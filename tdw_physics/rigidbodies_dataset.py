@@ -252,7 +252,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                     "use_centroid": False}
 
         return [add_object,
-                rotation_x, rotation_y, rotation_z,
+                #rotation_x, rotation_y, rotation_z,
                 {"$type": "set_mass",
                  "id": o_id,
                  "mass": mass},
