@@ -300,6 +300,7 @@ class Drop(RigidbodiesDataset):
                     "z": 0.
                 },
                 rotation=self.target_rotation,
+                rotation_use_centroid=False,
                 mass=random.uniform(2,7),
                 dynamic_friction=random.uniform(0, 0.9),
                 static_friction=random.uniform(0, 0.9),
@@ -357,6 +358,7 @@ class Drop(RigidbodiesDataset):
                 record=record,
                 position=self.drop_position,
                 rotation=self.drop_rotation,
+                rotation_use_centroid=True,
                 mass=random.uniform(2,7),
                 dynamic_friction=random.uniform(0, 0.9),
                 static_friction=random.uniform(0, 0.9),

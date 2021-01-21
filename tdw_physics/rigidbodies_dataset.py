@@ -192,7 +192,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            dynamic_friction: float,
                            static_friction: float,
                            bounciness: float,
-                           o_id: Optional[int] = None) -> List[dict]:
+                           o_id: Optional[int] = None,
+                           rotation_use_centroid = False) -> List[dict]:
         """
         Get commands to add an object and assign physics properties. Write the object's static info to the .hdf5 file.
 
@@ -216,7 +217,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                 record=record,
                                                 position=position,
                                                 #rotation=rotation
-                                                rotation={'x':0, 'y': 0, 'z':0}
+                                                rotation={'x':0,
+                                                          'y': 0,
+                                                          'z':0}
                                                 )
 
         self.masses = np.append(self.masses, mass)
@@ -237,22 +240,27 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                     "id": o_id,
                     "axis": "pitch",
                     "is_world": True,
-                    "use_centroid": True}
+                    "use_centroid": rotation_use_centroid
+                    }
         rotation_y = {"$type": "rotate_object_by",
                     "angle": rotation['y'],
                     "id": o_id,
                     "axis": "yaw",
                     "is_world": True,
-                    "use_centroid": True}
+                    "use_centroid": rotation_use_centroid
+                    }
         rotation_z = {"$type": "rotate_object_by",
                     "angle": rotation['z'],
                     "id": o_id,
                     "axis": "roll",
                     "is_world": True,
-                    "use_centroid": True}
+                    "use_centroid": rotation_use_centroid
+                    }
 
         return [add_object,
-                rotation_x, rotation_y, rotation_z,
+                rotation_x,
+                rotation_y,
+                rotation_z,
                 {"$type": "set_mass",
                  "id": o_id,
                  "mass": mass},
@@ -266,7 +274,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                    name: str,
                                    position: Dict[str, float],
                                    rotation: Dict[str, float],
-                                   o_id: Optional[int] = None) -> List[dict]:
+                                   o_id: Optional[int] = None,
+                                   rotation_use_centroid = False) -> List[dict]:
         """
         Add an object with default physics material values.
 
@@ -279,9 +288,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         """
 
         info = PHYSICS_INFO[name]
-        return self.add_physics_object(o_id=o_id, record=info.record, position=position, rotation=rotation,
-                                       mass=info.mass, dynamic_friction=info.dynamic_friction,
-                                       static_friction=info.static_friction, bounciness=info.bounciness)
+        return self.add_physics_object(o_id=o_id,
+                                       record=info.record,
+                                       position=position,
+                                       rotation=rotation,
+                                       rotation_use_centroid=rotation_use_centroid,
+                                       mass=info.mass,
+                                       dynamic_friction=info.dynamic_friction,
+                                       static_friction=info.static_friction,
+                                       bounciness=info.bounciness
+                                       )
 
     def get_objects_by_mass(self, mass: float) -> List[int]:
         """
