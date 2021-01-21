@@ -215,7 +215,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         add_object = self.add_transforms_object(o_id=o_id,
                                                 record=record,
                                                 position=position,
-                                                rotation=rotation
+                                                #rotation=rotation
+                                                rotation={'x':0, 'y': 0, 'z':0}
                                                 )
 
         self.masses = np.append(self.masses, mass)
@@ -231,7 +232,27 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                               bounciness=bounciness)
 
         # Return commands to create the object.
+        rotation_x = {"$type": "rotate_object_by",
+                    "angle": 10,
+                    "id": 1,
+                    "axis": "pitch",
+                    "is_world": True,
+                    "use_centroid": False}
+        rotation_y = {"$type": "rotate_object_by",
+                    "angle": 10,
+                    "id": 1,
+                    "axis": "yaw",
+                    "is_world": True,
+                    "use_centroid": False}
+        rotation_z = {"$type": "rotate_object_by",
+                    "angle": 10,
+                    "id": 1,
+                    "axis": "roll",
+                    "is_world": True,
+                    "use_centroid": False}
+
         return [add_object,
+                rotation_x, rotation_y, rotation_z,
                 {"$type": "set_mass",
                  "id": o_id,
                  "mass": mass},
