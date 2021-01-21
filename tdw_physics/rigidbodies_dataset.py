@@ -237,19 +237,19 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                     "id": o_id,
                     "axis": "pitch",
                     "is_world": True,
-                    "use_centroid": False}
+                    "use_centroid": True}
         rotation_y = {"$type": "rotate_object_by",
                     "angle": rotation['y'],
                     "id": o_id,
                     "axis": "yaw",
                     "is_world": True,
-                    "use_centroid": False}
+                    "use_centroid": True}
         rotation_z = {"$type": "rotate_object_by",
                     "angle": rotation['z'],
                     "id": o_id,
                     "axis": "roll",
                     "is_world": True,
-                    "use_centroid": False}
+                    "use_centroid": True}
 
         return [add_object,
                 rotation_x, rotation_y, rotation_z,
