@@ -233,26 +233,26 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         # Return commands to create the object.
         rotation_x = {"$type": "rotate_object_by",
-                    "angle": 10,
-                    "id": 1,
+                    "angle": rotation['x'],
+                    "id": o_id,
                     "axis": "pitch",
                     "is_world": True,
                     "use_centroid": False}
         rotation_y = {"$type": "rotate_object_by",
-                    "angle": 10,
-                    "id": 1,
+                    "angle": rotation['y'],
+                    "id": o_id,
                     "axis": "yaw",
                     "is_world": True,
                     "use_centroid": False}
         rotation_z = {"$type": "rotate_object_by",
-                    "angle": 10,
-                    "id": 1,
+                    "angle": rotation['z'],
+                    "id": o_id,
                     "axis": "roll",
                     "is_world": True,
                     "use_centroid": False}
 
         return [add_object,
-                #rotation_x, rotation_y, rotation_z,
+                rotation_x, rotation_y, rotation_z,
                 {"$type": "set_mass",
                  "id": o_id,
                  "mass": mass},
