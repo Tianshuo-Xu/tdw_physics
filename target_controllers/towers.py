@@ -256,11 +256,6 @@ class Tower(MultiDominoes):
         grad = self.middle_scale_gradient
         self.block_scales = [self._get_block_scale(offset=grad*(mid-i)) for i in range(self.num_blocks)]
 
-        # self.block_scales = [random.uniform(self.middle_scale_range[0], self.middle_scale_range[1])
-        #                      for _ in range(self.num_blocks)]
-
-        # self.block_scales = [s + (mid - i) * self.middle_scale_gradient for i,s in enumerate(self.block_scales)]
-
         # place the blocks
         for m in range(self.num_blocks):
             record, data = self.random_primitive(
@@ -408,7 +403,8 @@ if __name__ == "__main__":
         material_types=args.material_types,
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
-        middle_material=args.mmaterial
+        middle_material=args.mmaterial,
+        zone_material=args.zmaterial
     )
     print(TC.num_blocks, [r.name for r in TC._cap_types])
 
