@@ -7,19 +7,37 @@ from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
 from tdw.controller import Controller
 from tdw.librarian import ModelRecord
 from tdw_physics.dataset import Dataset
+from tdw_physics.util import xyz_to_arr, arr_to_xyz
 
+from PIL import Image
 
 class TransformsDataset(Dataset, ABC):
     """
     A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`.
     See README for more info.
     """
+    def clear_static_data(self) -> None:
+        super().clear_static_data()
+
+        self.initial_positions = []
+        self.initial_rotations = []
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+
+        # positions and rotations of objects
+        static_group.create_dataset("initial_position",
+                                    data=np.stack([xyz_to_arr(p) for p in self.initial_positions], 0))
+        static_group.create_dataset("initial_rotation",
+                                    data=np.stack([xyz_to_arr(r) for r in self.initial_rotations], 0))
 
     def add_transforms_object(self,
                               record: ModelRecord,
                               position: Dict[str, float],
                               rotation: Dict[str, float],
-                              o_id: Optional[int] = None) -> dict:
+                              o_id: Optional[int] = None,
+                              add_data: Optional[bool] = True
+    ) -> dict:
         """
         This is a wrapper for `Controller.get_add_object()` and the `add_object` command.
         This caches the ID of the object so that it can be easily cleaned up later.
@@ -28,6 +46,7 @@ class TransformsDataset(Dataset, ABC):
         :param position: The initial position of the object.
         :param rotation: The initial rotation of the object, in Euler angles.
         :param o_id: The unique ID of the object. If None, a random ID is generated.
+        :param add_data: whether to add the chosen data to the hdf5
 
         :return: An `add_object` command.
         """
@@ -37,6 +56,10 @@ class TransformsDataset(Dataset, ABC):
 
         # Log the static data.
         self.object_ids = np.append(self.object_ids, o_id)
+
+        if add_data:
+            self.initial_positions = np.append(self.initial_positions, position)
+            self.initial_rotations = np.append(self.initial_rotations, rotation)
 
         return {"$type": "add_object",
                 "name": record.name,
@@ -59,6 +82,7 @@ class TransformsDataset(Dataset, ABC):
 
         # Create a group for this frame.
         frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+
         # Create a group for images.
         images = frame.create_group("images")
 
@@ -99,6 +123,17 @@ class TransformsDataset(Dataset, ABC):
                     else:
                         image_data = im.get_image(i)
                     images.create_dataset(pass_mask, data=image_data, compression="gzip")
+
+                    # Save PNGs
+                    if pass_mask in self.save_passes:
+                        filename = pass_mask[1:] + "_" + TDWUtils.zero_padding(frame_num, 4) + "." + im.get_extension(i)
+                        path = self.png_dir.joinpath(filename)
+                        if pass_mask in ["_depth", "_depth_simple"]:
+                            Image.fromarray(TDWUtils.get_shaped_depth_pass(images=im, index=i)).save(path)
+                        else:
+                            with open(path, "wb") as f:
+                                f.write(im.get_image(i))
+
             # Add the camera matrices.
             elif OutputData.get_data_type_id(r) == "cama":
                 matrices = CameraMatrices(r)
@@ -111,3 +146,15 @@ class TransformsDataset(Dataset, ABC):
         objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
 
         return frame, objs, tr_dict, False
+
+    def get_object_position(self, obj_id: int, resp: List[bytes]) -> None:
+        position = None
+        for r in resp:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "tran":
+                tr = Transforms(r)
+                for i in range(tr.get_num()):
+                    if tr.get_id(i) == obj_id:
+                        position = tr.get_position(i)
+
+        return position

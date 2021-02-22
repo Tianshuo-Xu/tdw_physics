@@ -10,7 +10,7 @@ from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentColli
 from tdw.librarian import ModelRecord
 from tdw.tdw_utils import TDWUtils
 from tdw_physics.transforms_dataset import TransformsDataset
-from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz
+from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 
 
 def handle_random_transform_args(args):
@@ -179,7 +179,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                          scale: List[float] = [0.2, 0.3],
                          color: List[float] = None,
                          exclude_color: List[float] = None,
-                         exclude_range: float = 0.25
+                         exclude_range: float = 0.25,
+                         add_data=True
     ) -> dict:
         obj_record = random.choice(object_types)
         s = self.get_random_scale_transform(scale)
@@ -189,8 +190,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             "color": np.array(color if color is not None else self.random_color(exclude_color, exclude_range)),
             "name": obj_record.name
         }
-        self.scales.append(obj_data["scale"])
-        self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
+
+        if add_data:
+            self.scales.append(obj_data["scale"])
+            self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
         return obj_record, obj_data
 
     def add_physics_object(self,
@@ -201,7 +204,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            dynamic_friction: float,
                            static_friction: float,
                            bounciness: float,
-                           o_id: Optional[int] = None) -> List[dict]:
+                           o_id: Optional[int] = None,
+                           add_data: Optional[bool] = True
+    ) -> List[dict]:
         """
         Get commands to add an object and assign physics properties. Write the object's static info to the .hdf5 file.
 
@@ -213,6 +218,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         :param dynamic_friction: The dynamic friction of the object's physic material.
         :param static_friction: The static friction of the object's physic material.
         :param bounciness: The bounciness of the object's physic material.
+        :param add_data: whether to add the chosen data to the hdf5
 
         :return: A list of commands: `[add_object, set_mass, set_physic_material]`
         """
@@ -224,13 +230,15 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         add_object = self.add_transforms_object(o_id=o_id,
                                                 record=record,
                                                 position=position,
-                                                rotation=rotation
+                                                rotation=rotation,
+                                                add_data=add_data
                                                 )
 
-        self.masses = np.append(self.masses, mass)
-        self.dynamic_frictions = np.append(self.dynamic_frictions, dynamic_friction)
-        self.static_frictions = np.append(self.static_frictions, static_friction)
-        self.bouncinesses = np.append(self.bouncinesses, bounciness)
+        if add_data:
+            self.masses = np.append(self.masses, mass)
+            self.dynamic_frictions = np.append(self.dynamic_frictions, dynamic_friction)
+            self.static_frictions = np.append(self.static_frictions, static_friction)
+            self.bouncinesses = np.append(self.bouncinesses, bounciness)
 
         # Log the physics info per object for easy reference in a controller.
         self.physics_info[o_id] = PhysicsInfo(record=record,
@@ -334,6 +342,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         ## size and colors
         static_group.create_dataset("color", data=self.colors)
+        static_group.create_dataset("scale", data=np.stack([xyz_to_arr(_s) for _s in self.scales], 0))
         static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
         static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
         static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
@@ -369,8 +378,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                         sleeping = False
                 # Add the Rigibodies data.
                 for o_id, i in zip(self.object_ids, range(num_objects)):
-                    velocities[i] = ri_dict[o_id]["vel"]
-                    angular_velocities[i] = ri_dict[o_id]["ang"]
+                    try:
+                        velocities[i] = ri_dict[o_id]["vel"]
+                        angular_velocities[i] = ri_dict[o_id]["ang"]
+                    except KeyError:
+                        print("Couldn't store velocity data for object %d" % o_id)
             elif r_id == "coll":
                 co = Collision(r)
                 collision_states = np.append(collision_states, co.get_state())
@@ -398,3 +410,34 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         env_collisions.create_dataset("contacts", data=env_collision_contacts.reshape((-1, 2, 3)),
                                       compression="gzip")
         return frame, objs, tr, sleeping
+
+    def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
+
+        contact_points = []
+        contact_normals = []
+
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "coll":
+                co = Collision(r)
+                coll_ids = [co.get_collider_id(), co.get_collidee_id()]
+                if [obj_id, target_id] == coll_ids or [target_id, obj_id] == coll_ids:
+                    contact_points = [co.get_contact_point(i) for i in range(co.get_num_contacts())]
+                    contact_normals = [co.get_contact_normal(i) for i in range(co.get_num_contacts())]
+
+        return (contact_points, contact_normals)
+
+    def get_object_environment_collision(self, obj_id: int, resp: List[bytes]):
+
+        contact_points = []
+        contact_normals = []
+
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == 'enco':
+                en = EnvironmentCollision(r)
+                if en.get_object_id() == obj_id:
+                    contact_points = [np.array(en.get_contact_point(i)) for i in range(en.get_num_contacts())]
+                    contact_normals = [np.array(en.get_contact_normal(i)) for i in range(en.get_num_contacts())]
+
+        return (contact_points, contact_normals)

@@ -10,11 +10,13 @@ from typing import List, Dict, Tuple
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
+from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
 from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.postprocessing.labels import get_all_label_funcs
 
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
@@ -154,11 +156,11 @@ def get_args(dataset_dir: str, parse=True):
                         help="max height of camera")
     parser.add_argument("--camera_min_angle",
                         type=float,
-                        default=-15,
+                        default=0,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=315,
+                        default=270,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--material_types",
                         type=none_or_str,
@@ -295,6 +297,7 @@ class Dominoes(RigidbodiesDataset):
                  target_scale_range=[0.2, 0.3],
                  target_rotation_range=None,
                  target_color=None,
+                 target_motion_thresh=0.01,
                  collision_axis_length=1.,
                  force_scale_range=[0.,8.],
                  force_angle_range=[-60,60],
@@ -336,6 +339,7 @@ class Dominoes(RigidbodiesDataset):
         self.target_color = target_color
         self.target_rotation_range = target_rotation_range
         self.target_material = target_material
+        self.target_motion_thresh = target_motion_thresh
 
         self.probe_color = probe_color
         self.probe_scale_range = probe_scale_range
@@ -388,8 +392,6 @@ class Dominoes(RigidbodiesDataset):
             mtype = random.choice(self.material_types)
             mat = random.choice(MATERIAL_NAMES[mtype])
 
-        print("chose material: %s" % mat)
-
         return mat
 
     def get_object_material_commands(self, record, object_id, material):
@@ -403,11 +405,19 @@ class Dominoes(RigidbodiesDataset):
         ## scenario-specific metadata: object types and drop position
         self.target_type = None
         self.target_rotation = None
+        self.target_position = None
+        self.target_delta_position = None
 
         self.probe_type = None
         self.probe_mass = None
         self.push_force = None
         self.push_position = None
+
+    def get_controller_label_funcs(self):
+
+        funcs = super().get_controller_label_funcs()
+        funcs += get_all_label_funcs()
+        return funcs
 
     def get_field_of_view(self) -> float:
         return 55
@@ -491,7 +501,64 @@ class Dominoes(RigidbodiesDataset):
                                                          resp=resp,
                                                          frame_num=frame_num)
         # If this is a stable structure, disregard whether anything is actually moving.
-        return frame, objs, tr, sleeping and frame_num < 300
+        return frame, objs, tr, sleeping and not (frame_num < 150)
+
+    def _update_target_position(self, resp: List[bytes], frame_num: int) -> None:
+        if frame_num <= 0:
+            self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
+        elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
+            target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
+            self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
+            self.target_position = arr_to_xyz(target_position_new)
+
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+                            sleeping: bool) -> Tuple[h5py.Group, bool]:
+
+        labels, resp, frame_num, done = super()._write_frame_labels(frame_grp, resp, frame_num, sleeping)
+
+        # Whether this trial has a target or zone to track
+        has_target = not self.remove_target
+        has_zone = not self.remove_zone
+        labels.create_dataset("has_target", data=has_target)
+        labels.create_dataset("has_zone", data=has_zone)
+        if not (has_target or has_zone):
+            return labels, done
+
+        # Whether target moved from its initial position, and how much
+        if has_target:
+            self._update_target_position(resp, frame_num)
+            has_moved = np.sqrt((self.target_delta_position**2).sum()) > self.target_motion_thresh
+            labels.create_dataset("target_delta_position", data=self.target_delta_position)
+            labels.create_dataset("target_has_moved", data=has_moved)
+
+            # Whether target has fallen to the ground
+            c_points, c_normals = self.get_object_environment_collision(
+                self.target_id, resp)
+
+            if frame_num <= 0:
+                self.target_on_ground = False
+                self.target_ground_contacts = c_points
+            elif len(c_points) == 0:
+                self.target_on_ground = False
+            elif len(c_points) != len(self.target_ground_contacts):
+                self.target_on_ground = True
+            elif any([np.sqrt(((c_points[i] - self.target_ground_contacts[i])**2).sum()) > self.target_motion_thresh \
+                      for i in range(min(len(c_points), len(self.target_ground_contacts)))]):
+                self.target_on_ground = True
+
+            labels.create_dataset("target_on_ground", data=self.target_on_ground)
+
+        # Whether target has hit the zone
+        if has_target and has_zone:
+            c_points, c_normals = self.get_object_target_collision(
+                self.target_id, self.zone_id, resp)
+            target_zone_contact = bool(len(c_points))
+            labels.create_dataset("target_contacting_zone", data=target_zone_contact)
+
+        return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame > 250
@@ -526,7 +593,7 @@ class Dominoes(RigidbodiesDataset):
 
     def _get_zone_location(self, scale):
         return {
-            "x": 0.5 * self.collision_axis_length + scale["x"] + 0.1,
+            "x": 0.5 * self.collision_axis_length + scale["x"]*1.1,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
@@ -537,14 +604,19 @@ class Dominoes(RigidbodiesDataset):
         # create a target zone (usually flat, with same texture as room)
         record, data = self.random_primitive(self._zone_types,
                                              scale=self.zone_scale_range,
-                                             color=self.zone_color)
+                                             color=self.zone_color,
+                                             add_data=True
+        )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.zone = record
         self.zone_type = data["name"]
         self.zone_color = rgb
+        self.zone_id = o_id
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
+            self.scales = self.scales[:-1]
+            self.colors = self.colors[:-1]
         else:
             self.remove_zone = False
 
@@ -559,7 +631,9 @@ class Dominoes(RigidbodiesDataset):
                 dynamic_friction=0.5,
                 static_friction=0.5,
                 bounciness=0,
-                o_id=o_id))
+                o_id=o_id,
+                add_data=(not self.remove_zone)
+            ))
 
         # set its material to be the same as the room
         commands.extend(
@@ -592,34 +666,44 @@ class Dominoes(RigidbodiesDataset):
         # create a target object
         record, data = self.random_primitive(self._target_types,
                                              scale=self.target_scale_range,
-                                             color=self.target_color)
+                                             color=self.target_color,
+                                             add_data=(not self.remove_target)
+        )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
+        self.target_scale = scale
+        self.target_id = o_id
 
         if any((s <= 0 for s in scale.values())):
             self.remove_target = True
 
-        # add the object
-        commands = []
+        # Where to put the target
         if self.target_rotation is None:
             self.target_rotation = self.get_rotation(self.target_rotation_range)
 
+        if self.target_position is None:
+            self.target_position = {
+                "x": 0.5 * self.collision_axis_length,
+                "y": 0. if not self.remove_target else 10.0,
+                "z": 0. if not self.remove_target else 10.0
+            }
+
+        # Commands for adding hte object
+        commands = []
         commands.extend(
             self.add_physics_object(
                 record=record,
-                position={
-                    "x": 0.5 * self.collision_axis_length,
-                    "y": 0. if not self.remove_target else 10.0,
-                    "z": 0. if not self.remove_target else 10.0
-                },
+                position=self.target_position,
                 rotation=self.target_rotation,
-                mass=random.uniform(2,3),
-                dynamic_friction=random.uniform(0, 0.9),
-                static_friction=random.uniform(0, 0.9),
-                bounciness=random.uniform(0, 1),
-                o_id=o_id))
+                mass=2.5,
+                dynamic_friction=0.5,
+                static_friction=0.5,
+                bounciness=0.0,
+                o_id=o_id,
+                add_data=(not self.remove_target)
+            ))
 
         # Set the object material
         commands.extend(
@@ -635,7 +719,7 @@ class Dominoes(RigidbodiesDataset):
              "scale_factor": scale if not self.remove_target else TDWUtils.VECTOR3_ZERO,
              "id": o_id}])
 
-
+        # If this scene won't have a target
         if self.remove_target:
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
@@ -657,8 +741,7 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.probe = record
         self.probe_type = data["name"]
-
-        print("target", self.target.bounds)
+        self.probe_scale = scale
 
         # Add the object with random physics values
         commands = []
@@ -696,9 +779,9 @@ class Dominoes(RigidbodiesDataset):
         self.push_force = self.get_push_force(
             scale_range=self.probe_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range)
-        print("pos, force, scales", self.probe_initial_position, self.force_offset, self.scales[-1])
+        print("pos, force, scales", self.probe_initial_position, self.force_offset, self.probe_scale)
         self.push_position = {
-            k:v+self.force_offset[k]*self.scales[-1][k]
+            k:v+self.force_offset[k]*self.probe_scale[k]
             for k,v in self.probe_initial_position.items()}
         self.push_position = {
             k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
@@ -775,15 +858,16 @@ class MultiDominoes(Dominoes):
 
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
-        self.middle_color = self.middle_color or (self.probe_color if self.monochrome else self.random_color(exclude=self.target_color))
+        if self.monochrome:
+            self.middle_color = self.random_color(exclude=self.target_color)
 
         return self._place_middle_objects() if bool(self.num_middle_objects) else []
 
     def _place_middle_objects(self) -> List[dict]:
 
         offset = -0.5 * self.collision_axis_length
-        min_offset = offset + self.scales[-1]["x"]
-        max_offset = 0.5 * self.collision_axis_length - self.scales[0]["x"]
+        min_offset = offset + self.target_scale["x"]
+        max_offset = 0.5 * self.collision_axis_length - self.target_scale["x"]
 
         commands = []
         for m in range(self.num_middle_objects):
@@ -791,12 +875,14 @@ class MultiDominoes(Dominoes):
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
             if offset >= max_offset:
                 print("couldn't place middle object %s" % str(m+1))
+                print("offset now", offset)
                 break
 
-            print("middle color", self.middle_color)
             record, data = self.random_primitive(self._middle_types,
                                                  scale=self.middle_scale_range,
-                                                 color=self.middle_color)
+                                                 color=self.middle_color,
+                                                 exclude_color=self.target_color
+            )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
             pos = arr_to_xyz([offset,0.,0.])
             rot = self.get_y_rotation(self.middle_rotation_range)
@@ -804,8 +890,6 @@ class MultiDominoes(Dominoes):
                 rot["z"] = 90
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
-            print("horizontal", self.horizontal)
-            print("middle rotation", rot)
             self.middle_type = data["name"]
 
             commands.extend(
@@ -832,8 +916,6 @@ class MultiDominoes(Dominoes):
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}])
-
-            print("placed middle object %s" % str(m+1))
 
         return commands
 
@@ -890,9 +972,13 @@ if __name__ == "__main__":
 
     if bool(args.run):
         DomC.run(num=args.num,
-               output_dir=args.dir,
-               temp_path=args.temp,
-               width=args.width,
-               height=args.height)
+                 output_dir=args.dir,
+                 temp_path=args.temp,
+                 width=args.width,
+                 height=args.height,
+                 save_passes=args.save_passes.split(','),
+                 save_movies=args.save_movies,
+                 save_labels=args.save_labels,
+                 args_dict=vars(args))
     else:
         DomC.communicate({"$type": "terminate"})

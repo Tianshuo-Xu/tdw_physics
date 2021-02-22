@@ -1,15 +1,20 @@
-import sys, os, copy
+import sys, os, copy, subprocess
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
-import h5py
+import h5py, json
+from collections import OrderedDict
 import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
+from tdw.output_data import OutputData
+from tdw_physics.postprocessing.stimuli import pngs_to_mp4
+from tdw_physics.postprocessing.labels import get_labels_from
 import shutil
 
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
 
 class Dataset(Controller, ABC):
     """
@@ -22,7 +27,6 @@ class Dataset(Controller, ABC):
         2. Run the trial until it is "done" (defined by output from the writer). Write per-frame data to disk,.
         3. Clean up the scene and start a new trial.
     """
-
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
@@ -40,11 +44,20 @@ class Dataset(Controller, ABC):
         if not bool(self.randomize):
             random.seed(seed)
 
+        # save the command-line args
         self.save_args = save_args
-
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+
+    def get_controller_label_funcs(self):
+        """
+        A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
+        """
+        def controller_name(f):
+            return type(self).__name__
+
+        return [controller_name]
 
     def save_command_line_args(self, output_dir: str) -> None:
         if not self.save_args:
@@ -89,13 +102,15 @@ class Dataset(Controller, ABC):
                     {"$type": "set_shadow_strength",
                      "strength": 1.0},
                     {"$type": "set_sleep_threshold",
-                     "sleep_threshold": 0.1}]
+                     "sleep_threshold": 0.05}]
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
         commands.extend([{"$type": "create_avatar",
                           "type": "A_Img_Caps_Kinematic",
                           "id": "a"},
+                         {"$type": "set_target_framerate",
+                          "framerate": 30},
                          {"$type": "set_pass_masks",
                           "pass_masks": ["_img", "_id", "_depth", "_normals", "_flow"]},
                          {"$type": "set_field_of_view",
@@ -110,6 +125,9 @@ class Dataset(Controller, ABC):
             temp_path: str,
             width: int,
             height: int,
+            save_passes: List[str] = [],
+            save_movies: bool = False,
+            save_labels: bool = False,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -119,10 +137,28 @@ class Dataset(Controller, ABC):
         :param temp_path: Temporary path to a file being written.
         :param width: Screen width in pixels.
         :param height: Screen height in pixels.
+        :param save_passes: a list of which passes to save out as PNGs (or convert to MP4)
+        :param save_movies: whether to save out a movie of each trial
+        :param save_labels: whether to save out JSON labels for the full trial set.
         """
 
+        self._height, self._width = height, width
+
+        # which passes to save as an MP4
+        self.save_passes = save_passes
+        self.save_movies = save_movies
+
+        # whether to save a JSON of trial-level labels
+        self.save_labels = save_labels
+        if self.save_labels:
+            self.trial_metadata = []
+
+        print("save passes", self.save_passes)
+        print("save movies", self.save_movies)
+        print("save labels", self.save_labels)
 
         initialization_commands = self.get_initialization_commands(width=width, height=height)
+
         # Initialize the scene.
         self.communicate(initialization_commands)
         self.trial_loop(num, output_dir, temp_path)
@@ -131,6 +167,12 @@ class Dataset(Controller, ABC):
         if self.save_args:
             self.args_dict = copy.deepcopy(args_dict)
         self.save_command_line_args(output_dir)
+
+        # Save the trial-level metadata
+        json_str =json.dumps(self.trial_metadata, indent=4)
+        meta_file = Path(output_dir).joinpath('metadata.json')
+        meta_file.write_text(json_str, encoding='utf-8')
+        print(json_str)
 
         # Finish
         self.communicate({"$type": "terminate"})
@@ -164,11 +206,35 @@ class Dataset(Controller, ABC):
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
             if not filepath.exists():
-                # Do the trial.
+
                 print('trial %d' % i)
+
+                # Save out images
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists():
+                        self.png_dir.mkdir(parents=True)
+
+                # Do the trial.
                 self.trial(filepath=filepath,
                            temp_path=temp_path,
                            trial_num=i)
+
+                # Save an MP4 of the stimulus
+                if self.save_movies:
+                    for pass_mask in self.save_passes:
+                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        cmd, stdout, stderr = pngs_to_mp4(
+                            filename=mp4_filename,
+                            image_stem=pass_mask[1:]+'_',
+                            png_dir=self.png_dir,
+                            size=[self._height, self._width],
+                            overwrite=True,
+                            remove_pngs=True,
+                            use_parent_dir=False)
+                        print("saving to MP4: %s" % ' '.join(cmd))
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+
             pbar.update(1)
         pbar.close()
 
@@ -211,16 +277,27 @@ class Dataset(Controller, ABC):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
-        self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        self._write_frame_labels(frame_grp, resp, -1, False)
 
         # Continue the trial. Send commands, and parse output data.
         while not done:
-            print('frame %d' % frame)
             frame += 1
+            print('frame %d' % frame)
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
+            # Sometimes the build freezes and has to reopen the socket.
+            # This prevents such errors from throwing off the frame numbering
+            if ('imag' not in r_ids) or ('tran' not in r_ids):
+                print("retrying frame %d, response only had %s" % (frame, r_ids))
+                frame -= 1
+                continue
+
             frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-            done = done or self.is_done(resp, frame)
-            # print("frame, done", frame, done)
+
+            # Write whether this frame completed the trial and any other trial-level data
+            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
 
         # Cleanup.
         commands = []
@@ -228,6 +305,13 @@ class Dataset(Controller, ABC):
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         self.communicate(commands)
+
+        # Compute the trial-level metadata.
+        if self.save_labels:
+            stim_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+            meta = OrderedDict(stimulus=stim_name)
+            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(), res=meta)
+            self.trial_metadata.append(meta)
 
         # Close the file.
         f.close()
@@ -328,6 +412,42 @@ class Dataset(Controller, ABC):
         """
 
         raise Exception()
+
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+                            sleeping: bool) -> Tuple[h5py.Group, bool]:
+        """
+        Writes the trial-level data for this frame.
+
+        :param frame_grp: The hdf5 group for a single frame.
+        :param resp: The response from the build.
+        :param frame_num: The frame number.
+        :param sleeping: Whether this trial timed out due to objects falling asleep.
+
+        :return: Tuple(h5py.Group labels, bool done): the labels data and whether this is the last frame of the trial.
+        """
+        labels = frame_grp.create_group("labels")
+        if frame_num > 0:
+            complete = self.is_done(resp, frame_num)
+        else:
+            complete = False
+
+        # If the trial is over, one way or another
+        done = sleeping or complete
+
+        # Write labels indicate whether and why the trial is over
+        labels.create_dataset("trial_end", data=done)
+        labels.create_dataset("trial_timeout", data=(sleeping and not complete))
+        labels.create_dataset("trial_complete", data=(complete and not sleeping))
+
+        if done:
+            print("Trial Ended: timeout? %s, completed? %s" % \
+                  ("YES" if sleeping and not complete else "NO",\
+                   "YES" if complete and not sleeping else "NO"))
+
+        return labels, resp, frame_num, done
 
     def _get_destroy_object_command_name(self, o_id: int) -> str:
         """
