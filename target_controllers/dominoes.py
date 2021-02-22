@@ -442,6 +442,11 @@ class Dominoes(RigidbodiesDataset):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
+        # randomization across trials
+        if not(self.randomize):
+            self.trial_seed = (self.seed + 1) * self._trial_num
+            random.seed(self.trial_seed)
+
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
 
@@ -484,6 +489,11 @@ class Dominoes(RigidbodiesDataset):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
+        ## which objects are the zone, target, and probe
+        static_group.create_dataset("zone_id", data=self.zone_id)
+        static_group.create_dataset("target_id", data=self.target_id)
+        static_group.create_dataset("probe_id", data=self.probe_id)
+
         ## color and scales of primitive objects
         static_group.create_dataset("target_type", data=self.target_type)
         static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
@@ -508,8 +518,11 @@ class Dominoes(RigidbodiesDataset):
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
             target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
-            self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
-            self.target_position = arr_to_xyz(target_position_new)
+            try:
+                self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
+                self.target_position = arr_to_xyz(target_position_new)
+            except TypeError:
+                print("Failed to get a new object position, %s" % target_position_new)
 
     def _write_frame_labels(self,
                             frame_grp: h5py.Group,
@@ -742,6 +755,7 @@ class Dominoes(RigidbodiesDataset):
         self.probe = record
         self.probe_type = data["name"]
         self.probe_scale = scale
+        self.probe_id = o_id
 
         # Add the object with random physics values
         commands = []
