@@ -81,6 +81,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--temp", type=str, default="D:/temp.hdf5", help="Temp path for incomplete files.")
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
+    parser.add_argument("--gpu", type=int, default=None, help="ID of the gpu to run on")    
     parser.add_argument("--seed", type=int, default=0, help="Random seed with which to initialize scenario")
     parser.add_argument("--random", type=int, default=1, help="Whether to set trials randomly")
     parser.add_argument("--num_views", type=int, default=1, help="How many possible viewpoints to render trial from")

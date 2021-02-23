@@ -933,8 +933,15 @@ class MultiDominoes(Dominoes):
         return commands
 
 if __name__ == "__main__":
-
+    import platform, os
+    
     args = get_args("dominoes")
+    
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
 
     DomC = MultiDominoes(
         room=args.room,
