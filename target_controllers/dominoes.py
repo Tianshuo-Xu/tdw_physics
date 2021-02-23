@@ -40,7 +40,7 @@ def get_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--num_middle_objects",
                         type=int,
-                        default=0,
+                        default=3,
                         help="The number of middle objects to place")
     parser.add_argument("--zone",
                         type=str,
@@ -866,7 +866,8 @@ class MultiDominoes(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
-        static_group.create_dataset("middle_type", data=self.middle_type)
+        if self.middle_type is not None:
+            static_group.create_dataset("middle_type", data=self.middle_type)
 
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
