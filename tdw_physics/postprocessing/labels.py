@@ -2,6 +2,7 @@ import os, io, glob
 from pathlib import Path
 import numpy as np
 import h5py, json
+from tqdm import tqdm
 from collections import OrderedDict
 from PIL import Image
 
@@ -310,20 +311,27 @@ def get_all_labels(d, res=None):
     return get_labels_from(d, label_funcs=get_all_label_funcs(), res=res)
 
 def get_across_trial_stats_from(paths, funcs, agg_func=avg_label):
-    fs = [h5py.File(path, mode='r') for path in paths]
-    stats = {
-        func.__name__ + '/' + agg_func.__name__: \
-        agg_func(list(map(func, fs))) for func in funcs}
 
-    for f in fs:
+    res = []
+    for i,path in enumerate(tqdm(paths)):
+        f = h5py.File(path)
+        res_f = OrderedDict()
+        for func in funcs:
+            res_f[func.__name__ + '/' + agg_func.__name__] = func(f)
+        res.append(res_f)
         f.close()
+
+    keys = res[0].keys()
+    stats = {
+        k: agg_func([res[i][k] for i in range(len(res))])
+        for k in keys}
 
     return stats
 
 if __name__ == '__main__':
 
     # filename = '/Users/db/neuroailab/physion/stimuli/scratch/domi_22/0001.hdf5'
-    paths = glob.glob('/Users/db/neuroailab/physion/stimuli/scratch/domi_25/*.hdf5')
+    paths = glob.glob('/Users/db/neuroailab/physion/stimuli/scratch/domi_42/*.hdf5')
     res = get_across_trial_stats_from(paths, get_all_label_funcs(), avg_label)
     res_str = json.dumps(res, indent=4)
     print(res_str)

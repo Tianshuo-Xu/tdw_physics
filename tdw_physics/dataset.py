@@ -108,7 +108,7 @@ class Dataset(Controller, ABC):
                     {"$type": "set_shadow_strength",
                      "strength": 1.0},
                     {"$type": "set_sleep_threshold",
-                     "sleep_threshold": 0.05}]
+                     "sleep_threshold": 0.1}]
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
@@ -188,6 +188,7 @@ class Dataset(Controller, ABC):
 
         # Finish
         self.communicate({"$type": "terminate"})
+        print("TOLD BUILD TO TERMINATE")
 
     def trial_loop(self,
                    num: int,
@@ -279,7 +280,15 @@ class Dataset(Controller, ABC):
         commands.extend(self._get_send_data_commands())
 
         # Send the commands and start the trial.
-        resp = self.communicate(commands)
+        r_types = ['']
+        count = 0
+        while 'imag' not in r_types:
+            resp = self.communicate(commands)
+            r_types = [OutputData.get_data_type_id(r) for r in resp]
+            count += 1
+            print("INITIAL RESPONSE FROM BUILD ON TRY %d" % count)
+            print(r_types)
+
         self._set_segmentation_colors(resp)
         frame = 0
 

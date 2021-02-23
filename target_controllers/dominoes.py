@@ -40,7 +40,7 @@ def get_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--num_middle_objects",
                         type=int,
-                        default=0,
+                        default=3,
                         help="The number of middle objects to place")
     parser.add_argument("--zone",
                         type=str,
@@ -76,7 +76,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma separated list of initial target rotation values")
     parser.add_argument("--mrot",
                         type=str,
-                        default="[-60,60]",
+                        default="[-30,30]",
                         help="comma separated list of initial middle object rotation values")
     parser.add_argument("--mscale",
                         type=str,
@@ -136,7 +136,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Length of spacing between probe and target objects at initialization.")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0.25,
+                        default=0.2,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")
     parser.add_argument("--remove_target",
                         type=int,
@@ -866,7 +866,8 @@ class MultiDominoes(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
-        static_group.create_dataset("middle_type", data=self.middle_type)
+        if self.middle_type is not None:
+            static_group.create_dataset("middle_type", data=self.middle_type)
 
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
