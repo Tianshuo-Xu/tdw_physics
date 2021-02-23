@@ -108,7 +108,7 @@ class Dataset(Controller, ABC):
                     {"$type": "set_shadow_strength",
                      "strength": 1.0},
                     {"$type": "set_sleep_threshold",
-                     "sleep_threshold": 0.1}]
+                     "sleep_threshold": 0.01}]
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
