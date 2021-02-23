@@ -169,13 +169,23 @@ class Dataset(Controller, ABC):
         self.communicate(initialization_commands)
         self.trial_loop(num, output_dir, temp_path)
 
+        # Terminate TDW
+        end = self.communicate({"$type": "terminate"})
+        end_count = 0
+        print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)                    
+        while ('imag' not in [OutputData.get_data_type_id(r) for r in end]) and end_count <= 10:
+            end_count += 1
+            print([OutputData.get_data_type_id(r) for r in end])
+            print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)            
+            end = self.communicate({"$type": "terminate"})
+
         # Save the command line args
         if self.save_args:
             self.args_dict = copy.deepcopy(args_dict)
         self.save_command_line_args(output_dir)
 
+        # Save the across-trial stats        
         if self.save_labels:
-            # Save the across-trial stats
             hdf5_paths = glob.glob(str(output_dir) + '/*.hdf5')
             stats = get_across_trial_stats_from(
                 hdf5_paths, funcs=self.get_controller_label_funcs())
@@ -185,10 +195,8 @@ class Dataset(Controller, ABC):
             stats_file.write_text(stats_str, encoding='utf-8')
             print("ACROSS TRIAL STATS")
             print(stats_str)
+            
 
-        # Finish
-        self.communicate({"$type": "terminate"})
-        print("TOLD BUILD TO TERMINATE")
 
     def trial_loop(self,
                    num: int,

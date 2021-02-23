@@ -991,4 +991,5 @@ if __name__ == "__main__":
                  save_labels=args.save_labels,
                  args_dict=vars(args))
     else:
-        DomC.communicate({"$type": "terminate"})
+        end = DomC.communicate({"$type": "terminate"})
+        print([OutputData.get_data_type_id(r) for r in end])
