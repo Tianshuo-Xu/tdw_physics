@@ -76,7 +76,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma separated list of initial target rotation values")
     parser.add_argument("--mrot",
                         type=str,
-                        default="[-60,60]",
+                        default="[-30,30]",
                         help="comma separated list of initial middle object rotation values")
     parser.add_argument("--mscale",
                         type=str,
@@ -136,7 +136,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Length of spacing between probe and target objects at initialization.")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0.25,
+                        default=0.2,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")
     parser.add_argument("--remove_target",
                         type=int,
