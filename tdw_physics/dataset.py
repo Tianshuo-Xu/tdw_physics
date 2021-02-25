@@ -108,7 +108,7 @@ class Dataset(Controller, ABC):
                     {"$type": "set_shadow_strength",
                      "strength": 1.0},
                     {"$type": "set_sleep_threshold",
-                     "sleep_threshold": 0.1}]
+                     "sleep_threshold": 0.01}]
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
@@ -153,6 +153,8 @@ class Dataset(Controller, ABC):
         # which passes to save as an MP4
         self.save_passes = save_passes
         self.save_movies = save_movies
+        print("save passes", self.save_passes)
+        print("save movies", self.save_movies)
 
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels

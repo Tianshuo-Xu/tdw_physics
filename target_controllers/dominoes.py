@@ -84,7 +84,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Scale or scale range for middle objects")
     parser.add_argument("--mmass",
                         type=str,
-                        default="[2.0,7.0]",
+                        default="2.0",
                         help="Scale or scale range for middle objects")
     parser.add_argument("--horizontal",
                         type=int,
@@ -96,11 +96,11 @@ def get_args(dataset_dir: str, parse=True):
                         help="scale of probe objects")
     parser.add_argument("--pmass",
                         type=str,
-                        default="3.5",
+                        default="2.0",
                         help="scale of probe objects")
     parser.add_argument("--fscale",
                         type=str,
-                        default="[2.5,2.5]",
+                        default="2.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -108,7 +108,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="range of angles in xz plane to apply push force")
     parser.add_argument("--foffset",
                         type=str,
-                        default="0.0,0.75,0.0",
+                        default="0.0,0.8,0.0",
                         help="offset from probe centroid from which to apply force, relative to probe scale")
     parser.add_argument("--fjitter",
                         type=float,
@@ -132,35 +132,39 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma-separated R,G,B values for the middle object color. None is random.")
     parser.add_argument("--collision_axis_length",
                         type=float,
-                        default=2.,
+                        default=2.0,
                         help="Length of spacing between probe and target objects at initialization.")
     parser.add_argument("--spacing_jitter",
                         type=float,
                         default=0.2,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")
+    parser.add_argument("--lateral_jitter",
+                        type=float,
+                        default=0.2,
+                        help="lateral jitter in how to space middle objects, as a fraction of object width")
     parser.add_argument("--remove_target",
                         type=int,
                         default=0,
                         help="Don't actually put the target object in the scene.")
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=2.0,
+                        default=1.75,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
-                        default=0.5,
+                        default=0.75,
                          help="min height of camera")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=1.5,
+                        default=2.0,
                         help="max height of camera")
     parser.add_argument("--camera_min_angle",
                         type=float,
-                        default=0,
+                        default=45,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=270,
+                        default=225,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--material_types",
                         type=none_or_str,
@@ -573,7 +577,7 @@ class Dominoes(RigidbodiesDataset):
         return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 250
+        return frame > 300
 
     def get_rotation(self, rot_range):
         if rot_range is None:
@@ -605,7 +609,7 @@ class Dominoes(RigidbodiesDataset):
 
     def _get_zone_location(self, scale):
         return {
-            "x": 0.5 * self.collision_axis_length + scale["x"]*1.1,
+            "x": 0.5 * self.collision_axis_length + scale["x"] + 0.1,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
@@ -709,7 +713,7 @@ class Dominoes(RigidbodiesDataset):
                 record=record,
                 position=self.target_position,
                 rotation=self.target_rotation,
-                mass=2.5,
+                mass=2.0,
                 dynamic_friction=0.5,
                 static_friction=0.5,
                 bounciness=0.0,
@@ -768,9 +772,9 @@ class Dominoes(RigidbodiesDataset):
                 position=self.probe_initial_position,
                 rotation=TDWUtils.VECTOR3_ZERO,
                 mass=self.probe_mass,
-                dynamic_friction=random.uniform(0, 0.9),
-                static_friction=random.uniform(0, 0.9),
-                bounciness=random.uniform(0, 1),
+                dynamic_friction=0.5,
+                static_friction=0.5,
+                bounciness=0.,
                 o_id=o_id))
 
         # Set the probe material
@@ -826,7 +830,8 @@ class MultiDominoes(Dominoes):
                  middle_rotation_range=None,
                  middle_mass_range=[2.,7.],
                  horizontal=False,
-                 spacing_jitter=0.25,
+                 spacing_jitter=0.2,
+                 lateral_jitter=0.2,
                  middle_material=None,
                  **kwargs):
 
@@ -848,6 +853,7 @@ class MultiDominoes(Dominoes):
         self.num_middle_objects = num_middle_objects
         self.spacing = self.collision_axis_length / (self.num_middle_objects + 1.)
         self.spacing_jitter = spacing_jitter
+        self.lateral_jitter = lateral_jitter
 
     def set_middle_types(self, olist):
         if olist is None:
@@ -897,7 +903,8 @@ class MultiDominoes(Dominoes):
                                                  exclude_color=self.target_color
             )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-            pos = arr_to_xyz([offset,0.,0.])
+            zpos = scale["z"] * random.uniform(-self.lateral_jitter, self.lateral_jitter)
+            pos = arr_to_xyz([offset, 0., zpos])
             rot = self.get_y_rotation(self.middle_rotation_range)
             if self.horizontal:
                 rot["z"] = 90
@@ -911,9 +918,9 @@ class MultiDominoes(Dominoes):
                     position=pos,
                     rotation=rot,
                     mass=random.uniform(*get_range(self.middle_mass_range)),
-                    dynamic_friction=random.uniform(0, 0.9),
-                    static_friction=random.uniform(0, 0.9),
-                    bounciness=random.uniform(0, 1),
+                    dynamic_friction=0.5,
+                    static_friction=0.5,
+                    bounciness=0.,
                     o_id=o_id))
 
             # Set the middle object material
@@ -969,6 +976,7 @@ if __name__ == "__main__":
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
         spacing_jitter=args.spacing_jitter,
+        lateral_jitter=args.lateral_jitter,
         middle_scale_range=args.mscale,
         middle_rotation_range=args.mrot,
         middle_mass_range=args.mmass,
