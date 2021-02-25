@@ -153,6 +153,8 @@ class Dataset(Controller, ABC):
         # which passes to save as an MP4
         self.save_passes = save_passes
         self.save_movies = save_movies
+        print("save passes", self.save_passes)
+        print("save movies", self.save_movies)
 
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
