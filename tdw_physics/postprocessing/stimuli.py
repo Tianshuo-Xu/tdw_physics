@@ -64,6 +64,7 @@ def pngs_to_mp4(
 
 def rename_mp4s(
         stimulus_dir: str,
+        remove_dir_prefix: bool = False,
         file_pattern: str = "*_img.mp4"):
     """
     Give each mp4 the name '[PARENT_DIR]_[ORIGINAL_MP4]"
@@ -72,7 +73,10 @@ def rename_mp4s(
     mp4s = sorted(glob.glob(str(stimulus_dir.joinpath(file_pattern))))
 
     for path in mp4s:
-        newname = stimulus_dir.name + '_' + path.split('/')[-1]
+        if remove_dir_prefix:
+            newname = path.split(stimulus_dir.name + '_')[-1]
+        else:
+            newname = stimulus_dir.name + '_' + path.split('/')[-1]
         newpath = stimulus_dir.joinpath(newname)
         mv = ["mv", path, str(newpath)]
         subprocess.run(' '.join(mv), shell=True) 
@@ -82,8 +86,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=str, help="The directory of mp4s to rename")
-    parser.add_argument("--files", type=str, help="The pattern of files to rename")
+    parser.add_argument("--files", type=str, default="*_img.mp4", help="The pattern of files to rename")
+    parser.add_argument("--remove_prefix", action="store_true", help="remove the name of the dir as prefix")
     args = parser.parse_args()
     
-    rename_mp4s(stimulus_dir=args.dir)
+    rename_mp4s(stimulus_dir=args.dir, remove_dir_prefix=args.remove_prefix, file_pattern=args.files)
 

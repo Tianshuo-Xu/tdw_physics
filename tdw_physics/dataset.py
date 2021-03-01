@@ -59,7 +59,8 @@ class Dataset(Controller, ABC):
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
         def stimulus_name(f):
-            return str(np.array(f['static']['stimulus_name']))
+            stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            return stim_name
         def controller_name(f):
             return type(self).__name__
 
@@ -258,7 +259,7 @@ class Dataset(Controller, ABC):
                             size=[self._height, self._width],
                             overwrite=True,
                             remove_pngs=True,
-                            use_parent_dir=True)
+                            use_parent_dir=False)
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
             pbar.update(1)
