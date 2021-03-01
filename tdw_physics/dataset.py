@@ -232,7 +232,7 @@ class Dataset(Controller, ABC):
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-            self.stimulus_name = '/'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
             if not filepath.exists():
 
@@ -258,7 +258,7 @@ class Dataset(Controller, ABC):
                             size=[self._height, self._width],
                             overwrite=True,
                             remove_pngs=True,
-                            use_parent_dir=False)
+                            use_parent_dir=True)
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
             pbar.update(1)
