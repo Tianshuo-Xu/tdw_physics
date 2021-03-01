@@ -179,7 +179,7 @@ class Dataset(Controller, ABC):
         end_count = 0
         print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
         print(end_types)
-        while ('imag' not in end_types or 'tre\x04' in end_types) and end_count <= 10:
+        while ('tre\x04' in end_types) and end_count <= 10:
             end_count += 1
             print([OutputData.get_data_type_id(r) for r in end])
             print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
