@@ -59,7 +59,8 @@ class Dataset(Controller, ABC):
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
         def stimulus_name(f):
-            return str(np.array(f['static']['stimulus_name']))
+            stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            return stim_name
         def controller_name(f):
             return type(self).__name__
 
@@ -179,7 +180,7 @@ class Dataset(Controller, ABC):
         end_count = 0
         print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
         print(end_types)
-        while ('imag' not in end_types or 'tre\x04' in end_types) and end_count <= 10:
+        while ('tre\x04' in end_types) and end_count <= 10:
             end_count += 1
             print([OutputData.get_data_type_id(r) for r in end])
             print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
@@ -232,7 +233,7 @@ class Dataset(Controller, ABC):
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-            self.stimulus_name = '/'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
             if not filepath.exists():
 
