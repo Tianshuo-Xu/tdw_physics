@@ -934,25 +934,28 @@ class Dominoes(RigidbodiesDataset):
 
         max_theta = 20. * (self.num_distractors - 1) * np.sign(opposite['z'])
         thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
-        x_offset = 0.
-
         for i, o_id in enumerate(self.distractors.keys()):
-        # for o_id, record in self.distractors.items():
             record = self.distractors[o_id]
             print("distractor record")
-            print(record.__dict__.keys())
             print(record.name, record.wcategory)
 
             # todo: set a position
             theta = thetas[i]
-            pos = self.rotate_vector_parallel_to_floor(opposite, theta)
+            pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
             d_len, d_dep = self.get_record_length_and_depth(record)
-            pos = arr_to_xyz([pos['x'] - (x_offset + 0.5*d_len), 0., np.sign(pos['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
-            x_offset += (0.5*d_len + 0.2)
+            
+            pos = self.scale_vector(pos_unit, d_len)
+            if i == 0:
+                d_len_last = -d_len
+                last_x = pos['x']
+            x_offset = d_len_last + 0.6*d_len
+            pos = arr_to_xyz([min([pos['x'] - x_offset, last_x - x_offset]), 0., np.sign(opposite['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
+            d_len_last = 0.6*d_len
+            last_x = pos['x']
 
             # face toward camera
             ang = 0. if (self.camera_rotation > 0.) else 180.
-            rot = self.get_y_rotation([ang - 20., ang + 20.])
+            rot = self.get_y_rotation([ang, ang])
             
             # add the object
             commands.append(
