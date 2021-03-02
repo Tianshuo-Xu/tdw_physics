@@ -193,6 +193,9 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="core",
                         help="The names of distractor objects to use")
+    parser.add_argument("--distractor_category",
+                        type=none_or_str,
+                        help="The category of distractors to choose from")
     parser.add_argument("--num_distractors",
                         type=int,
                         default=0,
@@ -337,6 +340,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_material=None,
                  zone_material=None,
                  distractor_types=MODEL_NAMES,
+                 distractor_category=None,
                  num_distractors=0,
                  **kwargs):
 
@@ -392,14 +396,19 @@ class Dominoes(RigidbodiesDataset):
         ## distractors and occluders
         self.num_distractors = num_distractors
         self.distractor_types = self.get_types(
-            distractor_types, ["models_flex.json", "models_full.json", "models_special.json"])
+            distractor_types,
+            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            category=distractor_category)
 
 
-    def get_types(self, objlist, libraries=["models_flex.json"]):
+    def get_types(self, objlist, libraries=["models_flex.json"], category=None):
         recs = []
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
+        if category is not None:
+            print("category", category)
+            tlist = [r for r in tlist if r.wcategory == category]
         return tlist
 
     def set_probe_types(self, olist):
@@ -898,6 +907,9 @@ class Dominoes(RigidbodiesDataset):
         for i, o_id in enumerate(self.distractors.keys()):
         # for o_id, record in self.distractors.items():
             record = self.distractors[o_id]
+            print("distractor record")
+            print(record.__dict__.keys())
+            print(record.name, record.wcategory)
 
             # todo: set a position
             theta = thetas[i]
@@ -1113,6 +1125,7 @@ if __name__ == "__main__":
         probe_material=args.pmaterial,
         middle_material=args.mmaterial,
         distractor_types=args.distractor,
+        distractor_category=args.distractor_category,
         num_distractors=args.num_distractors
     )
 
