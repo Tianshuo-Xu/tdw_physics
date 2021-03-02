@@ -891,7 +891,7 @@ class Dominoes(RigidbodiesDataset):
         opposite = arr_to_xyz(opposite)
         print("opposite", opposite)
 
-        max_theta = 15. * (self.num_distractors - 1)
+        max_theta = 20. * (self.num_distractors - 1) * np.sign(opposite['z'])
         thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
         x_offset = 0.
 
@@ -902,17 +902,13 @@ class Dominoes(RigidbodiesDataset):
             # todo: set a position
             theta = thetas[i]
             pos = self.rotate_vector_parallel_to_floor(opposite, theta)
-            print("distractor bounds")
-            print(record.bounds)
             d_len, d_dep = self.get_record_length_and_depth(record)
-            # pos = self.scale_vector(pos_unit, np.sqrt(d_len**2 + d_dep**2))
-            pos = arr_to_xyz([pos['x'] + x_offset, 0., np.sign(pos['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
-            print("pos", pos)
-            x_offset -= d_len
+            pos = arr_to_xyz([pos['x'] - (x_offset + 0.5*d_len), 0., np.sign(pos['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
+            x_offset += (0.5*d_len + 0.2)
 
             # face toward camera
             ang = 0. if (self.camera_rotation > 0.) else 180.
-            rot = self.get_y_rotation([ang - theta, ang + theta])
+            rot = self.get_y_rotation([ang - 20., ang + 20.])
             
             # add the object
             commands.append(
@@ -924,7 +920,7 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.33)
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
             scale = arr_to_xyz([1.,1.,1.])
             commands.extend([
                 {"$type": "set_color",
