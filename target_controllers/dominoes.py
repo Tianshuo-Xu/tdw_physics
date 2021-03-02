@@ -193,9 +193,9 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="core",
                         help="The names of distractor objects to use")
-    parser.add_argument("--distractor_category",
+    parser.add_argument("--distractor_categories",
                         type=none_or_str,
-                        help="The category of distractors to choose from")
+                        help="The categories of distractors to choose from (comma-separated)")
     parser.add_argument("--num_distractors",
                         type=int,
                         default=0,
@@ -340,7 +340,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_material=None,
                  zone_material=None,
                  distractor_types=MODEL_NAMES,
-                 distractor_category=None,
+                 distractor_categories=None,
                  num_distractors=0,
                  **kwargs):
 
@@ -398,17 +398,18 @@ class Dominoes(RigidbodiesDataset):
         self.distractor_types = self.get_types(
             distractor_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
-            category=distractor_category)
+            categories=distractor_categories)
 
 
-    def get_types(self, objlist, libraries=["models_flex.json"], category=None):
+    def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
         recs = []
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
-        if category is not None:
-            print("category", category)
-            tlist = [r for r in tlist if r.wcategory == category]
+        if categories is not None:
+            if not isinstance(categories, list):
+                categories = categories.split(',')
+            tlist = [r for r in tlist if r.wcategory in categories]
         return tlist
 
     def set_probe_types(self, olist):
@@ -1125,7 +1126,7 @@ if __name__ == "__main__":
         probe_material=args.pmaterial,
         middle_material=args.mmaterial,
         distractor_types=args.distractor,
-        distractor_category=args.distractor_category,
+        distractor_categories=args.distractor_categories,
         num_distractors=args.num_distractors
     )
 
