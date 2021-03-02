@@ -7,6 +7,7 @@ import numpy as np
 from enum import Enum
 import random
 from typing import List, Dict, Tuple
+from collections import OrderedDict
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
@@ -24,6 +25,8 @@ M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
+ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+
 
 def none_or_str(value):
     if value == 'None':
@@ -186,7 +189,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
                         help="Material name for middle objects. If None, samples from material_type")
-
+    parser.add_argument("--num_distractors",
+                        type=int,
+                        default=0,
+                        help="The number of background distractor objects to place")
 
     def postprocess(args):
         # choose a valid room
@@ -317,6 +323,7 @@ class Dominoes(RigidbodiesDataset):
                  target_material=None,
                  probe_material=None,
                  zone_material=None,
+                 num_distractors=0,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -365,6 +372,10 @@ class Dominoes(RigidbodiesDataset):
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
         self.camera_aim = {"x": 0., "y": 0.5, "z": 0.} # fixed aim
+
+        ## distractors and occluders
+        self.num_distractors = num_distractors
+        self.distractor_types = MODEL_LIBRARIES["models_core.json"].records
 
     def get_types(self, objlist):
         recs = MODEL_LIBRARIES["models_flex.json"].records
@@ -484,6 +495,12 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
+
+        self.camera_position = a_pos
+
+        # Place distractor objects in the background
+        commands.extend(self._place_background_distractors())
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -633,6 +650,7 @@ class Dominoes(RigidbodiesDataset):
             self.remove_zone = True
             self.scales = self.scales[:-1]
             self.colors = self.colors[:-1]
+            self.model_names = self.model_names[:-1]
         else:
             self.remove_zone = False
 
@@ -819,6 +837,48 @@ class Dominoes(RigidbodiesDataset):
         commands = []
         return commands
 
+    def _set_distractor_objects(self) -> None:
+
+        self.distractors = OrderedDict()
+        for i in range(self.num_distractors):
+            record, data = self.random_model(self.distractor_types, add_data=True)
+            self.distractors[data['id']] = record
+
+    def _place_background_distractors(self) -> List[dict]:
+        """
+        Put one or more objects in the background of the scene; they will not interfere with trial dynamics
+        """
+
+        commands = []
+
+        # randomly sample distractors and give them obj_ids
+        self._set_distractor_objects()
+        
+        for o_id, record in self.distractors.items():
+
+            # set a position
+            pos = arr_to_xyz([0.,0.,-1.])
+
+            # face toward camera
+            rot = TDWUtils.VECTOR3_ZERO
+            
+            # add the object
+            commands.append(
+                self.add_transforms_object(
+                    record=record,
+                    position=pos,
+                    rotation=rot,
+                    o_id=o_id,
+                    add_data=True))
+
+        print("add distractors")
+        print(commands)
+
+        return commands
+            
+            
+        
+
 class MultiDominoes(Dominoes):
 
     def __init__(self,
@@ -985,7 +1045,8 @@ if __name__ == "__main__":
         material_types=args.material_types,
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
-        middle_material=args.mmaterial
+        middle_material=args.mmaterial,
+        num_distractors=args.num_distractors
     )
 
     if bool(args.run):

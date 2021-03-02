@@ -2,6 +2,7 @@ from typing import List, Tuple, Dict, Optional
 from abc import ABC
 import h5py
 import numpy as np
+import random
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
 from tdw.controller import Controller
@@ -30,6 +31,21 @@ class TransformsDataset(Dataset, ABC):
                                     data=np.stack([xyz_to_arr(p) for p in self.initial_positions], 0))
         static_group.create_dataset("initial_rotation",
                                     data=np.stack([xyz_to_arr(r) for r in self.initial_rotations], 0))
+
+    def random_model(self,
+                     object_types: List[ModelRecord],
+                     random_obj_id: bool = False,
+                     add_data: bool = True) -> dict:
+        obj_record = random.choice(object_types)
+        obj_data = {
+            "id": self.get_unique_id() if random_obj_id else self._get_next_object_id(),
+            "name": obj_record.name
+        }
+
+        if add_data:
+            self.model_names.append(obj_data["name"])
+
+        return obj_record, obj_data
 
     def add_transforms_object(self,
                               record: ModelRecord,

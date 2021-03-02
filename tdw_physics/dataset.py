@@ -52,6 +52,7 @@ class Dataset(Controller, ABC):
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+        self.model_names = []
         self._initialize_object_counter()
 
     def get_controller_label_funcs(self):
@@ -439,6 +440,8 @@ class Dataset(Controller, ABC):
         """
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
+        static_group.create_dataset("model_names", data=self.model_names)
+
         if self.object_segmentation_colors is not None:
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
 
