@@ -192,7 +192,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--distractor",
                         type=none_or_str,
                         default="core",
-                        help="The names of distractor objects to use")
+                        help="The names or library of distractor objects to use")
     parser.add_argument("--distractor_categories",
                         type=none_or_str,
                         help="The categories of distractors to choose from (comma-separated)")
@@ -200,6 +200,17 @@ def get_args(dataset_dir: str, parse=True):
                         type=int,
                         default=0,
                         help="The number of background distractor objects to place")
+    parser.add_argument("--occluder",
+                        type=none_or_str,
+                        default="core",
+                        help="The names or library of occluder objects to use")
+    parser.add_argument("--occluder_categories",
+                        type=none_or_str,
+                        help="The categories of occluders to choose from (comma-separated)")
+    parser.add_argument("--num_occluders",
+                        type=int,
+                        default=0,
+                        help="The number of foreground occluder objects to place")
 
     def postprocess(args):
         # choose a valid room
@@ -292,7 +303,18 @@ def get_args(dataset_dir: str, parse=True):
         elif args.distractor in ['flex', 'primitives']:
             args.distractor = MODEL_NAMES
         else:
-            args.distractor = [r for r in ALL_NAMES if args.distractor in r]
+            d_names = args.distractor.split(',')
+            args.distractor = [r for r in ALL_NAMES if any((nm in r for nm in d_names))]
+
+        if args.occluder is None or args.occluder == 'full':
+            args.occluder = ALL_NAMES
+        elif args.occluder == 'core':
+            args.occluder = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
+        elif args.occluder in ['flex', 'primitives']:
+            args.occluder = MODEL_NAMES
+        else:
+            o_names = args.occluder.split(',')
+            args.occluder = [r for r in ALL_NAMES if any((nm in r for nm in o_names))]
 
         return args
 
@@ -342,6 +364,9 @@ class Dominoes(RigidbodiesDataset):
                  distractor_types=MODEL_NAMES,
                  distractor_categories=None,
                  num_distractors=0,
+                 occluder_types=MODEL_NAMES,
+                 occluder_categories=None,
+                 num_occluders=0,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -399,6 +424,12 @@ class Dominoes(RigidbodiesDataset):
             distractor_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
             categories=distractor_categories)
+
+        self.num_occluders = num_occluders
+        self.occluder_types = self.get_types(
+            occluder_types,
+            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            categories=occluder_categories)
 
 
     def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
@@ -1127,7 +1158,10 @@ if __name__ == "__main__":
         middle_material=args.mmaterial,
         distractor_types=args.distractor,
         distractor_categories=args.distractor_categories,
-        num_distractors=args.num_distractors
+        num_distractors=args.num_distractors,
+        occluder_types=args.occluder,
+        occluder_categories=args.occluder_categories,
+        num_occluders=args.num_occluders
     )
 
     if bool(args.run):
