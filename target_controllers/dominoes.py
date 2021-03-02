@@ -189,6 +189,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
                         help="Material name for middle objects. If None, samples from material_type")
+    parser.add_argument("--distractor",
+                        type=none_or_str,
+                        default="core",
+                        help="The names of distractor objects to use")
     parser.add_argument("--num_distractors",
                         type=int,
                         default=0,
@@ -278,6 +282,15 @@ def get_args(dataset_dir: str, parse=True):
                 "All material types must be elements of %s" % MATERIAL_TYPES
             args.material_types = matlist
 
+        if args.distractor is None or args.distractor == 'full':
+            args.distractor = ALL_NAMES
+        elif args.distractor == 'core':
+            args.distractor = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
+        elif args.distractor in ['flex', 'primitives']:
+            args.distractor = MODEL_NAMES
+        else:
+            args.distractor = [r for r in ALL_NAMES if args.distractor in r]
+
         return args
 
     if not parse:
@@ -323,6 +336,7 @@ class Dominoes(RigidbodiesDataset):
                  target_material=None,
                  probe_material=None,
                  zone_material=None,
+                 distractor_types=MODEL_NAMES,
                  num_distractors=0,
                  **kwargs):
 
@@ -375,10 +389,14 @@ class Dominoes(RigidbodiesDataset):
 
         ## distractors and occluders
         self.num_distractors = num_distractors
-        self.distractor_types = MODEL_LIBRARIES["models_core.json"].records
+        self.distractor_types = self.get_types(
+            distractor_types, ["models_flex.json", "models_full.json", "models_special.json"])
 
-    def get_types(self, objlist):
-        recs = MODEL_LIBRARIES["models_flex.json"].records
+
+    def get_types(self, objlist, libraries=["models_flex.json"]):
+        recs = []
+        for lib in libraries:
+            recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
         return tlist
 
@@ -856,10 +874,13 @@ class Dominoes(RigidbodiesDataset):
         
         for o_id, record in self.distractors.items():
 
-            # set a position
+            # todo: set a position
+            print("camera pos and aim")
+            print(self.camera_position)
+            print(self.camera_aim)
             pos = arr_to_xyz([0.,0.,-1.])
 
-            # face toward camera
+            # todo: face toward camera
             rot = TDWUtils.VECTOR3_ZERO
             
             # add the object
@@ -870,6 +891,21 @@ class Dominoes(RigidbodiesDataset):
                     rotation=rot,
                     o_id=o_id,
                     add_data=True))
+
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color)
+            scale = arr_to_xyz([1.,1.,1.])
+            commands.extend([
+                {"$type": "set_color",
+                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                 "id": o_id}
+            ])
+
+            # todo: give it a random texture if it's a primitive
+
+            # add the metadata
+            self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+            self.scales.append(scale)
 
         print("add distractors")
         print(commands)
@@ -1046,6 +1082,7 @@ if __name__ == "__main__":
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
         middle_material=args.mmaterial,
+        distractor_types=args.distractor,
         num_distractors=args.num_distractors
     )
 

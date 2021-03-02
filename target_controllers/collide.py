@@ -114,8 +114,8 @@ def get_collide_args(dataset_dir: str, parse=True):
 if __name__ == '__main__':
 
     # args = get_collide_args("collide")
-    print([m.name for m in MODEL_LIBRARIES['models_full.json'].records
-           if 'ramp' in m.name])
+    print([m.name for m in MODEL_LIBRARIES['models_core.json'].records])
+
 
 
     
