@@ -862,6 +862,12 @@ class Dominoes(RigidbodiesDataset):
             record, data = self.random_model(self.distractor_types, add_data=True)
             self.distractors[data['id']] = record
 
+    @staticmethod
+    def get_record_length_and_depth(record: ModelRecord) -> List[float]:
+        length = np.abs(record.bounds['left']['x'] - record.bounds['right']['x'])
+        depth = np.abs(record.bounds['front']['z'] - record.bounds['back']['z'])
+        return (length, depth)
+    
     def _place_background_distractors(self) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
@@ -871,14 +877,29 @@ class Dominoes(RigidbodiesDataset):
 
         # randomly sample distractors and give them obj_ids
         self._set_distractor_objects()
+
+        # distractors will be placed opposite camera
+        print("camera pos and aim")
+        print(self.camera_position)
+        print(self.camera_aim)
+        
+        opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
+        opposite /= np.linalg.norm(opposite)
+        opposite = arr_to_xyz(opposite)
+        print("opposite", opposite)
+
+        d_positions = []
         
         for o_id, record in self.distractors.items():
 
             # todo: set a position
-            print("camera pos and aim")
-            print(self.camera_position)
-            print(self.camera_aim)
-            pos = arr_to_xyz([0.,0.,-1.])
+            theta = random.uniform(-30, 30)
+            pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
+            print("pos_unit", pos_unit)
+            print("distractor bounds")
+            print(record.bounds)
+            d_len, d_dep = self.get_record_length_and_depth(record)
+            pos = self.scale_vector(pos_unit, 2.)
 
             # todo: face toward camera
             rot = TDWUtils.VECTOR3_ZERO
