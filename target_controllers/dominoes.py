@@ -372,6 +372,8 @@ class Dominoes(RigidbodiesDataset):
         self.probe_material = probe_material
         self.match_probe_and_target_color = True
 
+        self.middle_scale_range = target_scale_range
+
         ## Scenario config properties
         self.collision_axis_length = collision_axis_length
         self.force_scale_range = force_scale_range
@@ -515,6 +517,7 @@ class Dominoes(RigidbodiesDataset):
         ])
 
         self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -888,21 +891,28 @@ class Dominoes(RigidbodiesDataset):
         opposite = arr_to_xyz(opposite)
         print("opposite", opposite)
 
-        d_positions = []
-        
-        for o_id, record in self.distractors.items():
+        max_theta = 15. * (self.num_distractors - 1)
+        thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
+        x_offset = 0.
+
+        for i, o_id in enumerate(self.distractors.keys()):
+        # for o_id, record in self.distractors.items():
+            record = self.distractors[o_id]
 
             # todo: set a position
-            theta = random.uniform(-30, 30)
-            pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
-            print("pos_unit", pos_unit)
+            theta = thetas[i]
+            pos = self.rotate_vector_parallel_to_floor(opposite, theta)
             print("distractor bounds")
             print(record.bounds)
             d_len, d_dep = self.get_record_length_and_depth(record)
-            pos = self.scale_vector(pos_unit, 2.)
+            # pos = self.scale_vector(pos_unit, np.sqrt(d_len**2 + d_dep**2))
+            pos = arr_to_xyz([pos['x'] + x_offset, 0., np.sign(pos['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
+            print("pos", pos)
+            x_offset -= d_len
 
-            # todo: face toward camera
-            rot = TDWUtils.VECTOR3_ZERO
+            # face toward camera
+            ang = 0. if (self.camera_rotation > 0.) else 180.
+            rot = self.get_y_rotation([ang - theta, ang + theta])
             
             # add the object
             commands.append(
@@ -914,11 +924,14 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color)
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.33)
             scale = arr_to_xyz([1.,1.,1.])
             commands.extend([
                 {"$type": "set_color",
                  "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                 "id": o_id},
+                {"$type": "scale_object",
+                 "scale_factor": scale,
                  "id": o_id}
             ])
 
