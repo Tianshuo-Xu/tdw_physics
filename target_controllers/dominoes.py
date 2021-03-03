@@ -211,6 +211,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=int,
                         default=0,
                         help="The number of foreground occluder objects to place")
+    parser.add_argument("--occlusion_scale",
+                        type=float,
+                        default=0.75,
+                        help="The height of the occluders as a proportion of camera height")    
 
     def postprocess(args):
         # choose a valid room
@@ -369,6 +373,7 @@ class Dominoes(RigidbodiesDataset):
                  occluder_types=MODEL_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
+                 occlusion_scale=0.6,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -428,6 +433,7 @@ class Dominoes(RigidbodiesDataset):
             categories=distractor_categories)
 
         self.num_occluders = num_occluders
+        self.occlusion_scale = occlusion_scale
         self.occluder_types = self.get_types(
             occluder_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
@@ -569,6 +575,8 @@ class Dominoes(RigidbodiesDataset):
 
         self.camera_position = a_pos
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -940,6 +948,11 @@ class Dominoes(RigidbodiesDataset):
         height = np.abs(record.bounds['top']['y'] - record.bounds['bottom']['y'])        
         depth = np.abs(record.bounds['front']['z'] - record.bounds['back']['z'])
         return (length, height, depth)
+
+    @staticmethod
+    def scale_to(current_scale : float, target_scale : float) -> float:
+
+        return target_scale / current_scale
     
     def _place_background_distractors(self) -> List[dict]:
         """
@@ -1047,7 +1060,7 @@ class Dominoes(RigidbodiesDataset):
             pos_unit = self.rotate_vector_parallel_to_floor(camera_ray, theta)
 
             o_len, o_height, o_dep = self.get_record_dimensions(record)
-            scale = 1. / np.sqrt(o_len**2 + o_dep**2 + o_height**2)
+            scale = 1. / np.sqrt(o_len**2 + o_dep**2)
             pos = self.scale_vector(pos_unit, 0.75 * camera_distance)
 
             if i == 0:
@@ -1062,7 +1075,7 @@ class Dominoes(RigidbodiesDataset):
             pos = arr_to_xyz(
                 [min([pos['x'] - x_offset, last_x - x_offset]),
                  0.,
-                 np.sign(camera_ray['z']) * max([o_dep, pos['z'], self.middle_scale['z']*2.0])])
+                 np.sign(camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
             o_len_last = 0.6*o_len
             last_x = pos['x']
 
@@ -1093,7 +1106,16 @@ class Dominoes(RigidbodiesDataset):
         
             # make sure it doesn't have the same color as the target object
             rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
-            scale = arr_to_xyz([scale, min([0.6*self.camera_position['y'], 1./o_height]), scale])
+
+            # do some trigonometry to figure out the scale of the occluder
+            occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
+            occ_dist *= np.cos(np.radians(theta))
+            occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
+            occ_target_height *= self.occlusion_scale
+            
+            scale_y = self.scale_to(o_height, occ_target_height)
+            print("scale_y", scale_y)
+            scale = arr_to_xyz([scale, scale_y, scale])
             commands.extend([
                 {"$type": "set_color",
                  "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1102,7 +1124,6 @@ class Dominoes(RigidbodiesDataset):
                  "scale_factor": scale,
                  "id": o_id}
             ])
-
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
@@ -1298,7 +1319,8 @@ if __name__ == "__main__":
         num_distractors=args.num_distractors,
         occluder_types=args.occluder,
         occluder_categories=args.occluder_categories,
-        num_occluders=args.num_occluders
+        num_occluders=args.num_occluders,
+        occlusion_scale=args.occlusion_scale
     )
 
     if bool(args.run):
