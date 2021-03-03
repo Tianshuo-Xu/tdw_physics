@@ -330,6 +330,8 @@ class Dominoes(RigidbodiesDataset):
     Drop a random Flex primitive object on another random Flex primitive object
     """
 
+    MAX_TRIALS = 1000
+    
     def __init__(self,
                  port: int = 1071,
                  room='box',
@@ -527,7 +529,8 @@ class Dominoes(RigidbodiesDataset):
 
         # randomization across trials
         if not(self.randomize):
-            self.trial_seed = (self.seed + 1) * self._trial_num
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            # self.trial_seed = (self.seed + 1) * self._trial_num
             random.seed(self.trial_seed)
 
         # Choose and place the target zone.
@@ -570,6 +573,9 @@ class Dominoes(RigidbodiesDataset):
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
 
+        # Place occluder objects in the background
+        commands.extend(self._place_occluders())
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -577,6 +583,11 @@ class Dominoes(RigidbodiesDataset):
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
+
+        # randomization
+        static_group.create_dataset("seed", data=self.seed)
+        static_group.create_dataset("trial_seed", data=self.trial_seed)
+        static_group.create_dataset("trial_num", data=self._trial_num)        
 
         ## which objects are the zone, target, and probe
         static_group.create_dataset("zone_id", data=self.zone_id)
@@ -780,7 +791,7 @@ class Dominoes(RigidbodiesDataset):
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
-        self.target_scale = scale
+        self.target_scale = self.middle_scale = scale
         self.target_id = o_id
 
         if any((s <= 0 for s in scale.values())):
@@ -917,11 +928,18 @@ class Dominoes(RigidbodiesDataset):
             record, data = self.random_model(self.distractor_types, add_data=True)
             self.distractors[data['id']] = record
 
+    def _set_occluder_objects(self) -> None:
+        self.occluders = OrderedDict()
+        for i in range(self.num_occluders):
+            record, data = self.random_model(self.occluder_types, add_data=True)
+            self.occluders[data['id']] = record
+
     @staticmethod
-    def get_record_length_and_depth(record: ModelRecord) -> List[float]:
+    def get_record_dimensions(record: ModelRecord) -> List[float]:
         length = np.abs(record.bounds['left']['x'] - record.bounds['right']['x'])
+        height = np.abs(record.bounds['top']['y'] - record.bounds['bottom']['y'])        
         depth = np.abs(record.bounds['front']['z'] - record.bounds['back']['z'])
-        return (length, depth)
+        return (length, height, depth)
     
     def _place_background_distractors(self) -> List[dict]:
         """
@@ -945,17 +963,20 @@ class Dominoes(RigidbodiesDataset):
             print("distractor record")
             print(record.name, record.wcategory)
 
-            # todo: set a position
+            # set a position
             theta = thetas[i]
             pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
-            d_len, d_dep = self.get_record_length_and_depth(record)
+            d_len, d_height, d_dep = self.get_record_dimensions(record)
             
             pos = self.scale_vector(pos_unit, d_len)
             if i == 0:
                 d_len_last = -d_len
                 last_x = pos['x']
             x_offset = d_len_last + 0.6*d_len
-            pos = arr_to_xyz([min([pos['x'] - x_offset, last_x - x_offset]), 0., np.sign(opposite['z'])*max([d_dep, self.target_scale['z'] * 4.0])])
+            pos = arr_to_xyz(
+                [min([pos['x'] - x_offset, last_x - x_offset]),
+                 0.,
+                 np.sign(opposite['z'])*max([d_dep, self.middle_scale['z'] * 4.0])])
             d_len_last = 0.6*d_len
             last_x = pos['x']
 
@@ -971,6 +992,13 @@ class Dominoes(RigidbodiesDataset):
                     rotation=rot,
                     o_id=o_id,
                     add_data=True))
+
+            # give it a texture if it's a primitive
+            if record.name in MODEL_NAMES:
+                commands.extend(
+                    self.get_object_material_commands(
+                        record, o_id, self.get_material_name(self.target_material)))            
+            
 
             # make sure it doesn't have the same color as the target object
             rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
@@ -996,8 +1024,91 @@ class Dominoes(RigidbodiesDataset):
         """
         Put one or more objects in the foreground to occlude the intermediate part of the scene
         """
-        
+
+        commands = []
+
+        # randomly sample occluders and give them obj_ids
+        self._set_occluder_objects()
+
+        # path to camera
+        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        camera_ray /= np.linalg.norm(camera_ray)
+        camera_ray = arr_to_xyz(camera_ray)
+
+        camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
+
+        max_theta = 20. * (self.num_occluders - 1)
+        thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
+        for i, o_id in enumerate(self.occluders.keys()):
+            record = self.occluders[o_id]
+
+            # set a position
+            theta = thetas[i]
+            pos_unit = self.rotate_vector_parallel_to_floor(camera_ray, theta)
+
+            o_len, o_height, o_dep = self.get_record_dimensions(record)
+            scale = 1. / np.sqrt(o_len**2 + o_dep**2 + o_height**2)
+            pos = self.scale_vector(pos_unit, 0.75 * camera_distance)
+
+            if i == 0:
+                o_len_last = -o_len
+                last_x = pos['x']
+                
+            if self.num_occluders > 1:
+                x_offset = o_len_last + 0.6 * o_len
+            else:
+                x_offset = 0.
+                
+            pos = arr_to_xyz(
+                [min([pos['x'] - x_offset, last_x - x_offset]),
+                 0.,
+                 np.sign(camera_ray['z']) * max([o_dep, pos['z'], self.middle_scale['z']*2.0])])
+            o_len_last = 0.6*o_len
+            last_x = pos['x']
+
+            # face the camera
+            ang = self.camera_rotation
+            rot = self.get_y_rotation([ang - 30., ang + 30.])
+
+            print("occluder name", record.name)
+            print("camera ray", camera_ray)
+            print("pos_unit", pos_unit)
+            print("pos", pos)
+
+            # add the occluder
+            commands.append(
+                self.add_transforms_object(
+                    record=record,
+                    position=pos,
+                    rotation=rot,
+                    o_id=o_id,
+                    add_data=True))
+
+            # give it a texture if it's a primitive
+            if record.name in MODEL_NAMES:
+                commands.extend(
+                    self.get_object_material_commands(
+                        record, o_id, self.get_material_name(self.target_material)))            
             
+        
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+            scale = arr_to_xyz([scale, min([0.6*self.camera_position['y'], 1./o_height]), scale])
+            commands.extend([
+                {"$type": "set_color",
+                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                 "id": o_id},
+                {"$type": "scale_object",
+                 "scale_factor": scale,
+                 "id": o_id}
+            ])
+
+
+            # add the metadata
+            self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+            self.scales.append(scale)
+
+        return commands
         
 
 class MultiDominoes(Dominoes):
@@ -1106,6 +1217,7 @@ class MultiDominoes(Dominoes):
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
             self.middle_type = data["name"]
+            self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
 
             commands.extend(
                 self.add_physics_object(
