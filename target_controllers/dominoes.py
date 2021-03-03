@@ -493,6 +493,13 @@ class Dominoes(RigidbodiesDataset):
 
         funcs = super().get_controller_label_funcs()
         funcs += get_all_label_funcs()
+
+        def num_distractors(f):
+            return int(len(f['static']['distractors']))
+        def num_occluders(f):
+            return int(len(f['static']['occluders']))
+        funcs += [num_distractors, num_occluders]
+        
         return funcs
 
     def get_field_of_view(self) -> float:
@@ -583,6 +590,10 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("probe_mass", data=self.probe_mass)
         static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
         static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+
+        # distractors and occluders
+        static_group.create_dataset("distractors", data=[r.name for r in self.distractors.values()])
+        static_group.create_dataset("occluders", data=[r.name for r in self.occluders.values()])
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -923,14 +934,9 @@ class Dominoes(RigidbodiesDataset):
         self._set_distractor_objects()
 
         # distractors will be placed opposite camera
-        print("camera pos and aim")
-        print(self.camera_position)
-        print(self.camera_aim)
-        
         opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
         opposite /= np.linalg.norm(opposite)
         opposite = arr_to_xyz(opposite)
-        print("opposite", opposite)
 
         max_theta = 20. * (self.num_distractors - 1) * np.sign(opposite['z'])
         thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
@@ -984,11 +990,13 @@ class Dominoes(RigidbodiesDataset):
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
-        print("add distractors")
-        print(commands)
-
         return commands
-            
+
+    def _place_occluders(self) -> List[dict]:
+        """
+        Put one or more objects in the foreground to occlude the intermediate part of the scene
+        """
+        
             
         
 
@@ -1039,6 +1047,9 @@ class MultiDominoes(Dominoes):
         super().clear_static_data()
 
         self.middle_type = None
+        self.distractors = OrderedDict()
+        self.occluders = OrderedDict()
+        
         if self.randomize_colors_across_trials:
             self.middle_color = None
 
@@ -1047,6 +1058,17 @@ class MultiDominoes(Dominoes):
 
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
+            static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])
+
+    def get_controller_label_funcs(self):
+        funcs = super().get_controller_label_funcs()
+
+        def num_middle_objects(f):
+            return int(len(f['static']['middle_objects']))
+
+        funcs += [num_middle_objects]
+        
+        return funcs
 
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
