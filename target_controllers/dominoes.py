@@ -560,8 +560,9 @@ class Dominoes(RigidbodiesDataset):
         # randomization across trials
         if not(self.randomize):
             self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            # self.trial_seed = (self.seed + 1) * self._trial_num
             random.seed(self.trial_seed)
+        else:
+            self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
@@ -624,6 +625,7 @@ class Dominoes(RigidbodiesDataset):
         # randomization
         static_group.create_dataset("room", data=self.room)
         static_group.create_dataset("seed", data=self.seed)
+        static_group.create_dataset("randomize", data=self.randomize)
         static_group.create_dataset("trial_seed", data=self.trial_seed)
         static_group.create_dataset("trial_num", data=self._trial_num)        
 
