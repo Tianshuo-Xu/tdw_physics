@@ -154,10 +154,17 @@ class Dataset(Controller, ABC):
 
         # which passes to save as an MP4
         self.save_passes = save_passes
+        if isinstance(self.save_passes, str):
+            self.save_passes = self.save_passes.split(',')
+        self.save_passes = [p for p in self.save_passes if p in PASSES]
         self.save_movies = save_movies
+
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
-
+        if self.save_movies:
+            assert len(self.save_passes),\
+                "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
+        
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
         if self.save_labels:
@@ -239,6 +246,7 @@ class Dataset(Controller, ABC):
             if not filepath.exists():
 
                 # Save out images
+                self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
                     self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
                     if not self.png_dir.exists():
