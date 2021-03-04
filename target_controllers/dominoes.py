@@ -7,6 +7,7 @@ import numpy as np
 from enum import Enum
 import random
 from typing import List, Dict, Tuple
+from collections import OrderedDict
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
@@ -24,6 +25,8 @@ M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
+ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+
 
 def none_or_str(value):
     if value == 'None':
@@ -72,12 +75,16 @@ def get_args(dataset_dir: str, parse=True):
                         help="scale of target objects")
     parser.add_argument("--trot",
                         type=str,
-                        default="0.0,0.0,0.0",
+                        default="[0,0]",
                         help="comma separated list of initial target rotation values")
     parser.add_argument("--mrot",
                         type=str,
                         default="[-30,30]",
                         help="comma separated list of initial middle object rotation values")
+    parser.add_argument("--prot",
+                        type=str,
+                        default="[0,0]",
+                        help="comma separated list of initial probe rotation values")    
     parser.add_argument("--mscale",
                         type=str,
                         default=None,
@@ -114,6 +121,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.0,
                         help="jitter around object centroid to apply force")
+    parser.add_argument("--fwait",
+                        type=none_or_str,
+                        default="[0,0]",
+                        help="How many frames to wait before applying the force")    
     parser.add_argument("--color",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
@@ -186,7 +197,35 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
                         help="Material name for middle objects. If None, samples from material_type")
-
+    parser.add_argument("--distractor",
+                        type=none_or_str,
+                        default="core",
+                        help="The names or library of distractor objects to use")
+    parser.add_argument("--distractor_categories",
+                        type=none_or_str,
+                        help="The categories of distractors to choose from (comma-separated)")
+    parser.add_argument("--num_distractors",
+                        type=int,
+                        default=0,
+                        help="The number of background distractor objects to place")
+    parser.add_argument("--occluder",
+                        type=none_or_str,
+                        default="core",
+                        help="The names or library of occluder objects to use")
+    parser.add_argument("--occluder_categories",
+                        type=none_or_str,
+                        help="The categories of occluders to choose from (comma-separated)")
+    parser.add_argument("--num_occluders",
+                        type=int,
+                        default=0,
+                        help="The number of foreground occluder objects to place")
+    parser.add_argument("--occlusion_scale",
+                        type=float,
+                        default=0.75,
+                        help="The height of the occluders as a proportion of camera height")
+    parser.add_argument("--remove_middle",
+                        action="store_true",
+                        help="Remove one of the middle dominoes scene.")    
 
     def postprocess(args):
         # choose a valid room
@@ -202,6 +241,7 @@ def get_args(dataset_dir: str, parse=True):
         args.trot = handle_random_transform_args(args.trot)
         args.pscale = handle_random_transform_args(args.pscale)
         args.pmass = handle_random_transform_args(args.pmass)
+        args.prot = handle_random_transform_args(args.prot)        
         args.mscale = handle_random_transform_args(args.mscale)
         args.mrot = handle_random_transform_args(args.mrot)
         args.mmass = handle_random_transform_args(args.mmass)
@@ -210,6 +250,7 @@ def get_args(dataset_dir: str, parse=True):
         args.fscale = handle_random_transform_args(args.fscale)
         args.frot = handle_random_transform_args(args.frot)
         args.foffset = handle_random_transform_args(args.foffset)
+        args.fwait = handle_random_transform_args(args.fwait)
 
         args.horizontal = bool(args.horizontal)
 
@@ -272,6 +313,26 @@ def get_args(dataset_dir: str, parse=True):
                 "All material types must be elements of %s" % MATERIAL_TYPES
             args.material_types = matlist
 
+        if args.distractor is None or args.distractor == 'full':
+            args.distractor = ALL_NAMES
+        elif args.distractor == 'core':
+            args.distractor = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
+        elif args.distractor in ['flex', 'primitives']:
+            args.distractor = MODEL_NAMES
+        else:
+            d_names = args.distractor.split(',')
+            args.distractor = [r for r in ALL_NAMES if any((nm in r for nm in d_names))]
+
+        if args.occluder is None or args.occluder == 'full':
+            args.occluder = ALL_NAMES
+        elif args.occluder == 'core':
+            args.occluder = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
+        elif args.occluder in ['flex', 'primitives']:
+            args.occluder = MODEL_NAMES
+        else:
+            o_names = args.occluder.split(',')
+            args.occluder = [r for r in ALL_NAMES if any((nm in r for nm in o_names))]
+
         return args
 
     if not parse:
@@ -286,6 +347,8 @@ class Dominoes(RigidbodiesDataset):
     Drop a random Flex primitive object on another random Flex primitive object
     """
 
+    MAX_TRIALS = 1000
+    
     def __init__(self,
                  port: int = 1071,
                  room='box',
@@ -298,6 +361,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_scale_range=[0.2, 0.3],
                  probe_mass_range=[2.,7.],
                  probe_color=None,
+                 probe_rotation_range=[0,0],
                  target_scale_range=[0.2, 0.3],
                  target_rotation_range=None,
                  target_color=None,
@@ -307,6 +371,7 @@ class Dominoes(RigidbodiesDataset):
                  force_angle_range=[-60,60],
                  force_offset={"x":0.,"y":0.5,"z":0.0},
                  force_offset_jitter=0.1,
+                 force_wait=None,
                  remove_target=False,
                  camera_radius=1.0,
                  camera_min_angle=0,
@@ -317,6 +382,13 @@ class Dominoes(RigidbodiesDataset):
                  target_material=None,
                  probe_material=None,
                  zone_material=None,
+                 distractor_types=MODEL_NAMES,
+                 distractor_categories=None,
+                 num_distractors=0,
+                 occluder_types=MODEL_NAMES,
+                 occluder_categories=None,
+                 num_occluders=0,
+                 occlusion_scale=0.6,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -347,9 +419,12 @@ class Dominoes(RigidbodiesDataset):
 
         self.probe_color = probe_color
         self.probe_scale_range = probe_scale_range
+        self.probe_rotation_range = probe_rotation_range
         self.probe_mass_range = get_range(probe_mass_range)
         self.probe_material = probe_material
         self.match_probe_and_target_color = True
+
+        self.middle_scale_range = target_scale_range
 
         ## Scenario config properties
         self.collision_axis_length = collision_axis_length
@@ -357,6 +432,7 @@ class Dominoes(RigidbodiesDataset):
         self.force_angle_range = force_angle_range
         self.force_offset = get_random_xyz_transform(force_offset)
         self.force_offset_jitter = force_offset_jitter
+        self.force_wait_range = force_wait or [0,0]
 
         ## camera properties
         self.camera_radius = camera_radius
@@ -366,9 +442,30 @@ class Dominoes(RigidbodiesDataset):
         self.camera_max_height = camera_max_height
         self.camera_aim = {"x": 0., "y": 0.5, "z": 0.} # fixed aim
 
-    def get_types(self, objlist):
-        recs = MODEL_LIBRARIES["models_flex.json"].records
+        ## distractors and occluders
+        self.num_distractors = num_distractors
+        self.distractor_types = self.get_types(
+            distractor_types,
+            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            categories=distractor_categories)
+
+        self.num_occluders = num_occluders
+        self.occlusion_scale = occlusion_scale
+        self.occluder_types = self.get_types(
+            occluder_types,
+            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            categories=occluder_categories)
+
+
+    def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
+        recs = []
+        for lib in libraries:
+            recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
+        if categories is not None:
+            if not isinstance(categories, list):
+                categories = categories.split(',')
+            tlist = [r for r in tlist if r.wcategory in categories]
         return tlist
 
     def set_probe_types(self, olist):
@@ -416,11 +513,25 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = None
         self.push_force = None
         self.push_position = None
+        self.force_wait = None
 
     def get_controller_label_funcs(self):
 
         funcs = super().get_controller_label_funcs()
         funcs += get_all_label_funcs()
+
+        def room(f):
+            return str(np.array(f['static']['room'], dtype=str))
+        def trial_seed(f):
+            return int(np.array(f['static']['trial_seed']))
+        def num_distractors(f):
+            return int(len(f['static']['distractors']))
+        def num_occluders(f):
+            return int(len(f['static']['occluders']))
+        def push_time(f):
+            return int(np.array(f['static']['push_time']))
+        funcs += [room, trial_seed, push_time, num_distractors, num_occluders]
+        
         return funcs
 
     def get_field_of_view(self) -> float:
@@ -448,7 +559,8 @@ class Dominoes(RigidbodiesDataset):
 
         # randomization across trials
         if not(self.randomize):
-            self.trial_seed = (self.seed + 1) * self._trial_num
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            # self.trial_seed = (self.seed + 1) * self._trial_num
             random.seed(self.trial_seed)
 
         # Choose and place the target zone.
@@ -484,13 +596,36 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
+
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+
+        # Place distractor objects in the background
+        commands.extend(self._place_background_distractors())
+
+        # Place occluder objects in the background
+        commands.extend(self._place_occluders())
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
-        return []
+
+        if (self.force_wait != 0) and frame == self.force_wait:
+            print("applied %s at time step %d" % (self.push_cmd, frame))
+            return self.push_cmd
+        else:
+            return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
+
+        # randomization
+        static_group.create_dataset("room", data=self.room)
+        static_group.create_dataset("seed", data=self.seed)
+        static_group.create_dataset("trial_seed", data=self.trial_seed)
+        static_group.create_dataset("trial_num", data=self._trial_num)        
 
         ## which objects are the zone, target, and probe
         static_group.create_dataset("zone_id", data=self.zone_id)
@@ -504,6 +639,11 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("probe_mass", data=self.probe_mass)
         static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
         static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+        static_group.create_dataset("push_time", data=int(self.force_wait))
+
+        # distractors and occluders
+        static_group.create_dataset("distractors", data=[r.name for r in self.distractors.values()])
+        static_group.create_dataset("occluders", data=[r.name for r in self.occluders.values()])
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -601,7 +741,6 @@ class Dominoes(RigidbodiesDataset):
         push = np.array([np.cos(theta), 0., np.sin(theta)])
 
         # scale it
-        # push *= random.uniform(scale_range[0], scale_range[1])
         push *= random.uniform(*get_range(scale_range))
 
         # convert to xyz
@@ -633,6 +772,7 @@ class Dominoes(RigidbodiesDataset):
             self.remove_zone = True
             self.scales = self.scales[:-1]
             self.colors = self.colors[:-1]
+            self.model_names = self.model_names[:-1]
         else:
             self.remove_zone = False
 
@@ -689,7 +829,7 @@ class Dominoes(RigidbodiesDataset):
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
-        self.target_scale = scale
+        self.target_scale = self.middle_scale = scale
         self.target_id = o_id
 
         if any((s <= 0 for s in scale.values())):
@@ -766,11 +906,13 @@ class Dominoes(RigidbodiesDataset):
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        rot = self.get_y_rotation(self.probe_rotation_range)
+        
         commands.extend(
             self.add_physics_object(
                 record=record,
                 position=self.probe_initial_position,
-                rotation=TDWUtils.VECTOR3_ZERO,
+                rotation=rot,
                 mass=self.probe_mass,
                 dynamic_friction=0.5,
                 static_friction=0.5,
@@ -796,19 +938,30 @@ class Dominoes(RigidbodiesDataset):
         self.push_force = self.get_push_force(
             scale_range=self.probe_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range)
+        self.push_force = self.rotate_vector_parallel_to_floor(
+            self.push_force, -rot['y'], degrees=True)
+
+        self.push_position = self.probe_initial_position
         self.push_position = {
-            k:v+self.force_offset[k]*self.probe_scale[k]
-            for k,v in self.probe_initial_position.items()}
+            k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                self.probe_scale, rot['y'])[k]
+            for k,v in self.push_position.items()}
         self.push_position = {
             k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
             for k,v in self.push_position.items()}
-        push = {
+        
+        self.push_cmd = {
             "$type": "apply_force_at_position",
             "force": self.push_force,
             "position": self.push_position,
             "id": int(o_id)
         }
-        commands.append(push)
+
+        # decide when to apply the force
+        self.force_wait = int(random.uniform(self.force_wait_range[0], self.force_wait_range[1]))
+
+        if self.force_wait == 0:
+            commands.append(self.push_cmd)
 
         return commands
 
@@ -818,6 +971,209 @@ class Dominoes(RigidbodiesDataset):
         """
         commands = []
         return commands
+
+    def _set_distractor_objects(self) -> None:
+
+        self.distractors = OrderedDict()
+        for i in range(self.num_distractors):
+            record, data = self.random_model(self.distractor_types, add_data=True)
+            self.distractors[data['id']] = record
+
+    def _set_occluder_objects(self) -> None:
+        self.occluders = OrderedDict()
+        for i in range(self.num_occluders):
+            record, data = self.random_model(self.occluder_types, add_data=True)
+            self.occluders[data['id']] = record
+
+    @staticmethod
+    def get_record_dimensions(record: ModelRecord) -> List[float]:
+        length = np.abs(record.bounds['left']['x'] - record.bounds['right']['x'])
+        height = np.abs(record.bounds['top']['y'] - record.bounds['bottom']['y'])        
+        depth = np.abs(record.bounds['front']['z'] - record.bounds['back']['z'])
+        return (length, height, depth)
+
+    @staticmethod
+    def scale_to(current_scale : float, target_scale : float) -> float:
+
+        return target_scale / current_scale
+    
+    def _place_background_distractors(self) -> List[dict]:
+        """
+        Put one or more objects in the background of the scene; they will not interfere with trial dynamics
+        """
+
+        commands = []
+
+        # randomly sample distractors and give them obj_ids
+        self._set_distractor_objects()
+
+        # distractors will be placed opposite camera
+        opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
+        opposite /= np.linalg.norm(opposite)
+        opposite = arr_to_xyz(opposite)
+
+        max_theta = 20. * (self.num_distractors - 1) * np.sign(opposite['z'])
+        thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
+        for i, o_id in enumerate(self.distractors.keys()):
+            record = self.distractors[o_id]
+            print("distractor record")
+            print(record.name, record.wcategory)
+
+            # set a position
+            theta = thetas[i]
+            pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
+            d_len, d_height, d_dep = self.get_record_dimensions(record)
+            
+            pos = self.scale_vector(pos_unit, d_len)
+            if i == 0:
+                d_len_last = -d_len
+                last_x = pos['x']
+            x_offset = d_len_last + 0.6*d_len
+            pos = arr_to_xyz(
+                [min([pos['x'] - x_offset, last_x - x_offset]),
+                 0.,
+                 np.sign(opposite['z'])*max([d_dep, self.middle_scale['z'] * 4.0])])
+            d_len_last = 0.6*d_len
+            last_x = pos['x']
+
+            # face toward camera
+            ang = 0. if (self.camera_rotation > 0.) else 180.
+            rot = self.get_y_rotation([ang, ang])
+            
+            # add the object
+            commands.append(
+                self.add_transforms_object(
+                    record=record,
+                    position=pos,
+                    rotation=rot,
+                    o_id=o_id,
+                    add_data=True))
+
+            # give it a texture if it's a primitive
+            if record.name in MODEL_NAMES:
+                commands.extend(
+                    self.get_object_material_commands(
+                        record, o_id, self.get_material_name(self.target_material)))            
+            
+
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+            scale = arr_to_xyz([1.,1.,1.])
+            commands.extend([
+                {"$type": "set_color",
+                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                 "id": o_id},
+                {"$type": "scale_object",
+                 "scale_factor": scale,
+                 "id": o_id}
+            ])
+
+            # todo: give it a random texture if it's a primitive
+
+            # add the metadata
+            self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+            self.scales.append(scale)
+
+        return commands
+
+    def _place_occluders(self) -> List[dict]:
+        """
+        Put one or more objects in the foreground to occlude the intermediate part of the scene
+        """
+
+        commands = []
+
+        # randomly sample occluders and give them obj_ids
+        self._set_occluder_objects()
+
+        # path to camera
+        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        camera_ray /= np.linalg.norm(camera_ray)
+        camera_ray = arr_to_xyz(camera_ray)
+
+        camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
+
+        max_theta = 20. * (self.num_occluders - 1)
+        thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
+        for i, o_id in enumerate(self.occluders.keys()):
+            record = self.occluders[o_id]
+
+            # set a position
+            theta = thetas[i]
+            pos_unit = self.rotate_vector_parallel_to_floor(camera_ray, theta)
+
+            o_len, o_height, o_dep = self.get_record_dimensions(record)
+            scale = 1. / np.sqrt(o_len**2 + o_dep**2)
+            pos = self.scale_vector(pos_unit, 0.75 * camera_distance)
+
+            if i == 0:
+                o_len_last = -o_len
+                last_x = pos['x']
+                
+            if self.num_occluders > 1:
+                x_offset = o_len_last + 0.6 * o_len
+            else:
+                x_offset = 0.
+                
+            pos = arr_to_xyz(
+                [min([pos['x'] - x_offset, last_x - x_offset]),
+                 0.,
+                 np.sign(camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
+            o_len_last = 0.6*o_len
+            last_x = pos['x']
+
+            # face the camera
+            ang = self.camera_rotation
+            rot = self.get_y_rotation([ang - 30., ang + 30.])
+
+            print("occluder name", record.name)
+            print("camera ray", camera_ray)
+            print("pos_unit", pos_unit)
+            print("pos", pos)
+
+            # add the occluder
+            commands.append(
+                self.add_transforms_object(
+                    record=record,
+                    position=pos,
+                    rotation=rot,
+                    o_id=o_id,
+                    add_data=True))
+
+            # give it a texture if it's a primitive
+            if record.name in MODEL_NAMES:
+                commands.extend(
+                    self.get_object_material_commands(
+                        record, o_id, self.get_material_name(self.target_material)))            
+            
+        
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+
+            # do some trigonometry to figure out the scale of the occluder
+            occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
+            occ_dist *= np.cos(np.radians(theta))
+            occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
+            occ_target_height *= self.occlusion_scale
+            
+            scale_y = self.scale_to(o_height, occ_target_height)
+            print("scale_y", scale_y)
+            scale = arr_to_xyz([scale, scale_y, scale])
+            commands.extend([
+                {"$type": "set_color",
+                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                 "id": o_id},
+                {"$type": "scale_object",
+                 "scale_factor": scale,
+                 "id": o_id}
+            ])
+
+            # add the metadata
+            self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+            self.scales.append(scale)
+
+        return commands
+        
 
 class MultiDominoes(Dominoes):
 
@@ -833,6 +1189,7 @@ class MultiDominoes(Dominoes):
                  spacing_jitter=0.2,
                  lateral_jitter=0.2,
                  middle_material=None,
+                 remove_middle=False,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -848,6 +1205,7 @@ class MultiDominoes(Dominoes):
         self.randomize_colors_across_trials = False if (middle_color is not None) else True
         self.middle_material = self.get_material_name(middle_material)
         self.horizontal = horizontal
+        self.remove_middle = remove_middle
 
         # How many middle objects and their spacing
         self.num_middle_objects = num_middle_objects
@@ -866,14 +1224,37 @@ class MultiDominoes(Dominoes):
         super().clear_static_data()
 
         self.middle_type = None
+        self.distractors = OrderedDict()
+        self.occluders = OrderedDict()
+        
         if self.randomize_colors_across_trials:
             self.middle_color = None
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
+        static_group.create_dataset("remove_middle", data=self.remove_middle)
+        static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])        
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
+
+    def get_controller_label_funcs(self):
+        funcs = super().get_controller_label_funcs()
+
+        def num_middle_objects(f):
+            try:
+                return int(len(f['static']['middle_objects']))
+            except KeyError:
+                return int(0)
+        def remove_middle(f):
+            try:
+                return bool(np.array(f['static']['remove_middle']))
+            except KeyError:
+                return bool(False)
+
+        funcs += [num_middle_objects, remove_middle]
+        
+        return funcs
 
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
@@ -889,6 +1270,12 @@ class MultiDominoes(Dominoes):
         max_offset = 0.5 * self.collision_axis_length - self.target_scale["x"]
 
         commands = []
+
+        if self.remove_middle:
+            rm_idx = random.choice(range(self.num_middle_objects))
+        else:
+            rm_idx = -1
+        
         for m in range(self.num_middle_objects):
             offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
@@ -896,6 +1283,9 @@ class MultiDominoes(Dominoes):
                 print("couldn't place middle object %s" % str(m+1))
                 print("offset now", offset)
                 break
+
+            if m == rm_idx:
+                continue
 
             record, data = self.random_primitive(self._middle_types,
                                                  scale=self.middle_scale_range,
@@ -911,6 +1301,7 @@ class MultiDominoes(Dominoes):
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
             self.middle_type = data["name"]
+            self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
 
             commands.extend(
                 self.add_physics_object(
@@ -965,6 +1356,7 @@ if __name__ == "__main__":
         middle_objects=args.middle,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
+        probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,
         target_color=args.color,
@@ -975,6 +1367,7 @@ if __name__ == "__main__":
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
+        force_wait=args.fwait,
         spacing_jitter=args.spacing_jitter,
         lateral_jitter=args.lateral_jitter,
         middle_scale_range=args.mscale,
@@ -992,7 +1385,15 @@ if __name__ == "__main__":
         material_types=args.material_types,
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
-        middle_material=args.mmaterial
+        middle_material=args.mmaterial,
+        distractor_types=args.distractor,
+        distractor_categories=args.distractor_categories,
+        num_distractors=args.num_distractors,
+        occluder_types=args.occluder,
+        occluder_categories=args.occluder_categories,
+        num_occluders=args.num_occluders,
+        occlusion_scale=args.occlusion_scale,
+        remove_middle=args.remove_middle
     )
 
     if bool(args.run):

@@ -111,6 +111,12 @@ def get_zone_mask(d):
 def get_probe_mask(d):
     return get_object_mask_at_frame(d, 'probe_id', 0)
 
+def mask_visible_area(mask):
+    area = mask.sum()
+    total_area = np.prod(mask.shape)
+    relative_area = float(area) / float(total_area)
+    return round(float(relative_area),3)
+
 def object_visible_area(d, object_key='target_id', frame_num=0):
     obj_mask = get_object_mask_at_frame(d, object_key, frame_num)
     obj_area = obj_mask.sum()
@@ -244,6 +250,16 @@ def is_probe_visible(d, thresh=0.025):
     except:
         return None
 
+def is_any_object_fully_occluded(d, thresh=0.005):
+    obj_ids = get_object_ids(d)
+    is_obj_occluded = []
+    for o_id in obj_ids:
+        mask = get_object_binary_mask(d, o_id, frame_num=0)
+        vis_area = mask_visible_area(mask)
+        is_obj_occluded.append(vis_area < thresh)
+
+    return bool(any(is_obj_occluded))
+
 def target_mask_initial_centroid(d):
     centroid = get_mask_centroid(d, 'target_id', 0)
     return [float(centroid[0]), float(centroid[1])]
@@ -287,7 +303,8 @@ TRIAL_LABELS = [
     final_target_mask_displacement,
     target_visible_area,
     zone_visible_area,
-    probe_visible_area
+    probe_visible_area,
+    is_any_object_fully_occluded
 ]
 
 def get_all_label_funcs():

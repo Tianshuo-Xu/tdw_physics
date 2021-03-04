@@ -191,6 +191,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         }
 
         if add_data:
+            self.model_names.append(obj_data["name"])
             self.scales.append(obj_data["scale"])
             self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
         return obj_record, obj_data

@@ -52,6 +52,7 @@ class Dataset(Controller, ABC):
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+        self.model_names = []
         self._initialize_object_counter()
 
     def get_controller_label_funcs(self):
@@ -364,6 +365,28 @@ class Dataset(Controller, ABC):
             shutil.move(temp_path, filepath)
 
     @staticmethod
+    def rotate_vector_parallel_to_floor(
+            vector: Dict[str, float],
+            theta: float,
+            degrees: bool = True) -> Dict[str, float]:
+        
+        v_x = vector['x']
+        v_z = vector['z']
+        if degrees:
+            theta = np.radians(theta)
+            
+        v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
+        v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
+
+        return {'x': v_x_new, 'y': vector['y'], 'z': v_z_new}
+
+    @staticmethod
+    def scale_vector(
+            vector: Dict[str, float],
+            scale: float) -> Dict[str, float]:
+        return {k:vector[k] * scale for k in ['x','y','z']}
+
+    @staticmethod
     def get_random_avatar_position(radius_min: float,
                                    radius_max: float,
                                    y_min: float,
@@ -439,6 +462,8 @@ class Dataset(Controller, ABC):
         """
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
+        static_group.create_dataset("model_names", data=self.model_names)
+
         if self.object_segmentation_colors is not None:
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
 
