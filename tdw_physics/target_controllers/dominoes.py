@@ -515,7 +515,8 @@ class Dominoes(RigidbodiesDataset):
         self.push_position = None
         self.force_wait = None
 
-    def get_controller_label_funcs(self):
+    @classmethod
+    def get_controller_label_funcs(MultiDominoes):
 
         funcs = super().get_controller_label_funcs()
         funcs += get_all_label_funcs()
