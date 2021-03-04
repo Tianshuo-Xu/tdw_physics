@@ -75,12 +75,16 @@ def get_args(dataset_dir: str, parse=True):
                         help="scale of target objects")
     parser.add_argument("--trot",
                         type=str,
-                        default="0.0,0.0,0.0",
+                        default="[0,0]",
                         help="comma separated list of initial target rotation values")
     parser.add_argument("--mrot",
                         type=str,
                         default="[-30,30]",
                         help="comma separated list of initial middle object rotation values")
+    parser.add_argument("--prot",
+                        type=str,
+                        default="[0,0]",
+                        help="comma separated list of initial probe rotation values")    
     parser.add_argument("--mscale",
                         type=str,
                         default=None,
@@ -237,6 +241,7 @@ def get_args(dataset_dir: str, parse=True):
         args.trot = handle_random_transform_args(args.trot)
         args.pscale = handle_random_transform_args(args.pscale)
         args.pmass = handle_random_transform_args(args.pmass)
+        args.prot = handle_random_transform_args(args.prot)        
         args.mscale = handle_random_transform_args(args.mscale)
         args.mrot = handle_random_transform_args(args.mrot)
         args.mmass = handle_random_transform_args(args.mmass)
@@ -356,6 +361,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_scale_range=[0.2, 0.3],
                  probe_mass_range=[2.,7.],
                  probe_color=None,
+                 probe_rotation_range=[0,0],
                  target_scale_range=[0.2, 0.3],
                  target_rotation_range=None,
                  target_color=None,
@@ -413,6 +419,7 @@ class Dominoes(RigidbodiesDataset):
 
         self.probe_color = probe_color
         self.probe_scale_range = probe_scale_range
+        self.probe_rotation_range = probe_rotation_range
         self.probe_mass_range = get_range(probe_mass_range)
         self.probe_material = probe_material
         self.match_probe_and_target_color = True
@@ -734,7 +741,6 @@ class Dominoes(RigidbodiesDataset):
         push = np.array([np.cos(theta), 0., np.sin(theta)])
 
         # scale it
-        # push *= random.uniform(scale_range[0], scale_range[1])
         push *= random.uniform(*get_range(scale_range))
 
         # convert to xyz
@@ -900,11 +906,13 @@ class Dominoes(RigidbodiesDataset):
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        rot = self.get_y_rotation(self.probe_rotation_range)
+        
         commands.extend(
             self.add_physics_object(
                 record=record,
                 position=self.probe_initial_position,
-                rotation=TDWUtils.VECTOR3_ZERO,
+                rotation=rot,
                 mass=self.probe_mass,
                 dynamic_friction=0.5,
                 static_friction=0.5,
@@ -930,12 +938,18 @@ class Dominoes(RigidbodiesDataset):
         self.push_force = self.get_push_force(
             scale_range=self.probe_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range)
+        self.push_force = self.rotate_vector_parallel_to_floor(
+            self.push_force, -rot['y'], degrees=True)
+
+        self.push_position = self.probe_initial_position
         self.push_position = {
-            k:v+self.force_offset[k]*self.probe_scale[k]
-            for k,v in self.probe_initial_position.items()}
+            k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                self.probe_scale, rot['y'])[k]
+            for k,v in self.push_position.items()}
         self.push_position = {
             k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
             for k,v in self.push_position.items()}
+        
         self.push_cmd = {
             "$type": "apply_force_at_position",
             "force": self.push_force,
@@ -1219,18 +1233,24 @@ class MultiDominoes(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
+        static_group.create_dataset("remove_middle", data=self.remove_middle)
+        static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])        
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
-            static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])
-            static_group.create_dataset("remove_middle", data=self.remove_middle)
 
     def get_controller_label_funcs(self):
         funcs = super().get_controller_label_funcs()
 
         def num_middle_objects(f):
-            return int(len(f['static']['middle_objects']))
+            try:
+                return int(len(f['static']['middle_objects']))
+            except KeyError:
+                return int(0)
         def remove_middle(f):
-            return bool(np.array(f['static']['remove_middle']))
+            try:
+                return bool(np.array(f['static']['remove_middle']))
+            except KeyError:
+                return bool(False)
 
         funcs += [num_middle_objects, remove_middle]
         
@@ -1329,6 +1349,7 @@ if __name__ == "__main__":
         middle_objects=args.middle,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
+        probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,
         target_color=args.color,
