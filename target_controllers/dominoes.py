@@ -117,6 +117,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.0,
                         help="jitter around object centroid to apply force")
+    parser.add_argument("--fwait",
+                        type=none_or_str,
+                        default="[0,0]",
+                        help="How many frames to wait before applying the force")    
     parser.add_argument("--color",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
@@ -214,7 +218,10 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--occlusion_scale",
                         type=float,
                         default=0.75,
-                        help="The height of the occluders as a proportion of camera height")    
+                        help="The height of the occluders as a proportion of camera height")
+    parser.add_argument("--remove_middle",
+                        action="store_true",
+                        help="Remove one of the middle dominoes scene.")    
 
     def postprocess(args):
         # choose a valid room
@@ -238,6 +245,7 @@ def get_args(dataset_dir: str, parse=True):
         args.fscale = handle_random_transform_args(args.fscale)
         args.frot = handle_random_transform_args(args.frot)
         args.foffset = handle_random_transform_args(args.foffset)
+        args.fwait = handle_random_transform_args(args.fwait)
 
         args.horizontal = bool(args.horizontal)
 
@@ -357,6 +365,7 @@ class Dominoes(RigidbodiesDataset):
                  force_angle_range=[-60,60],
                  force_offset={"x":0.,"y":0.5,"z":0.0},
                  force_offset_jitter=0.1,
+                 force_wait=None,
                  remove_target=False,
                  camera_radius=1.0,
                  camera_min_angle=0,
@@ -416,6 +425,7 @@ class Dominoes(RigidbodiesDataset):
         self.force_angle_range = force_angle_range
         self.force_offset = get_random_xyz_transform(force_offset)
         self.force_offset_jitter = force_offset_jitter
+        self.force_wait_range = force_wait or [0,0]
 
         ## camera properties
         self.camera_radius = camera_radius
@@ -496,17 +506,24 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = None
         self.push_force = None
         self.push_position = None
+        self.force_wait = None
 
     def get_controller_label_funcs(self):
 
         funcs = super().get_controller_label_funcs()
         funcs += get_all_label_funcs()
 
+        def room(f):
+            return str(np.array(f['static']['room'], dtype=str))
+        def trial_seed(f):
+            return int(np.array(f['static']['trial_seed']))
         def num_distractors(f):
             return int(len(f['static']['distractors']))
         def num_occluders(f):
             return int(len(f['static']['occluders']))
-        funcs += [num_distractors, num_occluders]
+        def push_time(f):
+            return int(np.array(f['static']['push_time']))
+        funcs += [room, trial_seed, push_time, num_distractors, num_occluders]
         
         return funcs
 
@@ -587,12 +604,18 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
-        return []
+
+        if (self.force_wait != 0) and frame == self.force_wait:
+            print("applied %s at time step %d" % (self.push_cmd, frame))
+            return self.push_cmd
+        else:
+            return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
         # randomization
+        static_group.create_dataset("room", data=self.room)
         static_group.create_dataset("seed", data=self.seed)
         static_group.create_dataset("trial_seed", data=self.trial_seed)
         static_group.create_dataset("trial_num", data=self._trial_num)        
@@ -609,6 +632,7 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("probe_mass", data=self.probe_mass)
         static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
         static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+        static_group.create_dataset("push_time", data=int(self.force_wait))
 
         # distractors and occluders
         static_group.create_dataset("distractors", data=[r.name for r in self.distractors.values()])
@@ -912,13 +936,18 @@ class Dominoes(RigidbodiesDataset):
         self.push_position = {
             k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
             for k,v in self.push_position.items()}
-        push = {
+        self.push_cmd = {
             "$type": "apply_force_at_position",
             "force": self.push_force,
             "position": self.push_position,
             "id": int(o_id)
         }
-        commands.append(push)
+
+        # decide when to apply the force
+        self.force_wait = int(random.uniform(self.force_wait_range[0], self.force_wait_range[1]))
+
+        if self.force_wait == 0:
+            commands.append(self.push_cmd)
 
         return commands
 
@@ -1146,6 +1175,7 @@ class MultiDominoes(Dominoes):
                  spacing_jitter=0.2,
                  lateral_jitter=0.2,
                  middle_material=None,
+                 remove_middle=False,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -1161,6 +1191,7 @@ class MultiDominoes(Dominoes):
         self.randomize_colors_across_trials = False if (middle_color is not None) else True
         self.middle_material = self.get_material_name(middle_material)
         self.horizontal = horizontal
+        self.remove_middle = remove_middle
 
         # How many middle objects and their spacing
         self.num_middle_objects = num_middle_objects
@@ -1191,14 +1222,17 @@ class MultiDominoes(Dominoes):
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
             static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])
+            static_group.create_dataset("remove_middle", data=self.remove_middle)
 
     def get_controller_label_funcs(self):
         funcs = super().get_controller_label_funcs()
 
         def num_middle_objects(f):
             return int(len(f['static']['middle_objects']))
+        def remove_middle(f):
+            return bool(np.array(f['static']['remove_middle']))
 
-        funcs += [num_middle_objects]
+        funcs += [num_middle_objects, remove_middle]
         
         return funcs
 
@@ -1216,6 +1250,12 @@ class MultiDominoes(Dominoes):
         max_offset = 0.5 * self.collision_axis_length - self.target_scale["x"]
 
         commands = []
+
+        if self.remove_middle:
+            rm_idx = random.choice(range(self.num_middle_objects))
+        else:
+            rm_idx = -1
+        
         for m in range(self.num_middle_objects):
             offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
@@ -1223,6 +1263,9 @@ class MultiDominoes(Dominoes):
                 print("couldn't place middle object %s" % str(m+1))
                 print("offset now", offset)
                 break
+
+            if m == rm_idx:
+                continue
 
             record, data = self.random_primitive(self._middle_types,
                                                  scale=self.middle_scale_range,
@@ -1296,6 +1339,7 @@ if __name__ == "__main__":
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
+        force_wait=args.fwait,
         spacing_jitter=args.spacing_jitter,
         lateral_jitter=args.lateral_jitter,
         middle_scale_range=args.mscale,
@@ -1320,7 +1364,8 @@ if __name__ == "__main__":
         occluder_types=args.occluder,
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
-        occlusion_scale=args.occlusion_scale
+        occlusion_scale=args.occlusion_scale,
+        remove_middle=args.remove_middle
     )
 
     if bool(args.run):
