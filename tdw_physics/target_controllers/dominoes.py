@@ -515,10 +515,10 @@ class Dominoes(RigidbodiesDataset):
         self.push_position = None
         self.force_wait = None
 
-    @classmethod
-    def get_controller_label_funcs(MultiDominoes):
+    @staticmethod
+    def get_controller_label_funcs(classname = 'Dominoes'):
 
-        funcs = super().get_controller_label_funcs()
+        funcs = super(Dominoes, Dominoes).get_controller_label_funcs(classname)
         funcs += get_all_label_funcs()
 
         def room(f):
@@ -1241,8 +1241,9 @@ class MultiDominoes(Dominoes):
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
 
-    def get_controller_label_funcs(self):
-        funcs = super().get_controller_label_funcs()
+    @staticmethod
+    def get_controller_label_funcs(classname = 'MultiDominoes'):
+        funcs = super(MultiDominoes, MultiDominoes).get_controller_label_funcs(classname)
 
         def num_middle_objects(f):
             try:
