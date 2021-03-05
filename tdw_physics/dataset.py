@@ -65,8 +65,10 @@ class Dataset(Controller, ABC):
             return stim_name
         def controller_name(f):
             return classname
+        def git_commit(f):
+            return str(np.array(f['static']['git_commit'], dtype=str))
 
-        return [stimulus_name, controller_name]
+        return [stimulus_name, controller_name, git_commit]
 
     def save_command_line_args(self, output_dir: str) -> None:
         if not self.save_args:
@@ -469,6 +471,12 @@ class Dataset(Controller, ABC):
 
         :param static_group: The static data group.
         """
+        # git commit
+        res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
+        self.commit = res.stdout.strip()
+        static_group.create_dataset("git_commit", data=self.commit)
+
+        # stimulus name
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
         static_group.create_dataset("model_names", data=self.model_names)
