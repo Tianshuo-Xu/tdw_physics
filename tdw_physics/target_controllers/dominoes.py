@@ -526,11 +526,20 @@ class Dominoes(RigidbodiesDataset):
         def trial_seed(f):
             return int(np.array(f['static']['trial_seed']))
         def num_distractors(f):
-            return int(len(f['static']['distractors']))
+            try:
+                return int(len(f['static']['distractors']))
+            except KeyError:
+                return int(0)
         def num_occluders(f):
-            return int(len(f['static']['occluders']))
+            try:
+                return int(len(f['static']['occluders']))
+            except KeyError:
+                return int(0)
         def push_time(f):
-            return int(np.array(f['static']['push_time']))
+            try:
+                return int(np.array(f['static']['push_time']))
+            except KeyError:
+                return int(0)
         funcs += [room, trial_seed, push_time, num_distractors, num_occluders]
         
         return funcs
@@ -1249,7 +1258,7 @@ class MultiDominoes(Dominoes):
             try:
                 return int(len(f['static']['middle_objects']))
             except KeyError:
-                return int(0)
+                return int(len(f['static']['mass']) - 3)
         def remove_middle(f):
             try:
                 return bool(np.array(f['static']['remove_middle']))
