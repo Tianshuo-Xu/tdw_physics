@@ -15,7 +15,7 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              handle_random_transform_args)
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
 
-from dominoes import Dominoes, MultiDominoes, get_args
+from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
 

@@ -55,7 +55,8 @@ class Dataset(Controller, ABC):
         self.model_names = []
         self._initialize_object_counter()
 
-    def get_controller_label_funcs(self):
+    @staticmethod
+    def get_controller_label_funcs(classname = 'Dataset'):
         """
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
@@ -63,9 +64,11 @@ class Dataset(Controller, ABC):
             stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
             return stim_name
         def controller_name(f):
-            return type(self).__name__
+            return classname
+        def git_commit(f):
+            return str(np.array(f['static']['git_commit'], dtype=str))
 
-        return [stimulus_name, controller_name]
+        return [stimulus_name, controller_name, git_commit]
 
     def save_command_line_args(self, output_dir: str) -> None:
         if not self.save_args:
@@ -203,7 +206,7 @@ class Dataset(Controller, ABC):
         if self.save_labels:
             hdf5_paths = glob.glob(str(output_dir) + '/*.hdf5')
             stats = get_across_trial_stats_from(
-                hdf5_paths, funcs=self.get_controller_label_funcs())
+                hdf5_paths, funcs=self.get_controller_label_funcs(classname=type(self).__name__))
             stats["num_trials"] = int(len(hdf5_paths))
             stats_str = json.dumps(stats, indent=4)
             stats_file = Path(output_dir).joinpath('trial_stats.json')
@@ -355,7 +358,7 @@ class Dataset(Controller, ABC):
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
             meta = OrderedDict()
-            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(), res=meta)
+            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
             self.trial_metadata.append(meta)
 
             # Save the trial-level metadata
@@ -468,6 +471,12 @@ class Dataset(Controller, ABC):
 
         :param static_group: The static data group.
         """
+        # git commit
+        res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
+        self.commit = res.stdout.strip()
+        static_group.create_dataset("git_commit", data=self.commit)
+
+        # stimulus name
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
         static_group.create_dataset("model_names", data=self.model_names)

@@ -515,9 +515,10 @@ class Dominoes(RigidbodiesDataset):
         self.push_position = None
         self.force_wait = None
 
-    def get_controller_label_funcs(self):
+    @staticmethod
+    def get_controller_label_funcs(classname = 'Dominoes'):
 
-        funcs = super().get_controller_label_funcs()
+        funcs = super(Dominoes, Dominoes).get_controller_label_funcs(classname)
         funcs += get_all_label_funcs()
 
         def room(f):
@@ -525,11 +526,20 @@ class Dominoes(RigidbodiesDataset):
         def trial_seed(f):
             return int(np.array(f['static']['trial_seed']))
         def num_distractors(f):
-            return int(len(f['static']['distractors']))
+            try:
+                return int(len(f['static']['distractors']))
+            except KeyError:
+                return int(0)
         def num_occluders(f):
-            return int(len(f['static']['occluders']))
+            try:
+                return int(len(f['static']['occluders']))
+            except KeyError:
+                return int(0)
         def push_time(f):
-            return int(np.array(f['static']['push_time']))
+            try:
+                return int(np.array(f['static']['push_time']))
+            except KeyError:
+                return int(0)
         funcs += [room, trial_seed, push_time, num_distractors, num_occluders]
         
         return funcs
@@ -1240,14 +1250,15 @@ class MultiDominoes(Dominoes):
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
 
-    def get_controller_label_funcs(self):
-        funcs = super().get_controller_label_funcs()
+    @staticmethod
+    def get_controller_label_funcs(classname = 'MultiDominoes'):
+        funcs = super(MultiDominoes, MultiDominoes).get_controller_label_funcs(classname)
 
         def num_middle_objects(f):
             try:
                 return int(len(f['static']['middle_objects']))
             except KeyError:
-                return int(0)
+                return int(len(f['static']['mass']) - 3)
         def remove_middle(f):
             try:
                 return bool(np.array(f['static']['remove_middle']))
