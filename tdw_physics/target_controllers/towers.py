@@ -18,6 +18,7 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args
+from tdw_physics.postprocessing.labels import is_trial_valid
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
 M = MaterialLibrarian()
@@ -85,13 +86,17 @@ def get_tower_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.5,0.5]",
                         help="scale of target objects")
+    parser.add_argument("--zscale",
+                        type=str,
+                        default="3.0,0.01,3.0",
+                        help="scale of target zone")    
     parser.add_argument("--fscale",
                         type=str,
-                        default="[4.0,15.0]",
+                        default="[10.0,10.0]",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
-                        default="[-10,10]",
+                        default="[-0,0]",
                         help="range of angles in xz plane to apply push force")
     parser.add_argument("--foffset",
                         type=str,
@@ -173,12 +178,31 @@ class Tower(MultiDominoes):
 
         self.cap_type = None
         self.did_fall = None
+        
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
         static_group.create_dataset("cap_type", data=self.cap_type)
         static_group.create_dataset("use_cap", data=self.use_cap)
+        static_group.create_dataset("num_blocks", data=self.num_blocks)
+
+    @staticmethod
+    def get_controller_label_funcs(classname = "Tower"):
+        funcs = Dominoes.get_controller_label_funcs(classname)
+
+        def num_middle_objects(f):
+            try:
+                return int(np.array(f['static']['num_blocks']))
+            except KeyError:
+                return int(len(f['static']['mass'] - 3))
+
+        def did_tower_fall(f):
+            return is_trial_valid(f, valid_key='did_fall')
+
+        funcs += [num_middle_objects, did_tower_fall]
+        
+        return funcs
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
         Tuple[h5py.Group, h5py.Group, dict, bool]:
@@ -194,7 +218,6 @@ class Tower(MultiDominoes):
         bottom_block_width += (self.num_blocks / 2.0) * np.abs(self.middle_scale_gradient)
         probe_width = get_range(self.probe_scale_range)[1]
         return {
-            # "x": -0.5 * scale["x"] - bottom_block_width,
             "x": 0.0,
             "y": 0.0,
             "z": -(0.5 + probe_width) * scale["z"] + bottom_block_width + 0.1,
@@ -214,12 +237,9 @@ class Tower(MultiDominoes):
         if frame == 5:
             self._set_tower_height_now(resp)
             self.init_height = self.tower_height + 0.
-            print("init tower height: %.2f" % self.tower_height)
         elif frame > 5:
             self._set_tower_height_now(resp)
-            print("tower height now: %.2f" % self.tower_height)
             self.did_fall = (self.tower_height < 0.5 * self.init_height)
-            print("Did the tower fall? %s" % ("yes" if self.did_fall else "no"))
 
         return []
 
@@ -306,6 +326,7 @@ class Tower(MultiDominoes):
     def _add_cap(self) -> List[dict]:
         commands = []
 
+        # the cap becomes the target
         record, data = self.random_primitive(
             self._cap_types,
             scale=self.target_scale_range,
@@ -313,8 +334,9 @@ class Tower(MultiDominoes):
             add_data=self.use_cap
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.cap = record
+        self.cap  = record
         self.cap_type = data["name"]
+        self._replace_target_with_object(record, data)
 
         commands.extend(
             self.add_physics_object(
@@ -408,7 +430,15 @@ if __name__ == "__main__":
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
         middle_material=args.mmaterial,
-        zone_material=args.zmaterial
+        zone_material=args.zmaterial,
+        distractor_types=args.distractor,
+        distractor_categories=args.distractor_categories,
+        num_distractors=args.num_distractors,
+        occluder_types=args.occluder,
+        occluder_categories=args.occluder_categories,
+        num_occluders=args.num_occluders,
+        occlusion_scale=args.occlusion_scale,
+        remove_middle=args.remove_middle        
     )
     print(TC.num_blocks, [r.name for r in TC._cap_types])
 
@@ -418,8 +448,10 @@ if __name__ == "__main__":
                temp_path=args.temp,
                width=args.width,
                height=args.height,
+               save_passes=args.save_passes.split(','),
+               save_movies=args.save_movies,
+               save_labels=args.save_labels,               
                args_dict=vars(args)
         )
-        print("Did the tower fall? %s" % ("YES" if TC.did_fall else "NO"))
     else:
         TC.communicate({"$type": "terminate"})

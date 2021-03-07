@@ -90,6 +90,9 @@ class Dataset(Controller, ABC):
         writelist = []
         for k,v in self.args_dict.items():
             writelist.extend(["--"+str(k),str(v)])
+
+        self._script_args = writelist
+        
         output_dir = Path(output_dir)
         filepath = output_dir.joinpath("args.txt")
         if not filepath.exists():
@@ -471,7 +474,7 @@ class Dataset(Controller, ABC):
 
         :param static_group: The static data group.
         """
-        # git commit
+        # git commit and args
         res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
         self.commit = res.stdout.strip()
         static_group.create_dataset("git_commit", data=self.commit)
