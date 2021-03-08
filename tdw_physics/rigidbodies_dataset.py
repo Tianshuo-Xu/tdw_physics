@@ -258,11 +258,14 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  "static_friction": static_friction,
                  "bounciness": bounciness}]
 
+
     def add_physics_object_default(self,
                                    name: str,
                                    position: Dict[str, float],
                                    rotation: Dict[str, float],
-                                   o_id: Optional[int] = None) -> List[dict]:
+                                   o_id: Optional[int] = None,
+                                   add_data: Optional[bool] = True,
+                                   ) -> List[dict]:
         """
         Add an object with default physics material values.
 
@@ -277,7 +280,58 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         info = PHYSICS_INFO[name]
         return self.add_physics_object(o_id=o_id, record=info.record, position=position, rotation=rotation,
                                        mass=info.mass, dynamic_friction=info.dynamic_friction,
-                                       static_friction=info.static_friction, bounciness=info.bounciness)
+                                       static_friction=info.static_friction, bounciness=info.bounciness, add_data=add_data)
+
+    def add_ramp(self,
+                 record: ModelRecord,
+                 position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                 o_id: Optional[int] = None,
+                 material: Optional[str] = None,
+                 add_data: Optional[bool] = True
+                 ) -> List[dict]:
+
+        # get a named ramp or choose a random one
+        ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records \
+                        if 'ramp' in r.name}
+        if record.name not in ramp_records.keys():
+            record = ramp_record[random.choice(sorted(ramp_records.keys()))]
+
+        cmds = []
+
+        # add the ramp
+        cmds.extend(
+            self.add_physics_object_default(
+                name = record.name,
+                position = position,
+                rotation = rotation,
+                o_id = o_id,
+                add_data = add_data))
+        
+        print("add ramp command")
+        print(cmds)
+
+        if o_id is None:
+            o_id = cmds[-1]["id"]
+
+        # scale the ramp
+        cmds.append(
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id})
+
+        # need to make ramp a kinetimatic object
+        cmds.extend([
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": o_id},
+            {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": True}])            
+
+        return cmds
 
     def get_objects_by_mass(self, mass: float) -> List[int]:
         """

@@ -634,7 +634,7 @@ class Dominoes(RigidbodiesDataset):
 
         if (self.force_wait != 0) and frame == self.force_wait:
             print("applied %s at time step %d" % (self.push_cmd, frame))
-            return self.push_cmd
+            return [self.push_cmd]
         else:
             return []
 
@@ -940,7 +940,7 @@ class Dominoes(RigidbodiesDataset):
                 mass=self.probe_mass,
                 dynamic_friction=0.5,
                 static_friction=0.5,
-                bounciness=0.,
+                bounciness=0.1,
                 o_id=o_id))
 
         # Set the probe material
@@ -965,24 +965,32 @@ class Dominoes(RigidbodiesDataset):
         self.push_force = self.rotate_vector_parallel_to_floor(
             self.push_force, -rot['y'], degrees=True)
 
-        self.push_position = self.probe_initial_position
-        self.push_position = {
-            k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                self.probe_scale, rot['y'])[k]
-            for k,v in self.push_position.items()}
-        self.push_position = {
-            k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
-            for k,v in self.push_position.items()}
-        
-        self.push_cmd = {
-            "$type": "apply_force_at_position",
-            "force": self.push_force,
-            "position": self.push_position,
-            "id": int(o_id)
-        }
+        self.push_position = self.probe_initial_position        
+        if self.use_ramp:
+            self.push_cmd = {
+                "$type": "apply_force_to_object",
+                "force": self.push_force,
+                "id": int(o_id)
+            }
+        else:
+            self.push_position = {
+                k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                    self.probe_scale, rot['y'])[k]
+                for k,v in self.push_position.items()}
+            self.push_position = {
+                k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                for k,v in self.push_position.items()}
+
+            self.push_cmd = {
+                "$type": "apply_force_at_position",
+                "force": self.push_force,
+                "position": self.push_position,
+                "id": int(o_id)
+            }
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(self.force_wait_range[0], self.force_wait_range[1]))
+        print("force wait", self.force_wait)
 
         if self.force_wait == 0:
             commands.append(self.push_cmd)
@@ -1000,7 +1008,7 @@ class Dominoes(RigidbodiesDataset):
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
         scale_x = (0.5 * self.collision_axis_length) / r_len
-        ramp_scale = arr_to_xyz([scale_x, scale_x, scale_x])
+        ramp_scale = arr_to_xyz([scale_x, 1.0, 0.75 * scale_x])
 
         cmds = self.add_ramp(
             record = self.ramp,
@@ -1026,7 +1034,9 @@ class Dominoes(RigidbodiesDataset):
         print(cmds)
 
         # need to adjust probe height as a result of ramp placement
-        self.probe_initial_position['y'] = ramp_scale['y'] * r_height + 0.01
+        self.probe_initial_position['x'] -= 0.5 * ramp_scale['x'] * r_len - 0.15
+        self.probe_initial_position['y'] = ramp_scale['y'] * r_height + 0.05
+
 
         return cmds
 

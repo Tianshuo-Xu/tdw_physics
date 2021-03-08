@@ -26,6 +26,12 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
+def none_or_str(value):
+    if value == 'None':
+        return None
+    else:
+        return value
+
 def get_tower_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
@@ -80,7 +86,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--pmass",
                         type=str,
-                        default="[2.0,4.0]",
+                        default="[3.0,3.0]",
                         help="scale of probe objects")
     parser.add_argument("--pscale",
                         type=str,
@@ -96,7 +102,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="scale of target zone")    
     parser.add_argument("--fscale",
                         type=str,
-                        default="[10.0,10.0]",
+                        default="1.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -110,6 +116,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.0,
                         help="jitter around object centroid to apply force")
+    parser.add_argument("--fwait",
+                        type=none_or_str,
+                        default="[15,15]",
+                        help="How many frames to wait before applying the force")        
     parser.add_argument("--camera_distance",
                         type=float,
                         default=2.5,
@@ -251,6 +261,10 @@ class Tower(MultiDominoes):
                         self.tower_height = tr.get_position(i)[1]
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+
+        cmds = super().get_per_frame_commands(resp, frame)
+        
+        # check if tower fell
         if frame == 5:
             self._set_tower_height_now(resp)
             self.init_height = self.tower_height + 0.
@@ -258,7 +272,7 @@ class Tower(MultiDominoes):
             self._set_tower_height_now(resp)
             self.did_fall = (self.tower_height < 0.5 * self.init_height)
 
-        return []
+        return cmds
 
     def _build_intermediate_structure(self) -> List[dict]:
         print("middle color", self.middle_color)
@@ -432,6 +446,7 @@ if __name__ == "__main__":
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
+        force_wait=args.fwait,
         remove_target=bool(args.remove_target),
         ## not scenario-specific
         room=args.room,
