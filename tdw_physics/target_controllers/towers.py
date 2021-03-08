@@ -204,14 +204,21 @@ class Tower(MultiDominoes):
         
         return funcs
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
-        Tuple[h5py.Group, h5py.Group, dict, bool]:
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
 
-        frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num)
-        if frame_num > 5:
-            frame.create_dataset("did_fall", data=bool(self.did_fall))
+        labels, resp, frame_num, done = super()._write_frame_labels(
+            frame_grp, resp, frame_num, sleeping)
 
-        return frame, objs, tr, sleeping
+        if frame_num >= 30:
+            labels.create_dataset("did_fall", data=bool(self.did_fall))
+        else:
+            labels.create_dataset("did_fall", data=False)
+
+        return labels, resp, frame_num, done
 
     def _get_zone_location(self, scale):
         bottom_block_width = get_range(self.middle_scale_range)[1]

@@ -684,7 +684,7 @@ class Dominoes(RigidbodiesDataset):
                             frame_grp: h5py.Group,
                             resp: List[bytes],
                             frame_num: int,
-                            sleeping: bool) -> Tuple[h5py.Group, bool]:
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
 
         labels, resp, frame_num, done = super()._write_frame_labels(frame_grp, resp, frame_num, sleeping)
 
