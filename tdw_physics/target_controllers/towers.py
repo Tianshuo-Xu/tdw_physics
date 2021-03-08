@@ -38,6 +38,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         type=int,
                         default=1,
                         help="Whether to remove the target object")
+    parser.add_argument("--ramp",
+                        type=int,
+                        default=1,
+                        help="Whether to place the probe object on the top of a ramp")    
     parser.add_argument("--collision_axis_length",
                         type=float,
                         default=3.0,
@@ -147,9 +151,12 @@ class Tower(MultiDominoes):
                  middle_scale_range=[0.5,0.5],
                  middle_scale_gradient=0.0,
                  tower_cap=[],
+                 use_ramp=True,
                  **kwargs):
 
         super().__init__(port=port, middle_scale_range=middle_scale_range, **kwargs)
+
+        self.use_ramp = use_ramp
 
         # probe and target different colors
         self.match_probe_and_target_color = False
@@ -220,15 +227,18 @@ class Tower(MultiDominoes):
 
         return labels, resp, frame_num, done
 
+    # def _get_zone_location(self, scale):
+    #     bottom_block_width = get_range(self.middle_scale_range)[1]
+    #     bottom_block_width += (self.num_blocks / 2.0) * np.abs(self.middle_scale_gradient)
+    #     probe_width = get_range(self.probe_scale_range)[1]
+    #     return {
+    #         "x": 0.0,
+    #         "y": 0.0,
+    #         "z": -(0.5 + probe_width) * scale["z"] + bottom_block_width + 0.1,
+    #     }
+
     def _get_zone_location(self, scale):
-        bottom_block_width = get_range(self.middle_scale_range)[1]
-        bottom_block_width += (self.num_blocks / 2.0) * np.abs(self.middle_scale_gradient)
-        probe_width = get_range(self.probe_scale_range)[1]
-        return {
-            "x": 0.0,
-            "y": 0.0,
-            "z": -(0.5 + probe_width) * scale["z"] + bottom_block_width + 0.1,
-        }
+        return TDWUtils.VECTOR3_ZERO
 
     def _set_tower_height_now(self, resp: List[bytes]) -> None:
         top_obj_id = self.object_ids[-1]
@@ -445,7 +455,8 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
-        remove_middle=args.remove_middle        
+        remove_middle=args.remove_middle,
+        use_ramp=bool(args.ramp)
     )
     print(TC.num_blocks, [r.name for r in TC._cap_types])
 

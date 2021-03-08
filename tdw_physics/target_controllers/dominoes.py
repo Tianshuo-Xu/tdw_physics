@@ -27,7 +27,6 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
-
 def none_or_str(value):
     if value == 'None':
         return None
@@ -61,6 +60,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=str,
                         default=None,
                         help="comma-separated list of possible middle objects; default to same as target")
+    parser.add_argument("--ramp",
+                        type=int,
+                        default=0,
+                        help="Whether to place the probe object on the top of a ramp")
     parser.add_argument("--zscale",
                         type=str,
                         default="0.5,0.01,2.0",
@@ -348,6 +351,7 @@ class Dominoes(RigidbodiesDataset):
     """
 
     MAX_TRIALS = 1000
+    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_weld' in r.name]
     
     def __init__(self,
                  port: int = 1071,
@@ -389,6 +393,7 @@ class Dominoes(RigidbodiesDataset):
                  occluder_categories=None,
                  num_occluders=0,
                  occlusion_scale=0.6,
+                 use_ramp=False,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -409,6 +414,9 @@ class Dominoes(RigidbodiesDataset):
         self.set_target_types(target_objects)
         self.material_types = material_types
         self.remove_target = remove_target
+
+        # whether to use a ramp
+        self.use_ramp = use_ramp
 
         ## object generation properties
         self.target_scale_range = target_scale_range
@@ -920,6 +928,9 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
+
+        if self.use_ramp:
+            commands.extend(self._place_ramp_under_probe())
         
         commands.extend(
             self.add_physics_object(
@@ -977,6 +988,47 @@ class Dominoes(RigidbodiesDataset):
             commands.append(self.push_cmd)
 
         return commands
+
+    def _place_ramp_under_probe(self) -> List[dict]:
+
+        # ramp params
+        self.ramp = random.choice(self.DEFAULT_RAMPS)
+        ramp_pos = copy.deepcopy(self.probe_initial_position)
+        ramp_rot = self.get_y_rotation([180,180])
+        ramp_id = self._get_next_object_id()
+
+        # figure out scale
+        r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
+        scale_x = (0.5 * self.collision_axis_length) / r_len
+        ramp_scale = arr_to_xyz([scale_x, scale_x, scale_x])
+
+        cmds = self.add_ramp(
+            record = self.ramp,
+            position=ramp_pos,
+            rotation=ramp_rot,
+            scale=ramp_scale,
+            o_id=ramp_id,
+            add_data=True)
+
+        # give the ramp a texture and color
+        cmds.extend(
+            self.get_object_material_commands(
+                self.ramp, ramp_id, self.get_material_name(self.zone_material)))
+        # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+        rgb = [0.75]*3
+        cmds.append(
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": ramp_id})            
+            
+
+        print("ramp commands")
+        print(cmds)
+
+        # need to adjust probe height as a result of ramp placement
+        self.probe_initial_position['y'] = ramp_scale['y'] * r_height + 0.01
+
+        return cmds
 
     def _replace_target_with_object(self, record, data):
         self.target = record
