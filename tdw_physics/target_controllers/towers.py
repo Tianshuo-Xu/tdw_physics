@@ -46,7 +46,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="Whether to remove the target object")
     parser.add_argument("--ramp",
                         type=int,
-                        default=1,
+                        default=0,
                         help="Whether to place the probe object on the top of a ramp")    
     parser.add_argument("--collision_axis_length",
                         type=float,
