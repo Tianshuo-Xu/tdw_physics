@@ -1056,26 +1056,26 @@
     "static_friction": 0.48
   },
     "ramp_with_platform_30": {
-	"bounciness": 0.0,
-	"dynamic_friction": 0.35,
-	"static_friction": 0.4,
-	"mass": 500,
+	"bounciness": 0,
+	"dynamic_friction": 0.05,
+	"static_friction": 0.05,
+	"mass": 5,
 	"name": "ramp_with_platform_30",
 	"library": "models_full.json"
     },
     "ramp_with_platform_60": {
-	"bounciness": 0.0,
-	"dynamic_friction": 0.4,
-	"static_friction": 0.4,
-	"mass": 500,
+	"bounciness": 0,
+	"dynamic_friction": 0.1,
+	"static_friction": 0.1,
+	"mass": 5,
 	"name": "ramp_with_platform_60",
 	"library": "models_full.json"
     },
     "ramp_with_platform_weld": {
-	"bounciness": 0.0,
-	"dynamic_friction": 0.4,
-	"static_friction": 0.4,
-	"mass": 500,
+	"bounciness": 0,
+	"dynamic_friction": 0.1,
+	"static_friction": 0.1,
+	"mass": 5,
 	"name": "ramp_with_platform_weld",
 	"library": "models_full.json"
     }        

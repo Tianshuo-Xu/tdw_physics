@@ -351,7 +351,7 @@ class Dominoes(RigidbodiesDataset):
     """
 
     MAX_TRIALS = 1000
-    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_weld' in r.name]
+    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     
     def __init__(self,
                  port: int = 1071,
@@ -788,6 +788,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone_type = data["name"]
         self.zone_color = rgb
         self.zone_id = o_id
+        self.zone_scale = scale
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
@@ -805,8 +806,8 @@ class Dominoes(RigidbodiesDataset):
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 mass=1000.,
-                dynamic_friction=0.5,
-                static_friction=0.5,
+                dynamic_friction=0.05,
+                static_friction=0.05,
                 bounciness=0,
                 o_id=o_id,
                 add_data=(not self.remove_zone)
@@ -938,9 +939,12 @@ class Dominoes(RigidbodiesDataset):
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
-                dynamic_friction=0.5,
-                static_friction=0.5,
-                bounciness=0.1,
+                # dynamic_friction=0.5,
+                # static_friction=0.5,
+                # bounciness=0.1,
+                dynamic_friction=0.1,
+                static_friction=0.1,
+                bounciness=0,                
                 o_id=o_id))
 
         # Set the probe material
@@ -957,6 +961,16 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "scale_object",
              "scale_factor": scale,
              "id": o_id}])
+
+        # Set its collision mode
+        commands.extend([
+            # {"$type": "set_object_collision_detection_mode",
+            #  "mode": "continuous_speculative",
+            #  "id": o_id},
+            {"$type": "set_object_drag",
+             "id": o_id,
+             "drag": 0, "angular_drag": 0}])
+            
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
@@ -1002,6 +1016,7 @@ class Dominoes(RigidbodiesDataset):
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
+        ramp_pos['y'] += self.zone_scale['y'] # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
 

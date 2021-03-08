@@ -86,46 +86,6 @@ class TransformsDataset(Dataset, ABC):
                 "category": record.wcategory,
                 "id": o_id}
 
-    def add_ramp(self,
-                 record: ModelRecord,
-                 position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                 rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                 scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
-                 o_id: Optional[int] = None,
-                 material: Optional[str] = None,
-                 add_data: Optional[bool] = True
-                 ) -> List[dict]:
-
-        # get a named ramp or choose a random one
-        ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records \
-                        if 'ramp' in r.name}
-        if record.name not in ramp_records.keys():
-            record = ramp_record[random.choice(sorted(ramp_records.keys()))]
-
-        cmds = []
-
-        # add the ramp
-        cmds.append(
-            self.add_transforms_object(
-                record=record,
-                position=position,
-                rotation=rotation,
-                o_id=o_id,
-                add_data=add_data))
-
-        print("add ramp command")
-        print(cmds)
-
-        if o_id is None:
-            o_id = cmds[-1]["id"]
-
-        # scale the ramp
-        cmds.append(
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id})
-
-        return cmds
 
     def _get_send_data_commands(self) -> List[dict]:
         return [{"$type": "send_transforms",

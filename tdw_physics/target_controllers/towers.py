@@ -96,6 +96,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.5,0.5]",
                         help="scale of target objects")
+    parser.add_argument("--zone",
+                        type=none_or_str,
+                        default="cube",
+                        help="type of zone object")        
     parser.add_argument("--zscale",
                         type=str,
                         default="3.0,0.01,3.0",
@@ -300,7 +304,7 @@ class Tower(MultiDominoes):
 
     def _build_stack(self) -> List[dict]:
         commands = []
-        height = 0.
+        height = self.zone_scale['y']
 
         # build the block scales
         mid = self.num_blocks / 2.0
