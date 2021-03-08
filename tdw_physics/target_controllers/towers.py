@@ -76,6 +76,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[-45,45]",
                         help="comma separated list of initial middle object rotation values")
+    parser.add_argument("--mmass",
+                        type=str,
+                        default="2.0",
+                        help="comma separated list of initial middle object rotation values")    
     parser.add_argument("--middle",
                         type=str,
                         default="cube",
@@ -86,7 +90,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--pmass",
                         type=str,
-                        default="[3.0,3.0]",
+                        default="[2.5,2.5]",
                         help="scale of probe objects")
     parser.add_argument("--pscale",
                         type=str,
@@ -304,7 +308,7 @@ class Tower(MultiDominoes):
 
     def _build_stack(self) -> List[dict]:
         commands = []
-        height = self.zone_scale['y']
+        height = self.zone_scale['y'] if not self.remove_zone else 0.0
 
         # build the block scales
         mid = self.num_blocks / 2.0
@@ -415,7 +419,7 @@ class Tower(MultiDominoes):
         return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 300
+        return frame > 500
 
 if __name__ == "__main__":
 

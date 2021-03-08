@@ -806,8 +806,8 @@ class Dominoes(RigidbodiesDataset):
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 mass=1000.,
-                dynamic_friction=0.05,
-                static_friction=0.05,
+                dynamic_friction=0.025,
+                static_friction=0.025,
                 bounciness=0,
                 o_id=o_id,
                 add_data=(not self.remove_zone)
@@ -1016,14 +1016,14 @@ class Dominoes(RigidbodiesDataset):
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
-        ramp_pos['y'] += self.zone_scale['y'] # don't intersect w zone
+        ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
 
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
         scale_x = (0.5 * self.collision_axis_length) / r_len
-        ramp_scale = arr_to_xyz([scale_x, 1.0, 0.75 * scale_x])
+        ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
 
         cmds = self.add_ramp(
             record = self.ramp,
@@ -1036,7 +1036,7 @@ class Dominoes(RigidbodiesDataset):
         # give the ramp a texture and color
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))
+                self.ramp, ramp_id, self.get_material_name(self.target_material)))
         # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
         rgb = [0.75]*3
         cmds.append(
