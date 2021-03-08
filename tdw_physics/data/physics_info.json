@@ -1054,5 +1054,29 @@
     "mass": 3.6512765139341354,
     "name": "woven_box",
     "static_friction": 0.48
-  }
+  },
+    "ramp_with_platform_30": {
+	"bounciness": 0.0,
+	"dynamic_friction": 0.35,
+	"static_friction": 0.4,
+	"mass": 500,
+	"name": "ramp_with_platform_30",
+	"library": "models_full.json"
+    },
+    "ramp_with_platform_60": {
+	"bounciness": 0.0,
+	"dynamic_friction": 0.4,
+	"static_friction": 0.4,
+	"mass": 500,
+	"name": "ramp_with_platform_60",
+	"library": "models_full.json"
+    },
+    "ramp_with_platform_weld": {
+	"bounciness": 0.0,
+	"dynamic_friction": 0.4,
+	"static_friction": 0.4,
+	"mass": 500,
+	"name": "ramp_with_platform_weld",
+	"library": "models_full.json"
+    }        
 }
