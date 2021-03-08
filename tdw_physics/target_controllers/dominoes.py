@@ -508,6 +508,7 @@ class Dominoes(RigidbodiesDataset):
         self.target_rotation = None
         self.target_position = None
         self.target_delta_position = None
+        self.replace_target = False
 
         self.probe_type = None
         self.probe_mass = None
@@ -683,12 +684,12 @@ class Dominoes(RigidbodiesDataset):
                             frame_grp: h5py.Group,
                             resp: List[bytes],
                             frame_num: int,
-                            sleeping: bool) -> Tuple[h5py.Group, bool]:
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
 
         labels, resp, frame_num, done = super()._write_frame_labels(frame_grp, resp, frame_num, sleeping)
 
         # Whether this trial has a target or zone to track
-        has_target = not self.remove_target
+        has_target = (not self.remove_target) or self.replace_target
         has_zone = not self.remove_zone
         labels.create_dataset("has_target", data=has_target)
         labels.create_dataset("has_zone", data=has_zone)
@@ -976,6 +977,15 @@ class Dominoes(RigidbodiesDataset):
             commands.append(self.push_cmd)
 
         return commands
+
+    def _replace_target_with_object(self, record, data):
+        self.target = record
+        self.target_type = data["name"]
+        self.target_color = data["color"]
+        self.target_scale = data["scale"]
+        self.target_id = data["id"]
+
+        self.replace_target = True
 
     def _build_intermediate_structure(self) -> List[dict]:
         """
