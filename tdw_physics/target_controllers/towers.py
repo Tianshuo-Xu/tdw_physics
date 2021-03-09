@@ -90,11 +90,11 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--pmass",
                         type=str,
-                        default="[2.5,2.5]",
+                        default="3.0",
                         help="scale of probe objects")
     parser.add_argument("--pscale",
                         type=str,
-                        default="[0.25,0.25]",
+                        default="0.3",
                         help="scale of probe objects")
     parser.add_argument("--tscale",
                         type=str,
@@ -130,7 +130,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="How many frames to wait before applying the force")        
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=2.5,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -138,7 +138,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=60,
+                        default=90,
                         help="maximum angle of camera rotation around centerpoint")
 
 
@@ -163,6 +163,8 @@ def get_tower_args(dataset_dir: str, parse=True):
 
 class Tower(MultiDominoes):
 
+    STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
+    
     def __init__(self,
                  port: int = 1071,
                  num_blocks=3,
@@ -197,7 +199,7 @@ class Tower(MultiDominoes):
 
         self.cap_type = None
         self.did_fall = None
-        
+        self.fall_frame = None
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -267,12 +269,15 @@ class Tower(MultiDominoes):
         cmds = super().get_per_frame_commands(resp, frame)
         
         # check if tower fell
-        if frame == 5:
+        self.did_fall = False
+        if frame == self.force_wait:
             self._set_tower_height_now(resp)
             self.init_height = self.tower_height + 0.
-        elif frame > 5:
+        elif frame > self.force_wait:
             self._set_tower_height_now(resp)
             self.did_fall = (self.tower_height < 0.5 * self.init_height)
+            if (self.fall_frame is None) and (self.did_fall == True):
+                self.fall_frame = frame
 
         return cmds
 
@@ -324,12 +329,18 @@ class Tower(MultiDominoes):
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
             block_pos = self._get_block_position(scale, height)
             block_rot = self.get_y_rotation(self.middle_rotation_range)
+
+            # scale the mass to give each block a uniform density
+            block_mass = random.uniform(*get_range(self.middle_mass_range))
+            block_mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+            
             commands.extend(
                 self.add_physics_object(
                     record=record,
                     position=block_pos,
                     rotation=block_rot,
-                    mass=random.uniform(*get_range(self.middle_mass_range)),
+                    # mass=random.uniform(*get_range(self.middle_mass_range)),
+                    mass=block_mass,
                     dynamic_friction=random.uniform(0, 0.9),
                     static_friction=random.uniform(0, 0.9),
                     bounciness=random.uniform(0, 1),
@@ -351,6 +362,7 @@ class Tower(MultiDominoes):
                  "id": o_id}])
 
             print("placed middle object %s" % str(m+1))
+            print("block mass", scale, block_mass)
 
             # update height
             _y = record.bounds['top']['y'] if self.middle_type != 'bowl' else (record.bounds['bottom']['y'] + 0.1)
@@ -417,7 +429,8 @@ class Tower(MultiDominoes):
         return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 500
+        return frame > 600
+        # return (frame > 750) or (self.fall_frame is not None and ((frame - 60) > self.fall_frame))
 
 if __name__ == "__main__":
 
@@ -437,6 +450,7 @@ if __name__ == "__main__":
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
+        zone_friction=args.zfriction,        
         target_objects=args.target,
         probe_objects=args.probe,
         middle_objects=args.middle,

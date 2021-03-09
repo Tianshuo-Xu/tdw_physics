@@ -72,6 +72,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default=None,
                         help="Where to place the target zone. None will default to a scenario-specific place.")
+    parser.add_argument("--zfriction",
+                        type=float,
+                        default=0.1,
+                        help="Static and dynamic friction on the target zone.")    
     parser.add_argument("--tscale",
                         type=str,
                         default="0.1,0.5,0.25",
@@ -360,6 +364,7 @@ class Dominoes(RigidbodiesDataset):
                  zone_color=[0.0,0.5,1.0],
                  zone_location=None,
                  zone_scale_range=[0.5,0.001,0.5],
+                 zone_friction=0.1,
                  probe_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
                  probe_scale_range=[0.2, 0.3],
@@ -408,6 +413,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone_color = zone_color
         self.zone_scale_range = zone_scale_range
         self.zone_material = zone_material
+        self.zone_friction = zone_friction
 
         ## allowable object types
         self.set_probe_types(probe_objects)
@@ -806,8 +812,8 @@ class Dominoes(RigidbodiesDataset):
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 mass=500,
-                dynamic_friction=0.01,
-                static_friction=0.01,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
                 bounciness=0,
                 o_id=o_id,
                 add_data=(not self.remove_zone)
@@ -1032,7 +1038,7 @@ class Dominoes(RigidbodiesDataset):
 
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
-        scale_x = (0.5 * self.collision_axis_length) / r_len
+        scale_x = (0.75 * self.collision_axis_length) / r_len
         ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
 
         cmds = self.add_ramp(
@@ -1060,7 +1066,7 @@ class Dominoes(RigidbodiesDataset):
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * ramp_scale['x'] * r_len - 0.15
-        self.probe_initial_position['y'] = ramp_scale['y'] * r_height + 0.05
+        self.probe_initial_position['y'] = ramp_scale['y'] * r_height
 
 
         return cmds
@@ -1461,6 +1467,7 @@ if __name__ == "__main__":
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
         zone_material=args.zmaterial,
+        zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
         middle_objects=args.middle,
