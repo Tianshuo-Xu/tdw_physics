@@ -805,7 +805,7 @@ class Dominoes(RigidbodiesDataset):
                 record=record,
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
-                mass=1000.,
+                mass=10,
                 dynamic_friction=0.01,
                 static_friction=0.01,
                 bounciness=0,
