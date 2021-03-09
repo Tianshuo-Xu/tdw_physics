@@ -805,7 +805,7 @@ class Dominoes(RigidbodiesDataset):
                 record=record,
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
-                mass=10,
+                mass=500,
                 dynamic_friction=0.01,
                 static_friction=0.01,
                 bounciness=0,
@@ -826,6 +826,16 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "scale_object",
              "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
              "id": o_id}])
+
+        # make it a "kinematic" object that won't move
+        commands.extend([
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": o_id},
+            {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": True}])            
 
         # get rid of it if not using a target object
         if self.remove_zone:
