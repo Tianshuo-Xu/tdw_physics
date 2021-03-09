@@ -192,12 +192,6 @@ class Tower(MultiDominoes):
         else:
             self.use_cap = False
 
-        # scale the camera height
-        self.camera_min_height *= 0.5 * (self.num_blocks + int(self.use_cap))
-        self.camera_max_height *= 0.5 * (self.num_blocks + int(self.use_cap))
-        self.camera_aim = 0.25 * (self.num_blocks + int(self.use_cap))
-        self.camera_aim = {"x": 0., "y": self.camera_aim, "z": 0.}
-
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
@@ -291,6 +285,10 @@ class Tower(MultiDominoes):
 
         commands.extend(self._build_stack())
         commands.extend(self._add_cap())
+
+        # set camera params
+        camera_y_aim = 0.5 * self.tower_height
+        self.camera_aim = arr_to_xyz([0.,camera_y_aim,0.])
 
         return commands
 
