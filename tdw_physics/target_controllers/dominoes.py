@@ -186,7 +186,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--material_types",
                         type=none_or_str,
-                        default="Wood",
+                        default="Wood,Metal,Plastic",
                         help="Which class of materials to sample material names from")
     parser.add_argument("--tmaterial",
                         type=none_or_str,
@@ -1052,9 +1052,10 @@ class Dominoes(RigidbodiesDataset):
         # give the ramp a texture and color
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.target_material)))
+                # self.ramp, ramp_id, self.get_material_name(self.target_material)))
+                self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
         # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
-        rgb = [0.75]*3
+        rgb = [1.0]*3
         cmds.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
