@@ -806,8 +806,8 @@ class Dominoes(RigidbodiesDataset):
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 mass=1000.,
-                dynamic_friction=0.025,
-                static_friction=0.025,
+                dynamic_friction=0.01,
+                static_friction=0.01,
                 bounciness=0,
                 o_id=o_id,
                 add_data=(not self.remove_zone)
@@ -942,8 +942,8 @@ class Dominoes(RigidbodiesDataset):
                 # dynamic_friction=0.5,
                 # static_friction=0.5,
                 # bounciness=0.1,
-                dynamic_friction=0.1,
-                static_friction=0.1,
+                dynamic_friction=0.01,
+                static_friction=0.01,
                 bounciness=0,                
                 o_id=o_id))
 

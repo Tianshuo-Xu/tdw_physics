@@ -119,6 +119,8 @@ def mask_visible_area(mask):
 
 def object_visible_area(d, object_key='target_id', frame_num=0):
     obj_mask = get_object_mask_at_frame(d, object_key, frame_num)
+    if obj_mask is None:
+        return None
     obj_area = obj_mask.sum()
     total_area = np.prod(obj_mask.shape)
     relative_area = float(obj_area) / float(total_area)

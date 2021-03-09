@@ -256,7 +256,7 @@ class Tower(MultiDominoes):
     #     }
 
     def _get_zone_location(self, scale):
-        return TDWUtils.VECTOR3_ZERO
+        return {"x": 0.0, "y": scale['y'], "z": 0.0}
 
     def _set_tower_height_now(self, resp: List[bytes]) -> None:
         top_obj_id = self.object_ids[-1]
