@@ -387,6 +387,9 @@ class Tower(MultiDominoes):
         self.cap_type = data["name"]
         self._replace_target_with_object(record, data)
 
+        mass = random.uniform(*get_range(self.middle_mass_range))
+        mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))        
+
         commands.extend(
             self.add_physics_object(
                 record=record,
@@ -396,10 +399,10 @@ class Tower(MultiDominoes):
                     "z": 0.
                 },
                 rotation={"x":0.,"y":0.,"z":0.},
-                mass=random.uniform(4.5,4.5),
-                dynamic_friction=random.uniform(0, 0.9),
-                static_friction=random.uniform(0, 0.9),
-                bounciness=random.uniform(0, 1),
+                mass=mass,
+                dynamic_friction=0.5,
+                static_friction=0.5,
+                bounciness=0,
                 o_id=o_id,
                 add_data=self.use_cap
             ))
