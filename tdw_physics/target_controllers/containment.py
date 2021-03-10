@@ -54,7 +54,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="Whether to remove the target object")
     parser.add_argument("--ramp",
                         type=int,
-                        default=1,
+                        default=0,
                         help="Whether to place the probe object on the top of a ramp")    
     parser.add_argument("--collision_axis_length",
                         type=float,
@@ -110,7 +110,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="scale of target zone")    
     parser.add_argument("--fscale",
                         type=str,
-                        default="1.0",
+                        default="2.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -169,7 +169,7 @@ class Containment(MultiDominoes):
                  middle_scale_range=[0.5,0.5],
                  middle_scale_gradient=0.0,
                  tower_cap=[],
-                 use_ramp=True,
+                 use_ramp=False,
                  **kwargs):
 
         super().__init__(port=port, middle_scale_range=middle_scale_range, **kwargs)
