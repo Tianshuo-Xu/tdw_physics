@@ -72,6 +72,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default=None,
                         help="Where to place the target zone. None will default to a scenario-specific place.")
+    parser.add_argument("--zfriction",
+                        type=float,
+                        default=0.1,
+                        help="Static and dynamic friction on the target zone.")    
     parser.add_argument("--tscale",
                         type=str,
                         default="0.1,0.5,0.25",
@@ -182,7 +186,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--material_types",
                         type=none_or_str,
-                        default="Wood",
+                        default="Wood,Metal,Plastic",
                         help="Which class of materials to sample material names from")
     parser.add_argument("--tmaterial",
                         type=none_or_str,
@@ -351,7 +355,7 @@ class Dominoes(RigidbodiesDataset):
     """
 
     MAX_TRIALS = 1000
-    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_weld' in r.name]
+    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     
     def __init__(self,
                  port: int = 1071,
@@ -360,6 +364,7 @@ class Dominoes(RigidbodiesDataset):
                  zone_color=[0.0,0.5,1.0],
                  zone_location=None,
                  zone_scale_range=[0.5,0.001,0.5],
+                 zone_friction=0.1,
                  probe_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
                  probe_scale_range=[0.2, 0.3],
@@ -408,6 +413,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone_color = zone_color
         self.zone_scale_range = zone_scale_range
         self.zone_material = zone_material
+        self.zone_friction = zone_friction
 
         ## allowable object types
         self.set_probe_types(probe_objects)
@@ -788,6 +794,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone_type = data["name"]
         self.zone_color = rgb
         self.zone_id = o_id
+        self.zone_scale = scale
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
@@ -804,9 +811,9 @@ class Dominoes(RigidbodiesDataset):
                 record=record,
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
-                mass=1000.,
-                dynamic_friction=0.5,
-                static_friction=0.5,
+                mass=500,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
                 bounciness=0,
                 o_id=o_id,
                 add_data=(not self.remove_zone)
@@ -825,6 +832,16 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "scale_object",
              "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
              "id": o_id}])
+
+        # make it a "kinematic" object that won't move
+        commands.extend([
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": o_id},
+            {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": True}])            
 
         # get rid of it if not using a target object
         if self.remove_zone:
@@ -938,9 +955,12 @@ class Dominoes(RigidbodiesDataset):
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
-                dynamic_friction=0.5,
-                static_friction=0.5,
-                bounciness=0.1,
+                # dynamic_friction=0.5,
+                # static_friction=0.5,
+                # bounciness=0.1,
+                dynamic_friction=0.01,
+                static_friction=0.01,
+                bounciness=0,                
                 o_id=o_id))
 
         # Set the probe material
@@ -957,6 +977,16 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "scale_object",
              "scale_factor": scale,
              "id": o_id}])
+
+        # Set its collision mode
+        commands.extend([
+            # {"$type": "set_object_collision_detection_mode",
+            #  "mode": "continuous_speculative",
+            #  "id": o_id},
+            {"$type": "set_object_drag",
+             "id": o_id,
+             "drag": 0, "angular_drag": 0}])
+            
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
@@ -1002,13 +1032,14 @@ class Dominoes(RigidbodiesDataset):
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
+        ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
 
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
-        scale_x = (0.5 * self.collision_axis_length) / r_len
-        ramp_scale = arr_to_xyz([scale_x, 1.0, 0.75 * scale_x])
+        scale_x = (0.75 * self.collision_axis_length) / r_len
+        ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
 
         cmds = self.add_ramp(
             record = self.ramp,
@@ -1021,9 +1052,10 @@ class Dominoes(RigidbodiesDataset):
         # give the ramp a texture and color
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))
+                # self.ramp, ramp_id, self.get_material_name(self.target_material)))
+                self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
         # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
-        rgb = [0.75]*3
+        rgb = [0.75,0.75,1.0]
         cmds.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1035,7 +1067,7 @@ class Dominoes(RigidbodiesDataset):
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * ramp_scale['x'] * r_len - 0.15
-        self.probe_initial_position['y'] = ramp_scale['y'] * r_height + 0.05
+        self.probe_initial_position['y'] = ramp_scale['y'] * r_height
 
 
         return cmds
@@ -1436,6 +1468,7 @@ if __name__ == "__main__":
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
         zone_material=args.zmaterial,
+        zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
         middle_objects=args.middle,

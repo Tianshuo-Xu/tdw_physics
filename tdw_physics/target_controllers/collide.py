@@ -114,18 +114,18 @@ def get_collide_args(dataset_dir: str, parse=True):
 if __name__ == '__main__':
 
     # args = get_collide_args("collide")
-    print([m.name for m in MODEL_LIBRARIES['models_full.json'].records \
-           if 'incline' == m.wcategory])
+    # print([m.name for m in MODEL_LIBRARIES['models_full.json'].records \
+    #        if 'incline' == m.wcategory])
     
 
 
     
     # c = SceneLibrarian()
     # print([r.name for r in c.search_records(search="room")])
-    # c = MaterialLibrarian()
-    # ms = c.get_material_types()
-    # print(ms)
-    # print([m.name for m in c.get_all_materials_of_type("Wood")])
+    c = MaterialLibrarian()
+    ms = c.get_material_types()
+    print(ms)
+    print([m.name for m in c.get_all_materials_of_type("Plastic")])
     # metal = [m for m in c.get_all_materials_of_type("Metal") if "steel_rusty" in m.name]
     # print(metal[0], metal[0].name)
     # for m in ms:
