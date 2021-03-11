@@ -1,3 +1,4 @@
+import sys, os
 from argparse import ArgumentParser
 import h5py
 import json
@@ -15,7 +16,10 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.util import (MODEL_LIBRARIES,
+                              get_parser,
+                              xyz_to_arr, arr_to_xyz, str_to_xyz,
+                              none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args
 from tdw_physics.postprocessing.labels import is_trial_valid
@@ -26,11 +30,6 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
-def none_or_str(value):
-    if value == 'None':
-        return None
-    else:
-        return value
 
 def get_tower_args(dataset_dir: str, parse=True):
     """
@@ -41,7 +40,7 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
     parser.add_argument("--remove_target",
-                        type=int,
+                        type=int_or_bool,
                         default=1,
                         help="Whether to remove the target object")
     parser.add_argument("--ramp",
@@ -65,7 +64,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         default=0.0,
                         help="Size of block scale gradient going from top to bottom of tower")
     parser.add_argument("--tower_cap",
-                        type=str,
+                        type=none_or_str,
                         default="bowl",
                         help="Object types to use as a capper on the tower")
     parser.add_argument("--spacing_jitter",
@@ -141,6 +140,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         default=90,
                         help="maximum angle of camera rotation around centerpoint")
 
+    # for generating training data without zones, targets, caps, and at lower resolution
+    parser.add_argument("--training_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")
 
     def postprocess(args):
 
@@ -153,11 +156,24 @@ def get_tower_args(dataset_dir: str, parse=True):
         else:
             args.tower_cap = []
 
+
         return args
 
     args = parser.parse_args()
     args = domino_postproc(args)
     args = postprocess(args)
+
+    # produce training data
+    if args.training_data_mode:
+        args.dir = os.path.join(args.dir, 'training_data')
+        args.random = 0
+        args.seed = args.seed + 1
+        args.color = args.pcolor = args.mcolor = args.rcolor = None            
+        args.remove_zone = 1
+        args.remove_target = 1
+        args.save_passes = ""
+        args.save_movies = False
+        args.tower_cap = MODEL_NAMES
 
     return args
 
@@ -192,6 +208,7 @@ class Tower(MultiDominoes):
             self.use_cap = True
             self._cap_types = self.get_types(tower_cap)
         else:
+            self._cap_types = self._middle_types
             self.use_cap = False
 
     def clear_static_data(self) -> None:
@@ -385,7 +402,8 @@ class Tower(MultiDominoes):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.cap  = record
         self.cap_type = data["name"]
-        self._replace_target_with_object(record, data)
+        if self.use_cap:
+            self._replace_target_with_object(record, data)
 
         mass = random.uniform(*get_range(self.middle_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))        
@@ -471,6 +489,7 @@ if __name__ == "__main__":
         force_offset_jitter=args.fjitter,
         force_wait=args.fwait,
         remove_target=bool(args.remove_target),
+        remove_zone=bool(args.remove_zone),
         ## not scenario-specific
         room=args.room,
         randomize=args.random,
@@ -494,9 +513,9 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
-        use_ramp=bool(args.ramp)
+        use_ramp=bool(args.ramp),
+        ramp_color=args.rcolor
     )
-    print(TC.num_blocks, [r.name for r in TC._cap_types])
 
     if bool(args.run):
         TC.run(num=args.num,

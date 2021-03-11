@@ -16,7 +16,11 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.util import (MODEL_LIBRARIES,
+                              get_parser,
+                              xyz_to_arr, arr_to_xyz, str_to_xyz,
+                              none_or_str, none_or_int, int_or_bool)
+
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
 
@@ -26,12 +30,6 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
-
-def none_or_str(value):
-    if value == 'None':
-        return None
-    else:
-        return value
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -101,7 +99,7 @@ def get_args(dataset_dir: str, parse=True):
                         default="2.0",
                         help="Scale or scale range for middle objects")
     parser.add_argument("--horizontal",
-                        type=int,
+                        type=int_or_bool,
                         default=0,
                         help="Whether to rotate middle objects horizontally")
     parser.add_argument("--pscale",
@@ -140,6 +138,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="1.0,1.0,0.0",
                         help="comma-separated R,G,B values for the target zone color. None is random")
+    parser.add_argument("--rcolor",
+                        type=none_or_str,
+                        default="0.75,0.75,1.0",
+                        help="comma-separated R,G,B values for the target zone color. None is random")    
     parser.add_argument("--pcolor",
                         type=none_or_str,
                         default="0.0,1.0,1.0",
@@ -161,9 +163,13 @@ def get_args(dataset_dir: str, parse=True):
                         default=0.2,
                         help="lateral jitter in how to space middle objects, as a fraction of object width")
     parser.add_argument("--remove_target",
-                        type=int,
+                        type=int_or_bool,
                         default=0,
                         help="Don't actually put the target object in the scene.")
+    parser.add_argument("--remove_zone",
+                        type=int_or_bool,
+                        default=0,
+                        help="Don't actually put the target zone in the scene.")    
     parser.add_argument("--camera_distance",
                         type=float,
                         default=1.75,
@@ -232,7 +238,12 @@ def get_args(dataset_dir: str, parse=True):
                         help="The height of the occluders as a proportion of camera height")
     parser.add_argument("--remove_middle",
                         action="store_true",
-                        help="Remove one of the middle dominoes scene.")    
+                        help="Remove one of the middle dominoes scene.")
+
+    # for generating training data without zones, targets, caps, and at lower resolution
+    parser.add_argument("--training_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")    
 
     def postprocess(args):
         # choose a valid room
@@ -301,6 +312,11 @@ def get_args(dataset_dir: str, parse=True):
             assert len(rgb) == 3, rgb
             args.zcolor = rgb
 
+        if args.rcolor is not None:
+            rgb = [float(c) for c in args.rcolor.split(',')]
+            assert len(rgb) == 3, rgb
+            args.rcolor = rgb
+
         if args.pcolor is not None:
             rgb = [float(c) for c in args.pcolor.split(',')]
             assert len(rgb) == 3, rgb
@@ -347,6 +363,23 @@ def get_args(dataset_dir: str, parse=True):
     else:
         args = parser.parse_args()
         args = postprocess(args)
+
+        # produce training data
+        if args.training_data_mode:
+            args.dir = os.path.join(args.dir, 'training_data')
+            args.random = 0
+            args.seed = args.seed + 1
+            args.color = args.pcolor = args.mcolor = args.rcolor = None            
+            args.remove_zone = 1
+            args.remove_target = 1
+            args.save_passes = ""
+            args.save_movies = False
+
+
+        print("args.dir", str(args.dir))
+        import pdb
+        pdb.set_trace()
+        
         return args
 
 class Dominoes(RigidbodiesDataset):
@@ -382,6 +415,7 @@ class Dominoes(RigidbodiesDataset):
                  force_offset_jitter=0.1,
                  force_wait=None,
                  remove_target=False,
+                 remove_zone=False,
                  camera_radius=1.0,
                  camera_min_angle=0,
                  camera_max_angle=360,
@@ -399,6 +433,7 @@ class Dominoes(RigidbodiesDataset):
                  num_occluders=0,
                  occlusion_scale=0.6,
                  use_ramp=False,
+                 ramp_color=None,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -414,6 +449,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone_scale_range = zone_scale_range
         self.zone_material = zone_material
         self.zone_friction = zone_friction
+        self.remove_zone = remove_zone
 
         ## allowable object types
         self.set_probe_types(probe_objects)
@@ -423,6 +459,7 @@ class Dominoes(RigidbodiesDataset):
 
         # whether to use a ramp
         self.use_ramp = use_ramp
+        self.ramp_color = ramp_color
 
         ## object generation properties
         self.target_scale_range = target_scale_range
@@ -708,7 +745,7 @@ class Dominoes(RigidbodiesDataset):
         labels.create_dataset("has_target", data=has_target)
         labels.create_dataset("has_zone", data=has_zone)
         if not (has_target or has_zone):
-            return labels, done
+            return labels, resp, frame_num, done
 
         # Whether target moved from its initial position, and how much
         if has_target:
@@ -801,8 +838,6 @@ class Dominoes(RigidbodiesDataset):
             self.scales = self.scales[:-1]
             self.colors = self.colors[:-1]
             self.model_names = self.model_names[:-1]
-        else:
-            self.remove_zone = False
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
@@ -1053,9 +1088,10 @@ class Dominoes(RigidbodiesDataset):
         cmds.extend(
             self.get_object_material_commands(
                 # self.ramp, ramp_id, self.get_material_name(self.target_material)))
-                self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
+                self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
+                # self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
         # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
-        rgb = [0.75,0.75,1.0]
+        rgb = self.ramp_color or np.array([0.75,0.75,1.0])
         cmds.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1493,6 +1529,7 @@ if __name__ == "__main__":
         middle_mass_range=args.mmass,
         horizontal=args.horizontal,
         remove_target=bool(args.remove_target),
+        remove_zone=bool(args.remove_zone),
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
@@ -1511,7 +1548,8 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
-        remove_middle=args.remove_middle
+        remove_middle=args.remove_middle,
+        ramp_color=args.rcolor
     )
 
     if bool(args.run):
