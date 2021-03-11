@@ -238,7 +238,12 @@ def get_args(dataset_dir: str, parse=True):
                         help="The height of the occluders as a proportion of camera height")
     parser.add_argument("--remove_middle",
                         action="store_true",
-                        help="Remove one of the middle dominoes scene.")    
+                        help="Remove one of the middle dominoes scene.")
+
+    # for generating training data without zones, targets, caps, and at lower resolution
+    parser.add_argument("--training_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")    
 
     def postprocess(args):
         # choose a valid room
@@ -358,6 +363,23 @@ def get_args(dataset_dir: str, parse=True):
     else:
         args = parser.parse_args()
         args = postprocess(args)
+
+        # produce training data
+        if args.training_data_mode:
+            args.dir = os.path.join(args.dir, 'training_data')
+            args.random = 0
+            args.seed = args.seed + 1
+            args.color = args.pcolor = args.mcolor = args.rcolor = None            
+            args.remove_zone = 1
+            args.remove_target = 1
+            args.save_passes = ""
+            args.save_movies = False
+
+
+        print("args.dir", str(args.dir))
+        import pdb
+        pdb.set_trace()
+        
         return args
 
 class Dominoes(RigidbodiesDataset):

@@ -1,3 +1,4 @@
+import sys, os
 from argparse import ArgumentParser
 import h5py
 import json
@@ -139,6 +140,10 @@ def get_tower_args(dataset_dir: str, parse=True):
                         default=90,
                         help="maximum angle of camera rotation around centerpoint")
 
+    # for generating training data without zones, targets, caps, and at lower resolution
+    parser.add_argument("--training_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")
 
     def postprocess(args):
 
@@ -151,11 +156,24 @@ def get_tower_args(dataset_dir: str, parse=True):
         else:
             args.tower_cap = []
 
+
         return args
 
     args = parser.parse_args()
     args = domino_postproc(args)
     args = postprocess(args)
+
+    # produce training data
+    if args.training_data_mode:
+        args.dir = os.path.join(args.dir, 'training_data')
+        args.random = 0
+        args.seed = args.seed + 1
+        args.color = args.pcolor = args.mcolor = args.rcolor = None            
+        args.remove_zone = 1
+        args.remove_target = 1
+        args.save_passes = ""
+        args.save_movies = False
+        args.tower_cap = MODEL_NAMES
 
     return args
 
