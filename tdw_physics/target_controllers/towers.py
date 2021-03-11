@@ -65,7 +65,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         default=0.0,
                         help="Size of block scale gradient going from top to bottom of tower")
     parser.add_argument("--tower_cap",
-                        type=str,
+                        type=none_or_str,
                         default="bowl",
                         help="Object types to use as a capper on the tower")
     parser.add_argument("--spacing_jitter",
@@ -192,6 +192,7 @@ class Tower(MultiDominoes):
             self.use_cap = True
             self._cap_types = self.get_types(tower_cap)
         else:
+            self._cap_types = self._middle_types
             self.use_cap = False
 
     def clear_static_data(self) -> None:
@@ -385,7 +386,8 @@ class Tower(MultiDominoes):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.cap  = record
         self.cap_type = data["name"]
-        self._replace_target_with_object(record, data)
+        if self.use_cap:
+            self._replace_target_with_object(record, data)
 
         mass = random.uniform(*get_range(self.middle_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))        
@@ -471,6 +473,7 @@ if __name__ == "__main__":
         force_offset_jitter=args.fjitter,
         force_wait=args.fwait,
         remove_target=bool(args.remove_target),
+        remove_zone=bool(args.remove_zone),
         ## not scenario-specific
         room=args.room,
         randomize=args.random,
@@ -494,9 +497,9 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
-        use_ramp=bool(args.ramp)
+        use_ramp=bool(args.ramp),
+        ramp_color=args.rcolor
     )
-    print(TC.num_blocks, [r.name for r in TC._cap_types])
 
     if bool(args.run):
         TC.run(num=args.num,
