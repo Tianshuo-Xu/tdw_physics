@@ -15,7 +15,10 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.util import (MODEL_LIBRARIES,
+                              get_parser,
+                              xyz_to_arr, arr_to_xyz, str_to_xyz,
+                              none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args
 from tdw_physics.postprocessing.labels import is_trial_valid
@@ -26,11 +29,6 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
-def none_or_str(value):
-    if value == 'None':
-        return None
-    else:
-        return value
 
 def get_tower_args(dataset_dir: str, parse=True):
     """
@@ -41,7 +39,7 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
     parser.add_argument("--remove_target",
-                        type=int,
+                        type=int_or_bool,
                         default=1,
                         help="Whether to remove the target object")
     parser.add_argument("--ramp",

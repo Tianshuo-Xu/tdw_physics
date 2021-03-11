@@ -66,6 +66,34 @@ def get_object_look_at(o_id: int, pos: Dict[str, float], noise: float = 0) -> Li
                          "is_world": True})
     return commands
 
+def none_or_int(value):
+    if value is None:
+        return None
+    elif value == 'None':
+        return None
+    else:
+        return value
+
+def none_or_str(value):
+    if value == 'None':
+        return None
+    else:
+        return value
+
+def int_or_bool(value):
+    if isinstance(value, int):
+        return False if value == 0 else True
+    elif isinstance(value, bool):
+        return value
+    elif isinstance(value, str):
+        if value in ['True', 'true', 't', '1']:
+            return True
+        elif value in ['False', 'false', 'f', '0']:
+            return False
+        else:
+            raise ValueError("%s is not a valid int_or_bool" % value)
+    else:
+        return False
 
 def get_parser(dataset_dir: str, get_help: bool=False):
     """
@@ -81,13 +109,13 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--temp", type=str, default="D:/temp.hdf5", help="Temp path for incomplete files.")
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
-    parser.add_argument("--gpu", type=int, default=None, help="ID of the gpu to run on")    
+    parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")    
     parser.add_argument("--seed", type=int, default=0, help="Random seed with which to initialize scenario")
     parser.add_argument("--random", type=int, default=1, help="Whether to set trials randomly")
     parser.add_argument("--num_views", type=int, default=1, help="How many possible viewpoints to render trial from")
     parser.add_argument("--viewpoint", type=int, default=0, help="which viewpoint to render from")
     parser.add_argument("--run", type=int, default=1, help="run the simulation or not")
-    parser.add_argument("--monochrome", type=int, default=0, help="whether to set all colorable objects to the same color")
+    parser.add_argument("--monochrome", type=int_or_bool, default=0, help="whether to set all colorable objects to the same color")
     parser.add_argument("--room", type=str, default="box", help="Which room to use. Either 'box' or 'tdw'.")
     parser.add_argument("--save_passes", type=str, default='', help="Which passes to save: _img, _depth, _normals, _id, _flow")
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")

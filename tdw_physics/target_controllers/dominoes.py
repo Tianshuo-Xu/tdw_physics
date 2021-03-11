@@ -16,7 +16,11 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.util import (MODEL_LIBRARIES,
+                              get_parser,
+                              xyz_to_arr, arr_to_xyz, str_to_xyz,
+                              none_or_str, none_or_int, int_or_bool)
+
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
 
@@ -26,12 +30,6 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
-
-def none_or_str(value):
-    if value == 'None':
-        return None
-    else:
-        return value
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -101,7 +99,7 @@ def get_args(dataset_dir: str, parse=True):
                         default="2.0",
                         help="Scale or scale range for middle objects")
     parser.add_argument("--horizontal",
-                        type=int,
+                        type=int_or_bool,
                         default=0,
                         help="Whether to rotate middle objects horizontally")
     parser.add_argument("--pscale",
@@ -165,11 +163,11 @@ def get_args(dataset_dir: str, parse=True):
                         default=0.2,
                         help="lateral jitter in how to space middle objects, as a fraction of object width")
     parser.add_argument("--remove_target",
-                        type=int,
+                        type=int_or_bool,
                         default=0,
                         help="Don't actually put the target object in the scene.")
     parser.add_argument("--remove_zone",
-                        type=int,
+                        type=int_or_bool,
                         default=0,
                         help="Don't actually put the target zone in the scene.")    
     parser.add_argument("--camera_distance",
