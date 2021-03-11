@@ -1053,7 +1053,8 @@ class Dominoes(RigidbodiesDataset):
         cmds.extend(
             self.get_object_material_commands(
                 # self.ramp, ramp_id, self.get_material_name(self.target_material)))
-                self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
+                self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
+                # self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
         # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
         rgb = [0.75,0.75,1.0]
         cmds.append(
