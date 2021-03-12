@@ -360,27 +360,22 @@ def get_args(dataset_dir: str, parse=True):
 
     if not parse:
         return (parser, postprocess)
-    else:
-        args = parser.parse_args()
-        args = postprocess(args)
 
-        # produce training data
-        if args.training_data_mode:
-            args.dir = os.path.join(args.dir, 'training_data')
-            args.random = 0
-            args.seed = args.seed + 1
-            args.color = args.pcolor = args.mcolor = args.rcolor = None            
-            args.remove_zone = 1
-            args.remove_target = 1
-            args.save_passes = ""
-            args.save_movies = False
+    args = parser.parse_args()
+    args = postprocess(args)
 
+    # produce training data
+    if args.training_data_mode:
+        args.dir = os.path.join(args.dir, 'training_data')
+        args.random = 0
+        args.seed = args.seed + 1
+        args.color = args.pcolor = args.mcolor = args.rcolor = None            
+        args.remove_zone = 1
+        args.remove_target = 1
+        args.save_passes = ""
+        args.save_movies = False
 
-        print("args.dir", str(args.dir))
-        import pdb
-        pdb.set_trace()
-        
-        return args
+    return args
 
 class Dominoes(RigidbodiesDataset):
     """

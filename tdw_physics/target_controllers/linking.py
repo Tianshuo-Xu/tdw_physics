@@ -22,7 +22,6 @@ from tdw_physics.util import (MODEL_LIBRARIES,
                               none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes
-from tdw_physics.target_controllers.dominoes import get_args as get_domino_args
 from tdw_physics.target_controllers.towers import Tower, get_tower_args
 from tdw_physics.postprocessing.labels import is_trial_valid
 
@@ -33,114 +32,14 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 
-def get_tower_args(dataset_dir: str, parse=True):
+def get_linking_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
     """
     common = get_parser(dataset_dir, get_help=False)
-    domino, domino_postproc = get_args(dataset_dir, parse=False)
-    parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
+    tower, tower_postproc = get_args(dataset_dir, parse=False)
+    parser = ArgumentParser(parents=[common, tower], conflict_handler='resolve', fromfile_prefix_chars='@')
 
-    parser.add_argument("--remove_target",
-                        type=int_or_bool,
-                        default=1,
-                        help="Whether to remove the target object")
-    parser.add_argument("--ramp",
-                        type=int,
-                        default=0,
-                        help="Whether to place the probe object on the top of a ramp")    
-    parser.add_argument("--collision_axis_length",
-                        type=float,
-                        default=3.0,
-                        help="How far to put the probe and target")
-    parser.add_argument("--num_blocks",
-                        type=int,
-                        default=3,
-                        help="Number of rectangular blocks to build the tower base with")
-    parser.add_argument("--mscale",
-                        type=str,
-                        default="[0.5,0.5]",
-                        help="Scale or scale range for rectangular blocks to sample from")
-    parser.add_argument("--mgrad",
-                        type=float,
-                        default=0.0,
-                        help="Size of block scale gradient going from top to bottom of tower")
-    parser.add_argument("--tower_cap",
-                        type=none_or_str,
-                        default="bowl",
-                        help="Object types to use as a capper on the tower")
-    parser.add_argument("--spacing_jitter",
-                        type=float,
-                        default=0.25,
-                        help="jitter in how to space middle objects, as a fraction of uniform spacing")
-    parser.add_argument("--mrot",
-                        type=str,
-                        default="[-45,45]",
-                        help="comma separated list of initial middle object rotation values")
-    parser.add_argument("--mmass",
-                        type=str,
-                        default="2.0",
-                        help="comma separated list of initial middle object rotation values")    
-    parser.add_argument("--middle",
-                        type=str,
-                        default="cube",
-                        help="comma-separated list of possible middle objects")
-    parser.add_argument("--probe",
-                        type=str,
-                        default="sphere",
-                        help="comma-separated list of possible target objects")
-    parser.add_argument("--pmass",
-                        type=str,
-                        default="3.0",
-                        help="scale of probe objects")
-    parser.add_argument("--pscale",
-                        type=str,
-                        default="0.3",
-                        help="scale of probe objects")
-    parser.add_argument("--tscale",
-                        type=str,
-                        default="[0.5,0.5]",
-                        help="scale of target objects")
-    parser.add_argument("--zone",
-                        type=none_or_str,
-                        default="cube",
-                        help="type of zone object")        
-    parser.add_argument("--zscale",
-                        type=str,
-                        default="3.0,0.01,3.0",
-                        help="scale of target zone")    
-    parser.add_argument("--fscale",
-                        type=str,
-                        default="1.0",
-                        help="range of scales to apply to push force")
-    parser.add_argument("--frot",
-                        type=str,
-                        default="[-0,0]",
-                        help="range of angles in xz plane to apply push force")
-    parser.add_argument("--foffset",
-                        type=str,
-                        default="0.0,0.5,0.0",
-                        help="offset from probe centroid from which to apply force, relative to probe scale")
-    parser.add_argument("--fjitter",
-                        type=float,
-                        default=0.0,
-                        help="jitter around object centroid to apply force")
-    parser.add_argument("--fwait",
-                        type=none_or_str,
-                        default="[15,15]",
-                        help="How many frames to wait before applying the force")        
-    parser.add_argument("--camera_distance",
-                        type=float,
-                        default=3.0,
-                        help="radial distance from camera to centerpoint")
-    parser.add_argument("--camera_min_angle",
-                        type=float,
-                        default=0,
-                        help="minimum angle of camera rotation around centerpoint")
-    parser.add_argument("--camera_max_angle",
-                        type=float,
-                        default=90,
-                        help="maximum angle of camera rotation around centerpoint")
 
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
@@ -149,22 +48,18 @@ def get_tower_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
 
-        # whether to use a cap object on the tower
-        if args.tower_cap is not None:
-            cap_list = args.tower_cap.split(',')
-            assert all([t in MODEL_NAMES for t in cap_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
-            args.tower_cap = cap_list
-        else:
-            args.tower_cap = []
-
+        # parent postprocess
+        args = tower_postproc(args)
 
         return args
 
-    args = parser.parse_args()
-    args = domino_postproc(args)
-    args = postprocess(args)
 
+    if not parse:
+        return (parser, postprocess)
+
+    args = parser.parse_args()
+    args = postprocess(args)
+    
     # produce training data
     if args.training_data_mode:
         args.dir = os.path.join(args.dir, 'training_data')
@@ -175,7 +70,6 @@ def get_tower_args(dataset_dir: str, parse=True):
         args.remove_target = 1
         args.save_passes = ""
         args.save_movies = False
-        args.tower_cap = MODEL_NAMES
 
     return args
 
@@ -183,14 +77,27 @@ class Linking(Tower):
     
     def __init__(self,
                  port: int = 1071,
-                 num_blocks=3,
-                 middle_scale_range=[0.5,0.5],
-                 middle_scale_gradient=0.0,
-                 tower_cap=[],
+                 
+                 # stand base
+                 base_object=None,
+                 base_scale_range=0.5,
+                 
+                 # what object the links attach to
+                 attachment_object='cylinder',
+                 attachment_scale_range={'x': 0.2, 'y': 0.5, 'z': 0.2},
+                 attachment_fixed_to_base=False,
+                 
+                 # what the links are, how many, and which is the target
+                 link_objects='torus',
+                 link_scale_range=0.5,
+                 num_links=1,
+                 target_link_idx=None,
+
+                 # generic
                  use_ramp=True,
                  **kwargs):
 
-        super().__init__(port=port, middle_scale_range=middle_scale_range, **kwargs)
+        super().__init__(port=port, use_cap=False, **kwargs)
 
         self.use_ramp = use_ramp
         self.use_cap False
@@ -203,10 +110,10 @@ class Linking(Tower):
         # self.middle_scale_gradient = 0.0
 
     def clear_static_data(self) -> None:
-        MultiDominoes.clear_static_data(self)
+        Dominoes.clear_static_data(self)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        MultiDominoes._write_static_data(self, static_group)
+        Dominoes._write_static_data(self, static_group)
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -220,14 +127,13 @@ class Linking(Tower):
                             frame_num: int,
                             sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
 
-        labels, resp, frame_num, done = MultiDominoes._write_frame_labels(
+        labels, resp, frame_num, done = Dominoes._write_frame_labels(
             self, frame_grp, resp, frame_num, sleeping)
 
         return labels, resp, frame_num, done
 
     def _get_zone_location(self, scale):
         return {"x": 0.0, "y": 0.0, "z": 0.0}
-
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
@@ -244,8 +150,8 @@ class Linking(Tower):
         # Build a stand for the linker object
         commands.extend(self._build_stand())
 
-        # Add the linker object (i.e. what the links will be partly attached to)
-        commands.extend(self._place_linker())
+        # Add the attacment object (i.e. what the links will be partly attached to)
+        commands.extend(self._place_attachment())
 
         # Add the links
         commands.extend(self._add_links())

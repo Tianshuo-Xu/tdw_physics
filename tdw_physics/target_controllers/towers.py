@@ -147,6 +147,9 @@ def get_tower_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
 
+        # parent postprocess
+        args = domino_postproc(args)
+        
         # whether to use a cap object on the tower
         if args.tower_cap is not None:
             cap_list = args.tower_cap.split(',')
@@ -159,8 +162,11 @@ def get_tower_args(dataset_dir: str, parse=True):
 
         return args
 
+    if not parse:
+        return (parser, postprocess)    
+
     args = parser.parse_args()
-    args = domino_postproc(args)
+    # args = domino_postproc(args)
     args = postprocess(args)
 
     # produce training data
