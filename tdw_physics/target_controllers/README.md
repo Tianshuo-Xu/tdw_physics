@@ -29,11 +29,13 @@ These arguments are common for every controller.
 | `--monochrome` | `int` | 0 | If 1, all the non-target and non-probe objects in a scene will have the same color (distinct from the target color.) | 
 | `--room` | `str` | `"box"` | Which preset TDW room to use. `"tdw"` has tiles, more natural lighting, and windows, but runs more slowly. |
 | `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]` | 
-| `--save_movies` | `store_true` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
-| `--save_labels` | `store_true` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
+| `--save_movies` | `store_true` | `False` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
+| `--save_labels` | `store_true` | `False` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
 
 ## Controllers
 
-| Scenario        | Description                                                  | Script                                                       | Type                 |
+| Scenario        | Description                                                  | Script                                                       | Subclassed From                 |
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------- |
 | Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `RigidBodiesDataset` |
+| MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `RigidBodiesDataset` |
+| Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
