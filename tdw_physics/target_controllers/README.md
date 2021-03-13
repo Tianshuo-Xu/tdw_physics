@@ -22,6 +22,15 @@ These arguments are common for every controller.
 | `--temp`   | `str` | D:/temp.hdf5                                                 | Temp path for incomplete files.      |
 | `--width`  | `int` | 256                                                          | Screen width in pixels.              |
 | `--height` | `int` | 256                                                          | Screen height in pixels.             |
+| `--gpu`    | `int` | 0                                                            | Which gpu to run on  |
+| `--random` | `int` | 1 | If 1, the random seed passed to the script will be ignored. Should be 0 for generating benchmark stimuli. |
+| `--seed`   | `int` | 0 | The random seed for generating a batch of `--num` trials. If you want to regenerate stimuli, this needs to be set exactly as before. |
+| `--run` | `int` | 1 | If 0, the controller will not be run, just initialized. |
+| `--monochrome` | `int` | 0 | If 1, all the non-target and non-probe objects in a scene will have the same color (distinct from the target color.) | 
+| `--room` | `str` | `"box"` | Which preset TDW room to use. `"tdw"` has tiles, more natural lighting, and windows, but runs more slowly. |
+| `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]` | 
+| `--save_movies` | `store_true` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
+| `--save_labels` | `store_true` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
 
 ## Controllers
 
