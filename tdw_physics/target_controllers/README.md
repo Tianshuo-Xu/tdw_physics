@@ -80,4 +80,16 @@ This `--training_data_mode` will do scenario-specific things, like removing targ
 
 ### 3. Adding new types of variation to a scenario
 
+After looking at a controller, some stimuli, or actually doing a benchmark task yourself, you may think of ways to diversify the set of stimuli for a given scenario (maybe you want to see how people and models perform when dominoes are arranged in a snake pattern, rather than a lineup.) You have a few options:
+
+a. Create a github Issue so that one of us can add this variation to a scenario
+b. Add new arguments / parameters / class methods to the controller script to do whatever you thought of
+c. Subclass off of the existing controller class and overwrite some methods, then add a flag to use your new class.
+
+If the new variant you have in mind is pretty different from anything in the current stimulus set, option (c) is safest. If it's something pretty minor (e.g., you want to be able to set the precise order of domino shapes and sizes instead of sampling randomly from a distribution) then option (b) + a pull request makes more sense. Ideally, your PR will have some example stimuli from the new variants and a demonstration that your changes didn't break the generation of old stimuli.
+
+Most controller-specific functionality will be found in the method `TargetController._build_intermediate_structure` and the methods it calls in turn. This method determines how the scenario-specific physical structures are initialized. Of course, if you want to add new parametrizable variation, you'll also have to add new things to the `TargetController.__init__` method that handles your new script arguments.
+
+### 4. Creating a new scenario
+
 
