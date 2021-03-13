@@ -19,6 +19,8 @@ These classes create a generic structure for generating physics datasets using T
 
 See the `controllers/` directory for controllers that use `tdw_physics` as well as [documentation](controllers/README.md). See below for the output .hdf5 file structure.
 
+Controllers specific to generating human benchmark stimuli ("Will the [COLOR] target object hit the [COLOR] area?") are found in `tdw_physics/target_controllers/`. See `tdw_physics/target_controllers/README.md` for further details on using these controllers to make task stimuli and training data, as well as designing your own physics scenarios by subclassing off of these controllers.
+
 ## Changelog
 
 See [changelog](changelog.md).
