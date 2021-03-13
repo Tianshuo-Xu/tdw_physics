@@ -60,4 +60,24 @@ Finally, if you try to regenerate stimuli and find that they don't match the ori
 
 ### 2. Generating model training data from a scenario
 
+In Physion benchmarking task, people only see a handful of stimuli and their outcomes in full (i.e., whether a target object indeed contacts a target zone); their performance on the majority of stimuli _without prediction accuracy feedback_ is therefore taken to be a readout of their physical understanding of the real world, not strong scenario-specific task training.
+
+Although we ultimately hope to identify computer vision / physics models that behave like humans given the exact same familiarization and task structure, it will be useful to know whether certain model architectures learn to do a task like humans given far more training data. To this end, we've made it straightforward to generate as much data as needed that follows the same "generative parameter distribution" as a given call to the controller.
+
+If you want to generate many trials with the _exact_ distribution as a given stimulus batch, just call
+```
+python [controller_script.py] @[/PATH/TO/commandline_args.txt] --dir [NEW_DIR] --num [MANY_TRIALS] --height [H] --width [W] --seed [DIFFERENT_SEED_FROM_ORIGINAL]
+```
+(Using a different seed is important so that the training stimuli differ from the testing set.) 
+
+Keep in mind that this will create all stimuli with a red target object, a yellow target zone, a green probe object, etc., if that's how the human testing stimuli were designed. It will also generate _labels_ that indicate various outcomes of the trial, like whether the target object will hit the target zone. For these reasons, models trained only on such stimuli will likely overfit to both this scenario and the task structure -- which may be fine for answering "sufficiency" questions about model architecture ("_Can_ my model architecture learn to do this task?") but wouldn't say much about whether a model resembles human visuophysical processing because of their incomporable types of training.
+
+On the other hand, if you want to generate a bunch of stimuli that contain the same _physical phenomenon_ as the task scenario (e.g., dominoes hitting each other) but without task-specific objects, settings, or training labels -- for instance, in order to train an _unsupervised_ model on these scenarios -- you can simply call 
+```
+python [controller_script.py] @[/PATH/TO/commandline_args.txt] --training_data_mode --num [MANY_TRIALS] --height [H] --width [W]
+```
+This `--training_data_mode` will do scenario-specific things, like removing target objects, randomizing colors, and creating a new `training_data` directory as a subdirectory of the one with the script arguments file. You can see what `--training_data_mode` does for a particular scenario by inspecting the `get_[controller]_args` function of a script. If you want to generate training data in a different way, you can always pass your own arguments; the `--training_data_mode` is just a convenience.
+
+### 3. Adding new types of variation to a scenario
+
 
