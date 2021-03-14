@@ -234,12 +234,13 @@ class Linking(Tower):
         if self.target_link_range is None:
             self.target_link_idx = random.choice(range(self.num_links))
         else:
-            self.target_link_idx = random.choice(*get_range(self.target_link_range))
-                                                 
-        if self.target_link_idx not in list(range(self.num_links)):
-            return [] # no link is the target
+            self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
 
         print("target is link idx %d" % self.target_link_idx)
+            
+        if int(self.target_link_idx) not in range(self.num_links):
+            print("no target link")
+            return [] # no link is the target
 
         record, data = self.blocks[self.target_link_idx]
         o_id = data['id']
