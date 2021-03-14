@@ -233,8 +233,12 @@ class Linking(Tower):
 
         if self.target_link_range is None:
             self.target_link_idx = random.choice(range(self.num_links))
-        else:
+        elif hasattr(self.target_link_range, '__len__'):
             self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
+        elif isinstance(self.target_link_range, (int, float)):
+            self.target_link_idx = int(self.target_link_range)
+        else:
+            return []
 
         print("target is link idx %d" % self.target_link_idx)
             
