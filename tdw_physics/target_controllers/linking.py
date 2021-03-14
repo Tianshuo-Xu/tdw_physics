@@ -37,7 +37,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     Combine Tower-specific args with general Dominoes args
     """
     common = get_parser(dataset_dir, get_help=False)
-    tower, tower_postproc = get_args(dataset_dir, parse=False)
+    tower, tower_postproc = get_tower_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[common, tower], conflict_handler='resolve', fromfile_prefix_chars='@')
 
     parser.add_argument("--middle",
@@ -52,6 +52,11 @@ def get_linking_args(dataset_dir: str, parse=True):
                         type=int,
                         default=1,
                         help="How many links to use")
+
+    parser.add_argument("--ramp",
+                        type=none_or_int,
+                        default=1,
+                        help="Whether to place the probe object on the top of a ramp")    
 
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
@@ -109,10 +114,10 @@ class Linking(Tower):
                  use_ramp=True,
                  **kwargs):
 
-        super().__init__(port=port, use_cap=False, **kwargs)
+        super().__init__(port=port, tower_cap=[], **kwargs)
 
         self.use_ramp = use_ramp
-        self.use_cap False
+        self.use_cap = False
 
         # probe and target different colors
         self.match_probe_and_target_color = False
@@ -149,7 +154,7 @@ class Linking(Tower):
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
-        cmds = super().get_per_frame_commands(resp, frame)
+        cmds = Dominoes.get_per_frame_commands(self, resp=resp, frame=frame)
         
         return cmds
 
