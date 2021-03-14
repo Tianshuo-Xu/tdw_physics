@@ -61,6 +61,11 @@ def get_linking_args(dataset_dir: str, parse=True):
                         default=0.0,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
+    parser.add_argument("--target_link_range",
+                        type=none_or_str,
+                        default=None,
+                        help="Which link to use as the target object. None is random, -1 is no target")    
+    
     parser.add_argument("--ramp",
                         type=none_or_int,
                         default=1,
@@ -75,6 +80,7 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
+        args.target_link_range = handle_random_transform_args(args.target_link_range)
 
         return args
 
@@ -122,7 +128,7 @@ class Linking(Tower):
                  link_rotation_range=[0,0],
                  link_mass_range=2.0,
                  num_links=1,
-                 target_link_idx=None,
+                 target_link_range=None,
 
                  # generic
                  use_ramp=True,
@@ -143,12 +149,17 @@ class Linking(Tower):
         self.middle_mass_range = link_mass_range
         self.middle_rotation_range = link_rotation_range
         self.middle_scale_gradient = link_scale_gradient
+        self.target_link_range = target_link_range
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
+        
+        self.target_link_idx = None
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
+
+        static_group.create_dataset("target_link_idx", data=self.target_link_idx)
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -212,8 +223,47 @@ class Linking(Tower):
         commands.extend(self._build_stack())
 
         # change one of the links to the target object
-        
+        commands.extend(self._switch_target_link())
+
         return commands
+
+    def _switch_target_link(self) -> List[dict]:
+
+        commands = []
+
+        if self.target_link_range is None:
+            self.target_link_idx = random.choice(range(self.num_links))
+        else:
+            self.target_link_idx = random.choice(*get_range(self.target_link_range))
+                                                 
+        if self.target_link_idx not in list(range(self.num_links)):
+            return [] # no link is the target
+
+        print("target is link idx %d" % self.target_link_idx)
+
+        record, data = self.blocks[self.target_link_idx]
+        o_id = data['id']
+
+        # update the data so that it's the target
+        if self.target_color is None:
+            self.target_color = self.random_color()
+        data['color'] = self.target_color
+        self._replace_target_with_object(record, data)
+
+        # add the commands to change the material and color
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.target_material)))
+
+        # Scale the object and set its color.
+        rgb = data['color']
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id}])
+
+        return commands
+
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame > 300
@@ -229,7 +279,8 @@ if __name__ == "__main__":
         link_rotation_range=args.mrot,
         link_mass_range=args.mmass,
         num_links=args.num_middle_objects,
-        
+        target_link_range=args.target_link_range,
+        spacing_jitter=args.spacing_jitter,
         
         # domino specific
         target_zone=args.zone,
