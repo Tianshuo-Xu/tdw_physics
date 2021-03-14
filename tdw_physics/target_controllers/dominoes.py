@@ -1361,6 +1361,9 @@ class MultiDominoes(Dominoes):
         self.lateral_jitter = lateral_jitter
 
     def set_middle_types(self, olist):
+        if isinstance(olist, str):
+            olist = [olist]            
+        
         if olist is None:
             self._middle_types = self._target_types
         else:

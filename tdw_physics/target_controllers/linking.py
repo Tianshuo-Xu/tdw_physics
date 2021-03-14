@@ -46,12 +46,20 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="Which type of object to use as the links")
     parser.add_argument("--mscale",
                         type=none_or_str,
-                        default="0.4,0.2,0.4",
+                        default="0.5,0.5,0.5",
                         help="The xyz scale ranges for each link object")
+    parser.add_argument("--mmass",
+                        type=none_or_str,
+                        default="2.0",
+                        help="The mass range of each link object")    
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=1,
                         help="How many links to use")
+    parser.add_argument("--spacing_jitter",
+                        type=float,
+                        default=0.0,
+                        help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
     parser.add_argument("--ramp",
                         type=none_or_int,
@@ -91,6 +99,9 @@ def get_linking_args(dataset_dir: str, parse=True):
     return args
 
 class Linking(Tower):
+
+    STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
+    STANDARD_MASS_FACTOR = 0.25 
     
     def __init__(self,
                  port: int = 1071,
@@ -107,6 +118,9 @@ class Linking(Tower):
                  # what the links are, how many, and which is the target
                  link_objects='torus',
                  link_scale_range=0.5,
+                 link_scale_gradient=0.0,
+                 link_rotation_range=[0,0],
+                 link_mass_range=2.0,
                  num_links=1,
                  target_link_idx=None,
 
@@ -122,9 +136,13 @@ class Linking(Tower):
         # probe and target different colors
         self.match_probe_and_target_color = False
 
-        # Block is the linker object
-        # self.num_blocks = 1
-        # self.middle_scale_gradient = 0.0
+        # links are the middle objects
+        self.set_middle_types(link_objects)        
+        self.num_links = self.num_blocks = num_links
+        self.middle_scale_range = link_scale_range        
+        self.middle_mass_range = link_mass_range
+        self.middle_rotation_range = link_rotation_range
+        self.middle_scale_gradient = link_scale_gradient
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
@@ -189,6 +207,12 @@ class Linking(Tower):
 
     def _add_links(self) -> List[dict]:
         commands = []
+
+        # build a "tower" out of the links
+        commands.extend(self._build_stack())
+
+        # change one of the links to the target object
+        
         return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
@@ -201,7 +225,11 @@ if __name__ == "__main__":
     LC = Linking(
         link_objects=args.middle,
         link_scale_range=args.mscale,
+        link_scale_gradient=args.mgrad,
+        link_rotation_range=args.mrot,
+        link_mass_range=args.mmass,
         num_links=args.num_middle_objects,
+        
         
         # domino specific
         target_zone=args.zone,
@@ -211,7 +239,6 @@ if __name__ == "__main__":
         zone_friction=args.zfriction,        
         target_objects=args.target,
         probe_objects=args.probe,
-        middle_objects=args.middle,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
         probe_scale_range=args.pscale,
