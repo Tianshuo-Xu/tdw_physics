@@ -40,6 +40,18 @@ def get_linking_args(dataset_dir: str, parse=True):
     tower, tower_postproc = get_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[common, tower], conflict_handler='resolve', fromfile_prefix_chars='@')
 
+    parser.add_argument("--middle",
+                        type=none_or_str,
+                        default='torus',
+                        help="Which type of object to use as the links")
+    parser.add_argument("--mscale",
+                        type=none_or_str,
+                        default="0.4,0.2,0.4",
+                        help="The xyz scale ranges for each link object")
+    parser.add_argument("--num_middle_objects",
+                        type=int,
+                        default=1,
+                        help="How many links to use")
 
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
@@ -162,23 +174,30 @@ class Linking(Tower):
 
         return commands
 
+    def _build_stand(self) -> List[dict]:
+        commands = []
+        return commands
+
+    def _place_attachment(self) -> List[dict]:
+        commands = []
+        return commands
+
+    def _add_links(self) -> List[dict]:
+        commands = []
+        return commands
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame > 300
-        # return (frame > 750) or (self.fall_frame is not None and ((frame - 60) > self.fall_frame))
 
 if __name__ == "__main__":
 
-    args = get_tower_args("towers")
+    args = get_linking_args("linking")
 
-    TC = Tower(
-        # tower specific
-        num_blocks=args.num_blocks,
-        tower_cap=args.tower_cap,
-        spacing_jitter=args.spacing_jitter,
-        middle_rotation_range=args.mrot,
-        middle_scale_range=args.mscale,
-        middle_mass_range=args.mmass,
-        middle_scale_gradient=args.mgrad,
+    LC = Linking(
+        link_objects=args.middle,
+        link_scale_range=args.mscale,
+        num_links=args.num_middle_objects,
+        
         # domino specific
         target_zone=args.zone,
         zone_location=args.zlocation,
@@ -203,6 +222,7 @@ if __name__ == "__main__":
         force_wait=args.fwait,
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
+        
         ## not scenario-specific
         room=args.room,
         randomize=args.random,
@@ -231,7 +251,7 @@ if __name__ == "__main__":
     )
 
     if bool(args.run):
-        TC.run(num=args.num,
+        LC.run(num=args.num,
                output_dir=args.dir,
                temp_path=args.temp,
                width=args.width,
@@ -242,4 +262,4 @@ if __name__ == "__main__":
                args_dict=vars(args)
         )
     else:
-        TC.communicate({"$type": "terminate"})
+        LC.communicate({"$type": "terminate"})
