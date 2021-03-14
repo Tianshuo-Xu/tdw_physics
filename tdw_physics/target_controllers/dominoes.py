@@ -504,6 +504,8 @@ class Dominoes(RigidbodiesDataset):
 
 
     def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
+        if isinstance(objlist, str):
+            objlist = [objlist]
         recs = []
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)

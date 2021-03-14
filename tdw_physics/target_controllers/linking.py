@@ -117,9 +117,13 @@ class Linking(Tower):
                  base_scale_range=0.5,
                  
                  # what object the links attach to
+                 use_attachment=True,
                  attachment_object='cylinder',
-                 attachment_scale_range={'x': 0.2, 'y': 0.5, 'z': 0.2},
+                 attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
+                 attachment_mass_range=3.0,
                  attachment_fixed_to_base=False,
+                 attachment_color=[0.5,0.5,0.5],
+                 attachment_material=None,
                  
                  # what the links are, how many, and which is the target
                  link_objects='torus',
@@ -142,6 +146,15 @@ class Linking(Tower):
         # probe and target different colors
         self.match_probe_and_target_color = False
 
+        # attachment
+        self.use_attachment = use_attachment        
+        self._attachment_types = self.get_types(attachment_object)
+        self.attachment_scale_range = attachment_scale_range
+        self.attachment_color = attachment_color or self.middle_color
+        self.attachment_mass_range = attachment_mass_range
+        self.attachment_fixed = attachment_fixed_to_base
+        self.attachment_material = attachment_material
+
         # links are the middle objects
         self.set_middle_types(link_objects)        
         self.num_links = self.num_blocks = num_links
@@ -153,7 +166,8 @@ class Linking(Tower):
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
-        
+
+        self.tower_height = 0.0
         self.target_link_idx = None
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -214,7 +228,61 @@ class Linking(Tower):
 
     def _place_attachment(self) -> List[dict]:
         commands = []
-        return commands
+
+        record, data = self.random_primitive(
+            self._attachment_types,
+            scale=self.attachment_scale_range,
+            color=self.attachment_color,
+            add_data=self.use_attachment)
+
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.attachment = record
+        self.attachment_type = data['name']
+
+        mass = random.uniform(*get_range(self.attachment_mass_range))
+        mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+        if self.attachment_type == 'cylinder':
+            mass *= (np.pi / 4.0)
+        elif self.attachment_type == 'cone':
+            mass *= (np.pi / 12.0)
+
+        commands.extend(
+            self.add_physics_object(
+                record=record,
+                position={
+                    "x": 0.,
+                    "y": self.tower_height,
+                    "z": 0.
+                },
+                rotation={"x":0.,"y":0.,"z":0.},
+                mass=mass,
+                dynamic_friction=0.5,
+                static_friction=0.5,
+                bounciness=0,
+                o_id=o_id,
+                add_data=self.use_attachment
+            ))
+
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.attachment_material)))
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id},
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id}])
+
+        if not self.use_attachment:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]
+
+        return commands        
 
     def _add_links(self) -> List[dict]:
         commands = []
