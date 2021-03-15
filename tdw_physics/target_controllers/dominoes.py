@@ -53,7 +53,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--probe",
                         type=str,
                         default="cube",
-                        help="comma-separated list of possible target objects")
+                        help="comma-separated list of possible probe objects")
     parser.add_argument("--middle",
                         type=str,
                         default=None,
@@ -92,7 +92,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma separated list of initial probe rotation values")    
     parser.add_argument("--mscale",
                         type=str,
-                        default=None,
+                        default="0.5",
                         help="Scale or scale range for middle objects")
     parser.add_argument("--mmass",
                         type=str,
@@ -1084,24 +1084,18 @@ class Dominoes(RigidbodiesDataset):
         # give the ramp a texture and color
         cmds.extend(
             self.get_object_material_commands(
-                # self.ramp, ramp_id, self.get_material_name(self.target_material)))
                 self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
-                # self.ramp, ramp_id, self.get_material_name("plastic_vinyl_glossy_white")))        
-        # rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
         rgb = self.ramp_color or np.array([0.75,0.75,1.0])
         cmds.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
              "id": ramp_id})            
-            
-
         print("ramp commands")
         print(cmds)
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * ramp_scale['x'] * r_len - 0.15
         self.probe_initial_position['y'] = ramp_scale['y'] * r_height
-
 
         return cmds
 
