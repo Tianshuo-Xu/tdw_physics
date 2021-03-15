@@ -202,11 +202,18 @@ class Linking(Tower):
 
         self.tower_height = 0.0
         self.target_link_idx = None
+        self.base = None
+        self.attachment = None
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
-        static_group.create_dataset("target_link_idx", data=self.target_link_idx)
+        static_group.create_dataset("base_id", data=self.base_id)                
+        static_group.create_dataset("attachment_id", data=self.attachment_id)
+        static_group.create_dataset("attachent_type", data=self.attachment_type)
+        static_group.create_dataset("link_type", data=self.middle_type)
+        static_group.create_dataset("num_links", data=self.num_links)        
+        static_group.create_dataset("target_link_idx", data=self.target_link_idx)        
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -241,7 +248,7 @@ class Linking(Tower):
         commands = []
 
         # Build a stand for the linker object
-        commands.extend(self._build_stand())
+        commands.extend(self._build_base())
 
         # Add the attacment object (i.e. what the links will be partly attached to)
         commands.extend(self._place_attachment())
@@ -255,7 +262,8 @@ class Linking(Tower):
 
         return commands
 
-    def _build_stand(self) -> List[dict]:
+    def _build_base(self) -> List[dict]:
+        
         commands = []
         return commands
 
@@ -270,8 +278,8 @@ class Linking(Tower):
 
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.attachment = record
+        self.attachment_id = data['id']
         self.attachment_type = data['name']
-
 
         mass = random.uniform(*get_range(self.attachment_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
@@ -320,6 +328,19 @@ class Linking(Tower):
         if self.attachment_type == 'cone' and self.use_attachment:
             a_len, a_height, a_dep = self.get_record_dimensions(record)
             self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
+
+        # fix it to ground or block
+        if self.attachment_fixed_to_base:
+            # make it kinematic
+            if self.base is None:
+                commands.extend([
+                    {"$type": "set_object_collision_detection_mode",
+                     "mode": "continuous_speculative",
+                     "id": o_id},
+                    {"$type": "set_kinematic_state",
+                     "id": o_id,
+                     "is_kinematic": True,
+                     "use_gravity": True}])
 
         return commands        
 
