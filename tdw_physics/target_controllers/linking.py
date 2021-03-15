@@ -110,12 +110,42 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--bmaterial",
                         type=none_or_str,
                         default="wood_european_ash",
-                        help="Material for base object")    
-    
+                        help="Material for base object")
+
+    # ramp
     parser.add_argument("--ramp",
                         type=int_or_bool,
                         default=1,
-                        help="Whether to place the probe object on the top of a ramp")    
+                        help="Whether to place the probe object on the top of a ramp")
+
+    # dominoes
+    parser.add_argument("--collision_axis_length",
+                        type=float,
+                        default=2.0,
+                        help="How far to put the probe and target")    
+
+    # camera
+    parser.add_argument("--camera_distance",
+                        type=float,
+                        default=2.75,
+                        help="radial distance from camera to centerpoint")
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=270,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=1.5,
+                         help="min height of camera")
+    parser.add_argument("--camera_max_height",
+                        type=float,
+                        default=2.5,
+                        help="max height of camera")
+    
 
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
@@ -302,8 +332,8 @@ class Linking(Tower):
         commands.extend(self._add_links())
         
         # # set camera params
-        # camera_y_aim = 0.5 * self.tower_height
-        # self.camera_aim = arr_to_xyz([0.,camera_y_aim,0.])
+        camera_y_aim = 0.5 * self.tower_height
+        self.camera_aim = arr_to_xyz([0.,camera_y_aim,0.])
 
         return commands
 
