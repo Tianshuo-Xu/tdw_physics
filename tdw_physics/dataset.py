@@ -172,6 +172,7 @@ class Dataset(Controller, ABC):
         self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
 
+        print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
         if self.save_movies:
