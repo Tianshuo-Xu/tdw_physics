@@ -272,6 +272,7 @@ class Linking(Tower):
         self.attachment = record
         self.attachment_type = data['name']
 
+
         mass = random.uniform(*get_range(self.attachment_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
         if self.attachment_type == 'cylinder':
@@ -314,6 +315,11 @@ class Linking(Tower):
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
+
+        # for an attachment that is wider at base, better to place links a little higher
+        if self.attachment_type == 'cone' and self.use_attachment:
+            a_len, a_height, a_dep = self.get_record_dimensions(record)
+            self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
 
         return commands        
 
