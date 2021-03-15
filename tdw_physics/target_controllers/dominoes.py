@@ -1051,7 +1051,7 @@ class Dominoes(RigidbodiesDataset):
             }
 
         # decide when to apply the force
-        self.force_wait = int(random.uniform(self.force_wait_range[0], self.force_wait_range[1]))
+        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
         print("force wait", self.force_wait)
 
         if self.force_wait == 0:

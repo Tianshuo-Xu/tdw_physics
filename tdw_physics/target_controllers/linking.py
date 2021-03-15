@@ -131,11 +131,11 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
-                        default=0,
+                        default=-30,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=270,
+                        default=165,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -143,7 +143,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                          help="min height of camera")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=2.5,
+                        default=3.0,
                         help="max height of camera")
     
 
@@ -245,7 +245,7 @@ class Linking(Tower):
 
         # base
         self.use_base = use_base
-        self._base_types = self.get_types(base_object)
+        self._base_types = self.get_types(base_object) if self.use_base else self._target_types
         self.base_scale_range = base_scale_range
         self.base_mass_range = base_mass_range
         self.base_color = base_color
@@ -253,7 +253,7 @@ class Linking(Tower):
 
         # attachment
         self.use_attachment = use_attachment        
-        self._attachment_types = self.get_types(attachment_object)
+        self._attachment_types = self.get_types(attachment_object) if self.use_attachment else self._target_types
         self.attachment_scale_range = attachment_scale_range
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
@@ -465,7 +465,7 @@ class Linking(Tower):
             self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
 
         # fix it to ground or block
-        if self.attachment_fixed_to_base:
+        if self.attachment_fixed_to_base and self.use_attachment:
             # make it kinematic
             if self.use_base:
                 commands.append({
@@ -539,7 +539,7 @@ class Linking(Tower):
 
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 300
+        return frame > 750
 
 if __name__ == "__main__":
 
