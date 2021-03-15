@@ -28,7 +28,8 @@ These arguments are common for every controller.
 | `--run` | `int` | 1 | If 0, the controller will not be run, just initialized. |
 | `--monochrome` | `int` | 0 | If 1, all the non-target and non-probe objects in a scene will have the same color (distinct from the target color.) | 
 | `--room` | `str` | `"box"` | Which preset TDW room to use. `"tdw"` has tiles, more natural lighting, and windows, but runs more slowly. |
-| `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]` | 
+| `--write_passes` | `str` | `"_img,_id,_depth,_normals,_flow"` | Which TDW image passes to write to HDF5. |
+| `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]`. These passes must also be written to HDF5 if they are to be saved as PNGs or MP4s. | 
 | `--save_movies` | `store_true` | `False` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
 | `--save_labels` | `store_true` | `False` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
 
