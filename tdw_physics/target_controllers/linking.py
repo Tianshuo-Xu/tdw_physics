@@ -146,7 +146,8 @@ class Linking(Tower):
                  port: int = 1071,
                  
                  # stand base
-                 base_object=None,
+                 use_base=False,
+                 base_object='cube',
                  base_scale_range=0.5,
                  
                  # what object the links attach to
@@ -208,7 +209,8 @@ class Linking(Tower):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
-        static_group.create_dataset("base_id", data=self.base_id)                
+        static_group.create_dataset("base_id", data=self.base_id)
+        static_group.create_dataset("base_type", data=self.base_type)
         static_group.create_dataset("attachment_id", data=self.attachment_id)
         static_group.create_dataset("attachent_type", data=self.attachment_type)
         static_group.create_dataset("link_type", data=self.middle_type)
@@ -265,6 +267,59 @@ class Linking(Tower):
     def _build_base(self) -> List[dict]:
         
         commands = []
+
+        record, data = self.random_primitive(
+            self._base_types,
+            scale=self.base_scale_range,
+            color=self.base_color,
+            add_data=self.use_base)
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.base = record
+        self.base_id = data['id']
+        self.base_type = data['name']
+
+        mass = random.uniform(*get_range(self.base_mass_range))
+        mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+
+        commands.extend(
+            self.add_physics_object(
+                record=record,
+                position={
+                    "x": 0.,
+                    "y": self.tower_height,
+                    "z": 0.
+                },
+                rotation={"x":0.,"y":0.,"z":0.},
+                mass=mass,
+                dynamic_friction=0.5,
+                static_friction=0.5,
+                bounciness=0,
+                o_id=o_id,
+                add_data=self.use_base
+            ))
+
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.base_material)))
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id},
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id}])
+
+        if self.use_base:
+            b_len, b_height, b_dep = self.get_record_dimensions(record)
+            self.tower_height += b_height * scale['y']
+        else:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]            
+        
         return commands
 
     def _place_attachment(self) -> List[dict]:
@@ -332,7 +387,7 @@ class Linking(Tower):
         # fix it to ground or block
         if self.attachment_fixed_to_base:
             # make it kinematic
-            if self.base is None:
+            if not self.use_base:
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "continuous_speculative",
