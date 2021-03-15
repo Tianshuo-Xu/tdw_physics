@@ -278,7 +278,7 @@ def get_args(dataset_dir: str, parse=True):
                 "All target object names must be elements of %s" % MODEL_NAMES
             args.zone = zone_list
         else:
-            args.target = MODEL_NAMES
+            args.zone = MODEL_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')

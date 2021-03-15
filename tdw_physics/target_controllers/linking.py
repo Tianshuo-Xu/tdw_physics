@@ -64,7 +64,31 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--target_link_range",
                         type=none_or_str,
                         default=None,
-                        help="Which link to use as the target object. None is random, -1 is no target")    
+                        help="Which link to use as the target object. None is random, -1 is no target")
+
+    parser.add_argument("--attachment",
+                        type=none_or_str,
+                        default="cylinder",
+                        help="Which type of object to use as the attachment")
+    parser.add_argument("--ascale",
+                        type=none_or_str,
+                        default="0.2,2.0,0.2",
+                        help="Scale range (xyz) for attachment object")
+    parser.add_argument("--amass",
+                        type=none_or_str,
+                        default="[3.0,3.0]",
+                        help="Mass range for attachment object")
+    parser.add_argument("--acolor",
+                        type=none_or_str,
+                        default="0.5,0.5,0.5",
+                        help="Color for attachment object")
+    parser.add_argument("--amaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material for attachment object")
+    parser.add_argument("--attachment_fixed",
+                        action="store_true",
+                        help="Whether the attachment object will be fixed to the base or floor")
     
     parser.add_argument("--ramp",
                         type=none_or_int,
@@ -80,10 +104,19 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
+        
+        # target
         args.target_link_range = handle_random_transform_args(args.target_link_range)
+        
+        # attachment
+        args.ascale = handle_random_transform_args(args.ascale)
+        args.amass = handle_random_transform_args(args.amass)
+        if args.acolor is not None:
+            args.acolor = [float(c) for c in args.acolor.split(',')]
+        if args.attachment is not None:
+            args.attachment = args.attachment.split(',')
 
         return args
-
 
     if not parse:
         return (parser, postprocess)
@@ -346,6 +379,7 @@ if __name__ == "__main__":
     args = get_linking_args("linking")
 
     LC = Linking(
+        # links
         link_objects=args.middle,
         link_scale_range=args.mscale,
         link_scale_gradient=args.mgrad,
@@ -354,6 +388,15 @@ if __name__ == "__main__":
         num_links=args.num_middle_objects,
         target_link_range=args.target_link_range,
         spacing_jitter=args.spacing_jitter,
+
+        # attachment
+        use_attachment=(args.attachment is not None),
+        attachment_object=args.attachment,
+        attachment_scale_range=args.ascale,
+        attachment_mass_range=args.amass,
+        attachment_color=args.acolor,
+        attachment_material=args.amaterial,
+        attachment_fixed_to_base=args.attachment_fixed,
         
         # domino specific
         target_zone=args.zone,

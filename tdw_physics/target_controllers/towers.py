@@ -77,7 +77,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="comma separated list of initial middle object rotation values")
     parser.add_argument("--mmass",
                         type=str,
-                        default="2o.0",
+                        default="2.0",
                         help="comma separated list of initial middle object rotation values")    
     parser.add_argument("--middle",
                         type=str,
