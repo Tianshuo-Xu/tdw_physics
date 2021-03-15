@@ -315,6 +315,7 @@ class Linking(Tower):
             self._base_types,
             scale=self.base_scale_range,
             color=self.base_color,
+            exclude_color=self.target_color,
             add_data=self.use_base)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.base = record
@@ -323,6 +324,8 @@ class Linking(Tower):
 
         mass = random.uniform(*get_range(self.base_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+
+        print("base mass", mass)        
 
         commands.extend(
             self.add_physics_object(
@@ -373,6 +376,7 @@ class Linking(Tower):
             self._attachment_types,
             scale=self.attachment_scale_range,
             color=self.attachment_color,
+            exclude_color=self.target_color,
             add_data=self.use_attachment)
 
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
@@ -386,6 +390,8 @@ class Linking(Tower):
             mass *= (np.pi / 4.0)
         elif self.attachment_type == 'cone':
             mass *= (np.pi / 12.0)
+
+        print("attachment mass", mass)
 
         commands.extend(
             self.add_physics_object(
@@ -594,6 +600,7 @@ if __name__ == "__main__":
                temp_path=args.temp,
                width=args.width,
                height=args.height,
+               write_passes=args.write_passes.split(','),               
                save_passes=args.save_passes.split(','),
                save_movies=args.save_movies,
                save_labels=args.save_labels,               

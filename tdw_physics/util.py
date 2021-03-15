@@ -9,6 +9,9 @@ MODEL_LIBRARIES: Dict[str, ModelLibrarian] = {}
 for filename in ModelLibrarian.get_library_filenames():
     MODEL_LIBRARIES.update({filename: ModelLibrarian(filename)})
 
+# The names of the image passes
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]    
+
 def str_to_xyz(s: str, to_json=False):
     xyz = s.split(',')
     if len(xyz) == 3:
@@ -117,7 +120,8 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--run", type=int, default=1, help="run the simulation or not")
     parser.add_argument("--monochrome", type=int_or_bool, default=0, help="whether to set all colorable objects to the same color")
     parser.add_argument("--room", type=str, default="box", help="Which room to use. Either 'box' or 'tdw'.")
-    parser.add_argument("--save_passes", type=str, default='', help="Which passes to save: _img, _depth, _normals, _id, _flow")
+    parser.add_argument("--write_passes", type=str, default=PASSES, help="Comma-separated list of which passes to write to the HDF5: _img, _depth, _normals, _id, _flow")
+    parser.add_argument("--save_passes", type=str, default='', help="Comma-separated list of Which passes to save to PNGs/MP4s: _img, _depth, _normals, _id, _flow")
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     return parser

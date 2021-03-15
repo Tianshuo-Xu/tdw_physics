@@ -126,7 +126,7 @@ class Dataset(Controller, ABC):
                          {"$type": "set_target_framerate",
                           "framerate": 30},
                          {"$type": "set_pass_masks",
-                          "pass_masks": ["_img", "_id", "_depth", "_normals", "_flow"]},
+                          "pass_masks": self.write_passes},
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
                          {"$type": "send_images",
@@ -139,6 +139,7 @@ class Dataset(Controller, ABC):
             temp_path: str,
             width: int,
             height: int,
+            write_passes: List[str] = PASSES,
             save_passes: List[str] = [],
             save_movies: bool = False,
             save_labels: bool = False,
@@ -158,11 +159,17 @@ class Dataset(Controller, ABC):
 
         self._height, self._width = height, width
 
+        # which passes to write to the HDF5
+        self.write_passes = write_passes
+        if isinstance(self.write_passes, str):
+            self.write_passes = self.write_passes.split(',')
+        self.write_passes = [p for p in self.write_passes if (p in PASSES)]
+
         # which passes to save as an MP4
         self.save_passes = save_passes
         if isinstance(self.save_passes, str):
             self.save_passes = self.save_passes.split(',')
-        self.save_passes = [p for p in self.save_passes if p in PASSES]
+        self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
 
         print("save passes", self.save_passes)
