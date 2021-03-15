@@ -41,6 +41,7 @@ These arguments are common for every controller.
 | MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `RigidBodiesDataset` |
 | Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
 | Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Tower` |
+| Gravity | Two ramps face each other. A ball pushed down one will roll up the other and be launched as a projectile or roll back to the middle. | `gravity.py` | `Dominoes` |
 
 ## Use Cases
 
