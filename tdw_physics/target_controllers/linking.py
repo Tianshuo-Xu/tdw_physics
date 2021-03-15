@@ -80,18 +80,18 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="Mass range for attachment object")
     parser.add_argument("--acolor",
                         type=none_or_str,
-                        default="0.5,0.5,0.5",
+                        default="0.8,0.8,0.8",
                         help="Color for attachment object")
     parser.add_argument("--amaterial",
                         type=none_or_str,
-                        default=None,
+                        default="wood_european_ash",
                         help="Material for attachment object")
     parser.add_argument("--attachment_fixed",
                         action="store_true",
                         help="Whether the attachment object will be fixed to the base or floor")
     
     parser.add_argument("--ramp",
-                        type=none_or_int,
+                        type=int_or_bool,
                         default=1,
                         help="Whether to place the probe object on the top of a ramp")    
 
