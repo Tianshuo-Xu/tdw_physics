@@ -89,6 +89,28 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--attachment_fixed",
                         action="store_true",
                         help="Whether the attachment object will be fixed to the base or floor")
+
+    # base
+    parser.add_argument("--base",
+                        type=none_or_str,
+                        default=None,
+                        help="Which type of object to use as the base")
+    parser.add_argument("--bscale",
+                        type=none_or_str,
+                        default="0.5",
+                        help="Scale range (xyz) for base object")
+    parser.add_argument("--bmass",
+                        type=none_or_str,
+                        default="[3.0,3.0]",
+                        help="Mass range for base object")
+    parser.add_argument("--bcolor",
+                        type=none_or_str,
+                        default="0.8,0.8,0.8",
+                        help="Color for base object")
+    parser.add_argument("--bmaterial",
+                        type=none_or_str,
+                        default="wood_european_ash",
+                        help="Material for base object")    
     
     parser.add_argument("--ramp",
                         type=int_or_bool,
@@ -115,6 +137,14 @@ def get_linking_args(dataset_dir: str, parse=True):
             args.acolor = [float(c) for c in args.acolor.split(',')]
         if args.attachment is not None:
             args.attachment = args.attachment.split(',')
+
+        # base
+        args.bscale = handle_random_transform_args(args.bscale)
+        args.bmass = handle_random_transform_args(args.bmass)
+        if args.bcolor is not None:
+            args.bcolor = [float(c) for c in args.bcolor.split(',')]
+        if args.base is not None:
+            args.base = args.base.split(',')
 
         return args
 
@@ -149,6 +179,9 @@ class Linking(Tower):
                  use_base=False,
                  base_object='cube',
                  base_scale_range=0.5,
+                 base_mass_range=3.0,
+                 base_color=[0.8,0.8,0.8],
+                 base_material=None,
                  
                  # what object the links attach to
                  use_attachment=True,
@@ -156,7 +189,7 @@ class Linking(Tower):
                  attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
                  attachment_mass_range=3.0,
                  attachment_fixed_to_base=False,
-                 attachment_color=[0.5,0.5,0.5],
+                 attachment_color=[0.8,0.8,0.8],
                  attachment_material=None,
                  
                  # what the links are, how many, and which is the target
@@ -180,14 +213,24 @@ class Linking(Tower):
         # probe and target different colors
         self.match_probe_and_target_color = False
 
+        # base
+        self.use_base = use_base
+        self._base_types = self.get_types(base_object)
+        self.base_scale_range = base_scale_range
+        self.base_mass_range = base_mass_range
+        self.base_color = base_color
+        self.base_material = base_material
+
         # attachment
         self.use_attachment = use_attachment        
         self._attachment_types = self.get_types(attachment_object)
         self.attachment_scale_range = attachment_scale_range
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
-        self.attachment_fixed = attachment_fixed_to_base
         self.attachment_material = attachment_material
+
+        # whether it'll be fixed to the base
+        self.attachment_fixed_to_base = attachment_fixed_to_base        
 
         # links are the middle objects
         self.set_middle_types(link_objects)        
@@ -312,8 +355,9 @@ class Linking(Tower):
              "id": o_id}])
 
         if self.use_base:
-            b_len, b_height, b_dep = self.get_record_dimensions(record)
-            self.tower_height += b_height * scale['y']
+            if self.base_type not in ['pipe', 'torus']:
+                b_len, b_height, b_dep = self.get_record_dimensions(record)
+                self.tower_height += b_height * scale['y']
         else:
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
@@ -387,7 +431,12 @@ class Linking(Tower):
         # fix it to ground or block
         if self.attachment_fixed_to_base:
             # make it kinematic
-            if not self.use_base:
+            if self.use_base:
+                commands.append({
+                    "$type": "add_fixed_joint",
+                    "parent_id": self.base_id,
+                    "id": o_id})
+            elif not self.use_base: # make kinematic
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "continuous_speculative",
@@ -471,6 +520,14 @@ if __name__ == "__main__":
         target_link_range=args.target_link_range,
         spacing_jitter=args.spacing_jitter,
 
+        # base
+        use_base=(args.base is not None),
+        base_object=args.base,
+        base_scale_range=args.bscale,
+        base_mass_range=args.bmass,
+        base_color=args.bcolor,
+        base_material=args.bmaterial,
+        
         # attachment
         use_attachment=(args.attachment is not None),
         attachment_object=args.attachment,
@@ -479,7 +536,7 @@ if __name__ == "__main__":
         attachment_color=args.acolor,
         attachment_material=args.amaterial,
         attachment_fixed_to_base=args.attachment_fixed,
-        
+
         # domino specific
         target_zone=args.zone,
         zone_location=args.zlocation,
