@@ -39,6 +39,7 @@ These arguments are common for every controller.
 | Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `RigidBodiesDataset` |
 | MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `RigidBodiesDataset` |
 | Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
+| Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Linking` |
 
 ## Use Cases
 
