@@ -147,6 +147,9 @@ def get_tower_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
 
+        # parent postprocess
+        args = domino_postproc(args)
+        
         # whether to use a cap object on the tower
         if args.tower_cap is not None:
             cap_list = args.tower_cap.split(',')
@@ -159,8 +162,11 @@ def get_tower_args(dataset_dir: str, parse=True):
 
         return args
 
+    if not parse:
+        return (parser, postprocess)    
+
     args = parser.parse_args()
-    args = domino_postproc(args)
+    # args = domino_postproc(args)
     args = postprocess(args)
 
     # produce training data
@@ -180,6 +186,7 @@ def get_tower_args(dataset_dir: str, parse=True):
 class Tower(MultiDominoes):
 
     STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
+    STANDARD_MASS_FACTOR = 1.0 # cubes
     
     def __init__(self,
                  port: int = 1071,
@@ -217,6 +224,7 @@ class Tower(MultiDominoes):
         self.cap_type = None
         self.did_fall = None
         self.fall_frame = None
+        self.tower_height = 0.0
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -328,13 +336,15 @@ class Tower(MultiDominoes):
 
     def _build_stack(self) -> List[dict]:
         commands = []
-        height = self.zone_scale['y'] if not self.remove_zone else 0.0
+        height = self.tower_height
+        height += self.zone_scale['y'] if not self.remove_zone else 0.0
 
         # build the block scales
         mid = self.num_blocks / 2.0
         grad = self.middle_scale_gradient
         self.block_scales = [self._get_block_scale(offset=grad*(mid-i)) for i in range(self.num_blocks)]
-
+        self.blocks = []
+        
         # place the blocks
         for m in range(self.num_blocks):
             record, data = self.random_primitive(
@@ -350,13 +360,13 @@ class Tower(MultiDominoes):
             # scale the mass to give each block a uniform density
             block_mass = random.uniform(*get_range(self.middle_mass_range))
             block_mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+            block_mass *= self.STANDARD_MASS_FACTOR
             
             commands.extend(
                 self.add_physics_object(
                     record=record,
                     position=block_pos,
                     rotation=block_rot,
-                    # mass=random.uniform(*get_range(self.middle_mass_range)),
                     mass=block_mass,
                     dynamic_friction=random.uniform(0, 0.9),
                     static_friction=random.uniform(0, 0.9),
@@ -379,13 +389,15 @@ class Tower(MultiDominoes):
                  "id": o_id}])
 
             print("placed middle object %s" % str(m+1))
-            print("block mass", scale, block_mass)
 
             # update height
             _y = record.bounds['top']['y'] if self.middle_type != 'bowl' else (record.bounds['bottom']['y'] + 0.1)
             height += scale["y"] * _y
 
-        self.tower_height = height
+            data.update({'position': block_pos, 'rotation': block_rot, 'mass': block_mass})
+            print("middle object data", data)
+            self.blocks.append((record, data))
+            self.tower_height = height            
 
         return commands
 
@@ -406,7 +418,8 @@ class Tower(MultiDominoes):
             self._replace_target_with_object(record, data)
 
         mass = random.uniform(*get_range(self.middle_mass_range))
-        mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))        
+        mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
+        mass *= self.STANDARD_MASS_FACTOR        
 
         commands.extend(
             self.add_physics_object(

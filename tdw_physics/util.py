@@ -72,7 +72,7 @@ def none_or_int(value):
     elif value == 'None':
         return None
     else:
-        return value
+        return int(value)
 
 def none_or_str(value):
     if value == 'None':

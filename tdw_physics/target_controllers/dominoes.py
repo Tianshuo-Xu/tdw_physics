@@ -278,7 +278,7 @@ def get_args(dataset_dir: str, parse=True):
                 "All target object names must be elements of %s" % MODEL_NAMES
             args.zone = zone_list
         else:
-            args.target = MODEL_NAMES
+            args.zone = MODEL_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')
@@ -360,27 +360,22 @@ def get_args(dataset_dir: str, parse=True):
 
     if not parse:
         return (parser, postprocess)
-    else:
-        args = parser.parse_args()
-        args = postprocess(args)
 
-        # produce training data
-        if args.training_data_mode:
-            args.dir = os.path.join(args.dir, 'training_data')
-            args.random = 0
-            args.seed = args.seed + 1
-            args.color = args.pcolor = args.mcolor = args.rcolor = None            
-            args.remove_zone = 1
-            args.remove_target = 1
-            args.save_passes = ""
-            args.save_movies = False
+    args = parser.parse_args()
+    args = postprocess(args)
 
+    # produce training data
+    if args.training_data_mode:
+        args.dir = os.path.join(args.dir, 'training_data')
+        args.random = 0
+        args.seed = args.seed + 1
+        args.color = args.pcolor = args.mcolor = args.rcolor = None            
+        args.remove_zone = 1
+        args.remove_target = 1
+        args.save_passes = ""
+        args.save_movies = False
 
-        print("args.dir", str(args.dir))
-        import pdb
-        pdb.set_trace()
-        
-        return args
+    return args
 
 class Dominoes(RigidbodiesDataset):
     """
@@ -509,6 +504,8 @@ class Dominoes(RigidbodiesDataset):
 
 
     def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
+        if isinstance(objlist, str):
+            objlist = [objlist]
         recs = []
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)
@@ -1366,6 +1363,9 @@ class MultiDominoes(Dominoes):
         self.lateral_jitter = lateral_jitter
 
     def set_middle_types(self, olist):
+        if isinstance(olist, str):
+            olist = [olist]            
+        
         if olist is None:
             self._middle_types = self._target_types
         else:
