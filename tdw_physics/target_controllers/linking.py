@@ -52,9 +52,9 @@ def get_linking_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="2.0",
                         help="The mass range of each link object")    
-    parser.add_argument("--num_middle_objects",
-                        type=int,
-                        default=1,
+    parser.add_argument("--num_middle_range",
+                        type=str,
+                        default="[1,6]",
                         help="How many links to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
@@ -89,6 +89,9 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--attachment_fixed",
                         action="store_true",
                         help="Whether the attachment object will be fixed to the base or floor")
+    parser.add_argument("--attachment_capped",
+                        action="store_true",
+                        help="Whether the attachment object will have a fixed cap like the base")    
 
     # base
     parser.add_argument("--base",
@@ -127,7 +130,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     # camera
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=2.75,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -135,7 +138,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=270,
+                        default=90,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -156,6 +159,9 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
+
+        # num links
+        args.num_middle_range = handle_random_transform_args(args.num_middle_range)
         
         # target
         args.target_link_range = handle_random_transform_args(args.target_link_range)
@@ -221,6 +227,7 @@ class Linking(Tower):
                  attachment_fixed_to_base=False,
                  attachment_color=[0.8,0.8,0.8],
                  attachment_material=None,
+                 use_cap=False,
                  
                  # what the links are, how many, and which is the target
                  link_objects='torus',
@@ -228,7 +235,7 @@ class Linking(Tower):
                  link_scale_gradient=0.0,
                  link_rotation_range=[0,0],
                  link_mass_range=2.0,
-                 num_links=1,
+                 num_link_range=[1,6],
                  target_link_range=None,
 
                  # generic
@@ -238,14 +245,13 @@ class Linking(Tower):
         super().__init__(port=port, tower_cap=[], **kwargs)
 
         self.use_ramp = use_ramp
-        self.use_cap = False
 
         # probe and target different colors
         self.match_probe_and_target_color = False
 
         # base
         self.use_base = use_base
-        self._base_types = self.get_types(base_object)
+        self._base_types = self.get_types(base_object) if self.use_base else self._target_types
         self.base_scale_range = base_scale_range
         self.base_mass_range = base_mass_range
         self.base_color = base_color
@@ -253,18 +259,19 @@ class Linking(Tower):
 
         # attachment
         self.use_attachment = use_attachment        
-        self._attachment_types = self.get_types(attachment_object)
+        self._attachment_types = self.get_types(attachment_object) if self.use_attachment else self._target_types
         self.attachment_scale_range = attachment_scale_range
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
         self.attachment_material = attachment_material
+        self.use_cap = use_cap        
 
         # whether it'll be fixed to the base
         self.attachment_fixed_to_base = attachment_fixed_to_base        
 
         # links are the middle objects
         self.set_middle_types(link_objects)        
-        self.num_links = self.num_blocks = num_links
+        self.num_link_range = num_link_range
         self.middle_scale_range = link_scale_range        
         self.middle_mass_range = link_mass_range
         self.middle_rotation_range = link_rotation_range
@@ -283,12 +290,16 @@ class Linking(Tower):
         Dominoes._write_static_data(self, static_group)
 
         static_group.create_dataset("base_id", data=self.base_id)
+        static_group.create_dataset("use_base", data=self.use_base)        
         static_group.create_dataset("base_type", data=self.base_type)
         static_group.create_dataset("attachment_id", data=self.attachment_id)
         static_group.create_dataset("attachent_type", data=self.attachment_type)
+        static_group.create_dataset("use_attachment", data=self.use_attachment)                
         static_group.create_dataset("link_type", data=self.middle_type)
         static_group.create_dataset("num_links", data=self.num_links)        
-        static_group.create_dataset("target_link_idx", data=self.target_link_idx)        
+        static_group.create_dataset("target_link_idx", data=self.target_link_idx)
+        static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
+        static_group.create_dataset("use_cap", data=self.use_cap)                        
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -323,7 +334,7 @@ class Linking(Tower):
         commands = []
 
         # Build a stand for the linker object
-        commands.extend(self._build_base())
+        commands.extend(self._build_base(height=self.tower_height, as_cap=False))
 
         # Add the attacment object (i.e. what the links will be partly attached to)
         commands.extend(self._place_attachment())
@@ -337,7 +348,7 @@ class Linking(Tower):
 
         return commands
 
-    def _build_base(self) -> List[dict]:
+    def _build_base(self, height, as_cap=False) -> List[dict]:
         
         commands = []
 
@@ -348,9 +359,12 @@ class Linking(Tower):
             exclude_color=self.target_color,
             add_data=self.use_base)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.base = record
-        self.base_id = data['id']
-        self.base_type = data['name']
+        if as_cap:
+            self.cap_id = data['id']
+            self.cap_type = data['name']
+        else:
+            self.base_id = data['id']
+            self.base_type = data['name']
 
         mass = random.uniform(*get_range(self.base_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
@@ -362,7 +376,7 @@ class Linking(Tower):
                 record=record,
                 position={
                     "x": 0.,
-                    "y": self.tower_height,
+                    "y": height,
                     "z": 0.
                 },
                 rotation={"x":0.,"y":0.,"z":0.},
@@ -395,8 +409,9 @@ class Linking(Tower):
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
-            self.object_ids = self.object_ids[:-1]            
-        
+            self.object_ids = self.object_ids[:-1]
+            self.tower_height = 0.0
+
         return commands
 
     def _place_attachment(self) -> List[dict]:
@@ -453,19 +468,20 @@ class Linking(Tower):
              "scale_factor": scale,
              "id": o_id}])
 
+        # for an attachment that is wider at base, better to place links a little higher
+        a_len, a_height, a_dep = self.get_record_dimensions(record)        
+        if self.attachment_type == 'cone' and self.use_attachment:
+            self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
+
         if not self.use_attachment:
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
-
-        # for an attachment that is wider at base, better to place links a little higher
-        if self.attachment_type == 'cone' and self.use_attachment:
-            a_len, a_height, a_dep = self.get_record_dimensions(record)
-            self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
+            
 
         # fix it to ground or block
-        if self.attachment_fixed_to_base:
+        if self.attachment_fixed_to_base and self.use_attachment:
             # make it kinematic
             if self.use_base:
                 commands.append({
@@ -482,10 +498,25 @@ class Linking(Tower):
                      "is_kinematic": True,
                      "use_gravity": True}])
 
+        # add a cap
+        if self.use_cap and self.use_attachment:
+            commands.extend(self._build_base(
+                height=(self.tower_height + a_height * scale['y']),
+                as_cap=True))
+            if self.attachment_fixed_to_base:
+                commands.append({
+                    "$type": "add_fixed_joint",
+                    "parent_id": o_id,
+                    "id": self.cap_id})                
+            
+
         return commands        
 
     def _add_links(self) -> List[dict]:
         commands = []
+
+        # select how many links
+        self.num_links = self.num_blocks = random.choice(range(*self.num_link_range))
 
         # build a "tower" out of the links
         commands.extend(self._build_stack())
@@ -503,6 +534,7 @@ class Linking(Tower):
             self.target_link_idx = random.choice(range(self.num_links))
         elif hasattr(self.target_link_range, '__len__'):
             self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
+            self.target_link_idx = min(self.target_link_idx, self.num_links - 1)
         elif isinstance(self.target_link_range, (int, float)):
             self.target_link_idx = int(self.target_link_range)
         else:
@@ -539,7 +571,7 @@ class Linking(Tower):
 
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 300
+        return frame > 450
 
 if __name__ == "__main__":
 
@@ -552,7 +584,7 @@ if __name__ == "__main__":
         link_scale_gradient=args.mgrad,
         link_rotation_range=args.mrot,
         link_mass_range=args.mmass,
-        num_links=args.num_middle_objects,
+        num_link_range=args.num_middle_range,
         target_link_range=args.target_link_range,
         spacing_jitter=args.spacing_jitter,
 
@@ -572,6 +604,7 @@ if __name__ == "__main__":
         attachment_color=args.acolor,
         attachment_material=args.amaterial,
         attachment_fixed_to_base=args.attachment_fixed,
+        use_cap=args.attachment_capped,
 
         # domino specific
         target_zone=args.zone,

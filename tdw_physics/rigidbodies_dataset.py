@@ -329,7 +329,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             {"$type": "set_kinematic_state",
              "id": o_id,
              "is_kinematic": True,
-             "use_gravity": True}])            
+             "use_gravity": True}])
+
+        if add_data:
+            self.model_names.append(record.name)
+            self.scales.append(scale)
 
         return cmds
 

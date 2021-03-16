@@ -40,6 +40,10 @@ def get_gravity_args(dataset_dir: str, parse=True):
                         type=int,
                         default=1,
                         help="Whether to place the probe object on the top of a ramp")
+    parser.add_argument("--rheight",
+                        type=none_or_str,
+                        default=0.5,
+                        help="Height of the ramp base")    
     parser.add_argument("--probe",
                         type=str,
                         default="sphere",
@@ -51,16 +55,45 @@ def get_gravity_args(dataset_dir: str, parse=True):
     parser.add_argument("--pmass",
                         type=str,
                         default="1.0",
-                        help="scale of probe objects")    
+                        help="scale of probe objects")
+    parser.add_argument("--foffset",
+                        type=str,
+                        default="0.0,0.5,0.0",
+                        help="offset from probe centroid from which to apply force, relative to probe scale")    
+
     parser.add_argument("--collision_axis_length",
                         type=float,
+                        default=2.5,
+                        help="How far to put the probe and target")    
+
+    # camera
+    parser.add_argument("--camera_distance",
+                        type=float,
+                        default=3.25,
+                        help="radial distance from camera to centerpoint")
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=90,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=2.0,
+                         help="min height of camera")
+    parser.add_argument("--camera_max_height",
+                        type=float,
                         default=3.0,
-                        help="How far to put the probe and target")
+                        help="max height of camera")
+        
 
 
     def postprocess(args):
 
         args = domino_postproc(args)
+        args.rheight = handle_random_transform_args(args.rheight)
 
         return args
 
@@ -97,11 +130,23 @@ class Gravity(Dominoes):
 
         super().__init__(port=port, **kwargs)
 
+        # always use a ramp for probe
+        self.use_ramp = True
+        
+        # middle ramp
         self._middle_types = self.DEFAULT_RAMPS        
         self.middle_scale_range = middle_scale_range
         self.middle_color = middle_color
         self.middle_material = middle_material
         self.remove_middle = remove_middle
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+
+        # ramp
+        static_group.create_dataset("ramp_base_height", data=self.ramp_base_height)
+        static_group.create_dataset("middle_type", data=self.middle_type)        
+        static_group.create_dataset("middle_id", data=self.middle_id)
 
     def _build_intermediate_structure(self) -> List[dict]:
 
@@ -129,7 +174,11 @@ class Gravity(Dominoes):
         commands.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": self.middle_id})            
+             "id": self.middle_id})
+        self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+
+        camera_y_aim = self.ramp_base_height
+        self.camera_aim = arr_to_xyz([0., camera_y_aim, 0.])
 
         return commands
 
@@ -141,6 +190,7 @@ if __name__ == '__main__':
 
         # gravity specific
         middle_scale_range=args.mscale,
+        ramp_base_height_range=args.rheight,        
         
         # domino specific
         target_zone=args.zone,
@@ -191,6 +241,7 @@ if __name__ == '__main__':
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor
+
     )
 
 
