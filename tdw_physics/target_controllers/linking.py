@@ -89,6 +89,9 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--attachment_fixed",
                         action="store_true",
                         help="Whether the attachment object will be fixed to the base or floor")
+    parser.add_argument("--attachment_capped",
+                        action="store_true",
+                        help="Whether the attachment object will have a fixed cap like the base")    
 
     # base
     parser.add_argument("--base",
@@ -127,7 +130,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     # camera
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=2.75,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -224,6 +227,7 @@ class Linking(Tower):
                  attachment_fixed_to_base=False,
                  attachment_color=[0.8,0.8,0.8],
                  attachment_material=None,
+                 use_cap=False,
                  
                  # what the links are, how many, and which is the target
                  link_objects='torus',
@@ -241,7 +245,6 @@ class Linking(Tower):
         super().__init__(port=port, tower_cap=[], **kwargs)
 
         self.use_ramp = use_ramp
-        self.use_cap = False
 
         # probe and target different colors
         self.match_probe_and_target_color = False
@@ -261,6 +264,7 @@ class Linking(Tower):
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
         self.attachment_material = attachment_material
+        self.use_cap = use_cap        
 
         # whether it'll be fixed to the base
         self.attachment_fixed_to_base = attachment_fixed_to_base        
@@ -286,13 +290,16 @@ class Linking(Tower):
         Dominoes._write_static_data(self, static_group)
 
         static_group.create_dataset("base_id", data=self.base_id)
+        static_group.create_dataset("use_base", data=self.use_base)        
         static_group.create_dataset("base_type", data=self.base_type)
         static_group.create_dataset("attachment_id", data=self.attachment_id)
         static_group.create_dataset("attachent_type", data=self.attachment_type)
+        static_group.create_dataset("use_attachment", data=self.use_attachment)                
         static_group.create_dataset("link_type", data=self.middle_type)
         static_group.create_dataset("num_links", data=self.num_links)        
         static_group.create_dataset("target_link_idx", data=self.target_link_idx)
         static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
+        static_group.create_dataset("use_cap", data=self.use_cap)                        
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -327,7 +334,7 @@ class Linking(Tower):
         commands = []
 
         # Build a stand for the linker object
-        commands.extend(self._build_base())
+        commands.extend(self._build_base(height=self.tower_height, as_cap=False))
 
         # Add the attacment object (i.e. what the links will be partly attached to)
         commands.extend(self._place_attachment())
@@ -341,7 +348,7 @@ class Linking(Tower):
 
         return commands
 
-    def _build_base(self) -> List[dict]:
+    def _build_base(self, height, as_cap=False) -> List[dict]:
         
         commands = []
 
@@ -352,9 +359,12 @@ class Linking(Tower):
             exclude_color=self.target_color,
             add_data=self.use_base)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.base = record
-        self.base_id = data['id']
-        self.base_type = data['name']
+        if as_cap:
+            self.cap_id = data['id']
+            self.cap_type = data['name']
+        else:
+            self.base_id = data['id']
+            self.base_type = data['name']
 
         mass = random.uniform(*get_range(self.base_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
@@ -366,7 +376,7 @@ class Linking(Tower):
                 record=record,
                 position={
                     "x": 0.,
-                    "y": self.tower_height,
+                    "y": height,
                     "z": 0.
                 },
                 rotation={"x":0.,"y":0.,"z":0.},
@@ -401,7 +411,7 @@ class Linking(Tower):
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
             self.tower_height = 0.0
-        
+
         return commands
 
     def _place_attachment(self) -> List[dict]:
@@ -458,16 +468,17 @@ class Linking(Tower):
              "scale_factor": scale,
              "id": o_id}])
 
+        # for an attachment that is wider at base, better to place links a little higher
+        a_len, a_height, a_dep = self.get_record_dimensions(record)        
+        if self.attachment_type == 'cone' and self.use_attachment:
+            self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
+
         if not self.use_attachment:
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
-
-        # for an attachment that is wider at base, better to place links a little higher
-        if self.attachment_type == 'cone' and self.use_attachment:
-            a_len, a_height, a_dep = self.get_record_dimensions(record)
-            self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
+            
 
         # fix it to ground or block
         if self.attachment_fixed_to_base and self.use_attachment:
@@ -486,6 +497,18 @@ class Linking(Tower):
                      "id": o_id,
                      "is_kinematic": True,
                      "use_gravity": True}])
+
+        # add a cap
+        if self.use_cap and self.use_attachment:
+            commands.extend(self._build_base(
+                height=(self.tower_height + a_height * scale['y']),
+                as_cap=True))
+            if self.attachment_fixed_to_base:
+                commands.append({
+                    "$type": "add_fixed_joint",
+                    "parent_id": o_id,
+                    "id": self.cap_id})                
+            
 
         return commands        
 
@@ -581,6 +604,7 @@ if __name__ == "__main__":
         attachment_color=args.acolor,
         attachment_material=args.amaterial,
         attachment_fixed_to_base=args.attachment_fixed,
+        use_cap=args.attachment_capped,
 
         # domino specific
         target_zone=args.zone,

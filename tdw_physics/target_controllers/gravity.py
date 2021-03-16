@@ -57,6 +57,29 @@ def get_gravity_args(dataset_dir: str, parse=True):
                         default=3.0,
                         help="How far to put the probe and target")
 
+    # camera
+    parser.add_argument("--camera_distance",
+                        type=float,
+                        default=2.75,
+                        help="radial distance from camera to centerpoint")
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=90,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=1.5,
+                         help="min height of camera")
+    parser.add_argument("--camera_max_height",
+                        type=float,
+                        default=2.5,
+                        help="max height of camera")
+        
+
 
     def postprocess(args):
 
