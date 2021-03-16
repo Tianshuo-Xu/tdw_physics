@@ -289,6 +289,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
                  o_id: Optional[int] = None,
                  material: Optional[str] = None,
+                 mass: Optional[float] = None,
+                 dynamic_friction: Optional[float] = None,
+                 static_friction: Optional[float] = None,
+                 bounciness: Optional[float] = None,
                  add_data: Optional[bool] = True
                  ) -> List[dict]:
 
@@ -301,11 +305,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         cmds = []
 
         # add the ramp
+        info = PHYSICS_INFO[record.name]
         cmds.extend(
-            self.add_physics_object_default(
-                name = record.name,
+            self.add_physics_object(
+                record = record,
                 position = position,
                 rotation = rotation,
+                mass = mass or info.mass,
+                dynamic_friction = dynamic_friction or info.dynamic_friction,
+                static_friction = static_friction or info.static_friction,
+                bounciness = bounciness or info.bounciness,
                 o_id = o_id,
                 add_data = add_data))
         

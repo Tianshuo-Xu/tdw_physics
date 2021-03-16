@@ -996,9 +996,6 @@ class Dominoes(RigidbodiesDataset):
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
-                # dynamic_friction=0.5,
-                # static_friction=0.5,
-                # bounciness=0.1,
                 dynamic_friction=0.01,
                 static_friction=0.01,
                 bounciness=0,                
@@ -1080,6 +1077,10 @@ class Dominoes(RigidbodiesDataset):
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
 
+        self.ramp_pos = ramp_pos
+        self.ramp_rot = ramp_rot
+        self.ramp_id = ramp_id
+
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
         scale_x = (0.75 * self.collision_axis_length) / r_len        
@@ -1087,52 +1088,16 @@ class Dominoes(RigidbodiesDataset):
             self.ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
 
         # optionally add base
-        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
-        if self.ramp_base_height > 0.01:
-            self.ramp_base = self.CUBE
-            self.ramp_base_scale = arr_to_xyz([
-                float(scale_x * r_len), float(self.ramp_base_height), float(0.75 * scale_x * r_dep)])
-            self.ramp_base_id = self._get_next_object_id()
-            cmds.extend(
-                self.add_physics_object(
-                    record=self.ramp_base,
-                    position=copy.deepcopy(ramp_pos),
-                    rotation=TDWUtils.VECTOR3_ZERO,
-                    mass=500,
-                    dynamic_friction=0.01,
-                    static_friction=0.01,
-                    bounciness=0.0,
-                    o_id=self.ramp_base_id,
-                    add_data=True))
-            _,rb_height,_ = self.get_record_dimensions(self.ramp_base)
-            ramp_pos['y'] += self.ramp_base_scale['y']
+        cmds.extend(self._add_ramp_base_to_ramp(color=rgb))
 
-            # scale it, color it, fix it
-            cmds.extend(
-                self.get_object_material_commands(
-                    self.ramp_base, self.ramp_base_id, self.get_material_name(self.zone_material)))
-            cmds.extend([
-                {"$type": "scale_object",
-                 "scale_factor": self.ramp_base_scale,
-                 "id": self.ramp_base_id},
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": self.ramp_base_id},                        
-                {"$type": "set_object_collision_detection_mode",
-                 "mode": "continuous_speculative",
-                 "id": self.ramp_base_id},
-                {"$type": "set_kinematic_state",
-                 "id": self.ramp_base_id,
-                 "is_kinematic": True,
-                 "use_gravity": True}])                        
-
+        # add the ramp
         cmds.extend(
             self.add_ramp(
                 record = self.ramp,
-                position=ramp_pos,
-                rotation=ramp_rot,
+                position=self.ramp_pos,
+                rotation=self.ramp_rot,
                 scale=self.ramp_scale,
-                o_id=ramp_id,
+                o_id=self.ramp_id,
                 add_data=True))
 
         # give the ramp a texture and color
@@ -1152,6 +1117,63 @@ class Dominoes(RigidbodiesDataset):
         self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height
 
         return cmds
+
+    def _add_ramp_base_to_ramp(self, color=None) -> None:
+
+        cmds = []
+
+        if color is None:
+            color = self.random_color(exclude=self.target_color)
+
+        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
+        if self.ramp_base_height < 0.01:
+            return []
+        
+        self.ramp_base = self.CUBE
+        r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
+        self.ramp_base_scale = arr_to_xyz([
+            float(self.ramp_scale['x'] * r_len),
+            float(self.ramp_base_height),
+            float(self.ramp_scale['z'] * r_dep)])
+        self.ramp_base_id = self._get_next_object_id()
+
+        # add the base
+        cmds.extend(
+            self.add_physics_object(
+                record=self.ramp_base,
+                position=copy.deepcopy(self.ramp_pos),
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=500,
+                dynamic_friction=0.01,
+                static_friction=0.01,
+                bounciness=0.0,
+                o_id=self.ramp_base_id,
+                add_data=True))
+
+        # scale it, color it, fix it
+        cmds.extend(
+            self.get_object_material_commands(
+                self.ramp_base, self.ramp_base_id, self.get_material_name(self.zone_material)))
+        cmds.extend([
+            {"$type": "scale_object",
+             "scale_factor": self.ramp_base_scale,
+             "id": self.ramp_base_id},
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": self.ramp_base_id},                                    
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": self.ramp_base_id},
+            {"$type": "set_kinematic_state",
+             "id": self.ramp_base_id,
+             "is_kinematic": True,
+             "use_gravity": True}])
+        
+        # raise the ramp
+        self.ramp_pos['y'] += self.ramp_base_scale['y']        
+
+        return cmds
+
 
     def _replace_target_with_object(self, record, data):
         self.target = record
