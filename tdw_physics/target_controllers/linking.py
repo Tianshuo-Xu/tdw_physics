@@ -511,6 +511,7 @@ class Linking(Tower):
             self.target_link_idx = random.choice(range(self.num_links))
         elif hasattr(self.target_link_range, '__len__'):
             self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
+            self.target_link_idx = min(self.target_link_idx, self.num_links - 1)
         elif isinstance(self.target_link_range, (int, float)):
             self.target_link_idx = int(self.target_link_range)
         else:
