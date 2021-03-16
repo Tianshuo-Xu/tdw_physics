@@ -52,9 +52,9 @@ def get_linking_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="2.0",
                         help="The mass range of each link object")    
-    parser.add_argument("--num_middle_objects",
-                        type=int,
-                        default=1,
+    parser.add_argument("--num_middle_range",
+                        type=str,
+                        default="[1,6]",
                         help="How many links to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
@@ -131,11 +131,11 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
-                        default=-30,
+                        default=0,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=165,
+                        default=90,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -143,7 +143,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                          help="min height of camera")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=3.0,
+                        default=2.5,
                         help="max height of camera")
     
 
@@ -156,6 +156,9 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
+
+        # num links
+        args.num_middle_range = handle_random_transform_args(args.num_middle_range)
         
         # target
         args.target_link_range = handle_random_transform_args(args.target_link_range)
@@ -228,7 +231,7 @@ class Linking(Tower):
                  link_scale_gradient=0.0,
                  link_rotation_range=[0,0],
                  link_mass_range=2.0,
-                 num_links=1,
+                 num_link_range=[1,6],
                  target_link_range=None,
 
                  # generic
@@ -264,7 +267,7 @@ class Linking(Tower):
 
         # links are the middle objects
         self.set_middle_types(link_objects)        
-        self.num_links = self.num_blocks = num_links
+        self.num_link_range = num_link_range
         self.middle_scale_range = link_scale_range        
         self.middle_mass_range = link_mass_range
         self.middle_rotation_range = link_rotation_range
@@ -288,7 +291,8 @@ class Linking(Tower):
         static_group.create_dataset("attachent_type", data=self.attachment_type)
         static_group.create_dataset("link_type", data=self.middle_type)
         static_group.create_dataset("num_links", data=self.num_links)        
-        static_group.create_dataset("target_link_idx", data=self.target_link_idx)        
+        static_group.create_dataset("target_link_idx", data=self.target_link_idx)
+        static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
 
     @staticmethod
     def get_controller_label_funcs(classname = "Linking"):
@@ -395,7 +399,8 @@ class Linking(Tower):
             commands.append(
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
-            self.object_ids = self.object_ids[:-1]            
+            self.object_ids = self.object_ids[:-1]
+            self.tower_height = 0.0
         
         return commands
 
@@ -487,6 +492,9 @@ class Linking(Tower):
     def _add_links(self) -> List[dict]:
         commands = []
 
+        # select how many links
+        self.num_links = self.num_blocks = random.choice(range(*self.num_link_range))
+
         # build a "tower" out of the links
         commands.extend(self._build_stack())
 
@@ -539,7 +547,7 @@ class Linking(Tower):
 
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 750
+        return frame > 450
 
 if __name__ == "__main__":
 
@@ -552,7 +560,7 @@ if __name__ == "__main__":
         link_scale_gradient=args.mgrad,
         link_rotation_range=args.mrot,
         link_mass_range=args.mmass,
-        num_links=args.num_middle_objects,
+        num_link_range=args.num_middle_range,
         target_link_range=args.target_link_range,
         spacing_jitter=args.spacing_jitter,
 
