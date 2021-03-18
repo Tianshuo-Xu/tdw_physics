@@ -46,7 +46,11 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser.add_argument("--ramp",
                         type=int,
                         default=0,
-                        help="Whether to place the probe object on the top of a ramp")    
+                        help="Whether to place the probe object on the top of a ramp")
+    parser.add_argument("--rheight",
+                        type=none_or_str,
+                        default="0",
+                        help="Height of the ramp base")            
     parser.add_argument("--collision_axis_length",
                         type=float,
                         default=3.0,
@@ -149,6 +153,9 @@ def get_tower_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = domino_postproc(args)
+
+        # ramp height
+        args.rheight = handle_random_transform_args(args.rheight)                
         
         # whether to use a cap object on the tower
         if args.tower_cap is not None:
@@ -527,7 +534,8 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        ramp_base_height_range=args.rheight
     )
 
     if bool(args.run):

@@ -43,7 +43,15 @@ def get_gravity_args(dataset_dir: str, parse=True):
     parser.add_argument("--rheight",
                         type=none_or_str,
                         default=0.5,
-                        help="Height of the ramp base")    
+                        help="Height of the ramp base")
+    parser.add_argument("--rscale",
+                        type=none_or_str,
+                        default=None,
+                        help="The xyz scale of the ramp")
+    parser.add_argument("--rcolor",
+                        type=none_or_str,
+                        default=None,
+                        help="The rgb color of the ramp")        
     parser.add_argument("--probe",
                         type=str,
                         default="sphere",
@@ -190,7 +198,9 @@ if __name__ == '__main__':
 
         # gravity specific
         middle_scale_range=args.mscale,
-        ramp_base_height_range=args.rheight,        
+        ramp_base_height_range=args.rheight,
+        ramp_scale=args.rscale,
+        ramp_has_friction=args.rfriction,
         
         # domino specific
         target_zone=args.zone,
