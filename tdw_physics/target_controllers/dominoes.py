@@ -311,8 +311,6 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.middle is not None:
             middle_list = args.middle.split(',')
-            assert all([t in MODEL_NAMES for t in middle_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
             args.middle = middle_list
 
         if args.color is not None:
@@ -444,7 +442,7 @@ class Dominoes(RigidbodiesDataset):
                  use_ramp=False,
                  ramp_has_friction=False,
                  ramp_scale=None,
-                 ramp_color=None,
+                 ramp_color=[0.75,0.75,1.0],
                  ramp_base_height_range=0,
                  **kwargs):
 
@@ -554,25 +552,6 @@ class Dominoes(RigidbodiesDataset):
         tlist = self.get_types(olist)
         self._zone_types = tlist
 
-    def get_material_name(self, material):
-
-        if material is not None:
-            if material in MATERIAL_TYPES:
-                mat = random.choice(MATERIAL_NAMES[material])
-            else:
-                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
-                    (material, self.material_types)
-                mat = material
-        else:
-            mtype = random.choice(self.material_types)
-            mat = random.choice(MATERIAL_NAMES[mtype])
-
-        return mat
-
-    def get_object_material_commands(self, record, object_id, material):
-        commands = TDWUtils.set_visual_material(
-            self, record.substructure, object_id, material, quality="high")
-        return commands
 
     def clear_static_data(self) -> None:
         super().clear_static_data()
@@ -718,6 +697,13 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("zone_id", data=self.zone_id)
         static_group.create_dataset("target_id", data=self.target_id)
         static_group.create_dataset("probe_id", data=self.probe_id)
+
+        if self.use_ramp:
+            static_group.create_dataset("ramp_id", data=self.ramp_id)
+            static_group.create_dataset("ramp_scale", data=self.ramp_scale)            
+            if self.ramp_base_height > 0.0:
+                static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
+                static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
 
         ## color and scales of primitive objects
         static_group.create_dataset("target_type", data=self.target_type)
@@ -1096,7 +1082,7 @@ class Dominoes(RigidbodiesDataset):
 
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
-        rgb = self.ramp_color or np.array([0.75,0.75,1.0])        
+        rgb = self.ramp_color or self.random_color(exclude=self.target_color)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
         ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
@@ -1122,22 +1108,23 @@ class Dominoes(RigidbodiesDataset):
                 position=self.ramp_pos,
                 rotation=self.ramp_rot,
                 scale=self.ramp_scale,
+                material=self.zone_material,
+                color=rgb,
                 o_id=self.ramp_id,
                 add_data=True,
                 **self.ramp_physics_info
             ))
 
         # give the ramp a texture and color
-        cmds.extend(
-            self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
+        # cmds.extend(
+        #     self.get_object_material_commands(
+        #         self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
 
-        cmds.append(
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": ramp_id})            
-        print("ramp commands")
-        print(cmds)
+        # cmds.append(
+        #     {"$type": "set_color",
+        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+        #      "id": ramp_id})
+        # self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)        
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * self.ramp_scale['x'] * r_len - 0.15
@@ -1199,6 +1186,11 @@ class Dominoes(RigidbodiesDataset):
              "id": self.ramp_base_id,
              "is_kinematic": True,
              "use_gravity": True}])
+
+        # add data
+        self.model_names.append(self.ramp_base.name)
+        self.scales.append(self.ramp_base_scale)
+        self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)        
         
         # raise the ramp
         self.ramp_pos['y'] += self.ramp_base_scale['y']        

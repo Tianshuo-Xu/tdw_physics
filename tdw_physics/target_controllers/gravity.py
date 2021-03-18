@@ -103,6 +103,10 @@ def get_gravity_args(dataset_dir: str, parse=True):
         args = domino_postproc(args)
         args.rheight = handle_random_transform_args(args.rheight)
 
+        # a bunch of different middle args
+        if 'ramp' in args.middle:
+            args.middle = 'ramp'
+
         return args
 
     if not parse:
@@ -126,14 +130,12 @@ def get_gravity_args(dataset_dir: str, parse=True):
     
 class Gravity(Dominoes):
 
-    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
+
     
     def __init__(self,
                  port: int = 1071,
-                 middle_scale_range=1.0,
                  middle_color=None,
                  middle_material=None,
-                 remove_middle=False,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -141,20 +143,60 @@ class Gravity(Dominoes):
         # always use a ramp for probe
         self.use_ramp = True
         
-        # middle ramp
-        self._middle_types = self.DEFAULT_RAMPS        
-        self.middle_scale_range = middle_scale_range
+        # middle
         self.middle_color = middle_color
         self.middle_material = middle_material
+        self.middle_objects = []
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+        assert self.middle_type is not None
+
+    @staticmethod
+    def get_controller_label_funcs(classname = 'Gravity'):
+
+        funcs = super(Dominoes,Dominoes).get_controller_label_funcs(classname)
+
+        return funcs
+
+    def _build_intermediate_structure(self) -> None:
+
+        # append scales and colors and names
+        for (record, data) in self.middle_objects:
+            self.model_names.append(record.name)
+            self.scales.append(copy.deepcopy(data['scale']))        
+            self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1,3))], axis=0)
+
+        # aim camera
+        camera_y_aim = max(0.5, self.ramp_base_height)
+        self.camera_aim = arr_to_xyz([0., camera_y_aim, 0.])
+
+        return []
+
+class Ramp(Gravity):
+
+    RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp' in r.name]
+
+    def __init__(self,
+                 port: int = 1071,
+                 middle_objects='ramp',
+                 middle_scale_range=1.0,
+                 remove_middle=False,                     
+                 **kwargs):
+        
+        super().__init__(port=port, **kwargs)
+        
+        self._middle_types = self.RAMPS
+        self.middle_scale_range = middle_scale_range
         self.remove_middle = remove_middle
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
-        # ramp
-        static_group.create_dataset("ramp_base_height", data=self.ramp_base_height)
-        static_group.create_dataset("middle_type", data=self.middle_type)        
+        static_group.create_dataset("middle_type", data=str("ramp"))
+        static_group.create_dataset("middle_material", data=self.middle_material)                
         static_group.create_dataset("middle_id", data=self.middle_id)
+        static_group.create_dataset("middle_scale", data=self.middle_scale)
 
     def _build_intermediate_structure(self) -> List[dict]:
 
@@ -165,6 +207,13 @@ class Gravity(Dominoes):
         self.middle_type = self.middle.name
         self.middle_id = self._get_next_object_id()
         self.middle_scale = get_random_xyz_transform(self.middle_scale_range)
+        rgb = self.middle_color or self.random_color(exclude=self.target_color)
+
+        ramp_data = {
+            'name': self.middle.name,
+            'id': self.middle_id,
+            'scale': self.middle_scale,
+            'color': rgb}        
         
         commands = self.add_ramp(
             record = self.middle,
@@ -172,21 +221,14 @@ class Gravity(Dominoes):
             rotation = ramp_rot,
             scale = self.middle_scale,
             o_id = self.middle_id,
-            add_data = True)
+            color=rgb,
+            material=self.middle_material,
+            add_data = False)
 
-        # give the ramp a texture and color
-        commands.extend(
-            self.get_object_material_commands(
-                self.middle, self.middle_id, self.get_material_name(self.middle_material)))        
-        rgb = self.middle_color or self.random_color(exclude=self.target_color)
-        commands.append(
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": self.middle_id})
-        self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
-
-        camera_y_aim = self.ramp_base_height
-        self.camera_aim = arr_to_xyz([0., camera_y_aim, 0.])
+        # append data        
+        self.middle_objects.append(
+            (self.middle, ramp_data))
+        commands.extend(super._build_intermediate_structure())        
 
         return commands
 
@@ -194,7 +236,12 @@ if __name__ == '__main__':
 
     args = get_gravity_args("gravity")
 
-    GC = Gravity(
+    if args.middle == 'ramp':
+        classtype = Ramp
+    else:
+        classtype = Gravity
+
+    GC = classtype(
 
         # gravity specific
         middle_scale_range=args.mscale,

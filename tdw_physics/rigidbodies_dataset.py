@@ -289,6 +289,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
                  o_id: Optional[int] = None,
                  material: Optional[str] = None,
+                 color: Optional[list] = None,
                  mass: Optional[float] = None,
                  dynamic_friction: Optional[float] = None,
                  static_friction: Optional[float] = None,
@@ -318,9 +319,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 o_id = o_id,
                 add_data = add_data))
         
-        print("add ramp command")
-        print(cmds)
-
         if o_id is None:
             o_id = cmds[-1]["id"]
 
@@ -329,6 +327,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             {"$type": "scale_object",
              "scale_factor": scale,
              "id": o_id})
+
+        # texture and color it
+        cmds.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(material)))        
+
+        cmds.append(
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": ramp_id})
 
         # need to make ramp a kinetimatic object
         cmds.extend([
@@ -342,6 +350,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         if add_data:
             self.model_names.append(record.name)
+            self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
         return cmds
