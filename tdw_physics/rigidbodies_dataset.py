@@ -336,7 +336,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         cmds.append(
             {"$type": "set_color",
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
-             "id": ramp_id})
+             "id": o_id})
 
         # need to make ramp a kinetimatic object
         cmds.extend([

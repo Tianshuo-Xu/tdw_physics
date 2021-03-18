@@ -36,6 +36,15 @@ def get_gravity_args(dataset_dir: str, parse=True):
     domino, domino_postproc = get_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
+    # what type of scenario to make it
+    parser.add_argument("--middle",
+                        type=str,
+                        default="ramp",
+                        help="comma-separated list of possible middle objects/scenario types")
+    parser.add_argument("--mfriction",
+                        type=float,
+                        default=0.1,
+                        help="Static and dynamic friction on middle objects")        
     parser.add_argument("--ramp",
                         type=int,
                         default=1,
@@ -129,13 +138,12 @@ def get_gravity_args(dataset_dir: str, parse=True):
     return args
     
 class Gravity(Dominoes):
-
-
     
     def __init__(self,
                  port: int = 1071,
                  middle_color=None,
                  middle_material=None,
+                 middle_friction=0.1,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -146,6 +154,7 @@ class Gravity(Dominoes):
         # middle
         self.middle_color = middle_color
         self.middle_material = middle_material
+        self.middle_friction = middle_friction
         self.middle_objects = []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -196,7 +205,6 @@ class Ramp(Gravity):
         static_group.create_dataset("middle_type", data=str("ramp"))
         static_group.create_dataset("middle_material", data=self.middle_material)                
         static_group.create_dataset("middle_id", data=self.middle_id)
-        static_group.create_dataset("middle_scale", data=self.middle_scale)
 
     def _build_intermediate_structure(self) -> List[dict]:
 
@@ -223,12 +231,16 @@ class Ramp(Gravity):
             o_id = self.middle_id,
             color=rgb,
             material=self.middle_material,
+            mass = 500,
+            static_friction=self.middle_friction,
+            dynamic_friction=self.middle_friction,
+            bounciness = 0,            
             add_data = False)
 
         # append data        
         self.middle_objects.append(
             (self.middle, ramp_data))
-        commands.extend(super._build_intermediate_structure())        
+        commands.extend(super()._build_intermediate_structure())        
 
         return commands
 
@@ -245,9 +257,11 @@ if __name__ == '__main__':
 
         # gravity specific
         middle_scale_range=args.mscale,
+        middle_friction=args.mfriction,
         ramp_base_height_range=args.rheight,
         ramp_scale=args.rscale,
         ramp_has_friction=args.rfriction,
+        probe_has_friction=args.pfriction,
         
         # domino specific
         target_zone=args.zone,
@@ -297,7 +311,8 @@ if __name__ == '__main__':
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        ramp_material=args.rmaterial
 
     )
 

@@ -214,10 +214,17 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="wood_european_ash",
                         help="Material name for target. If None, samples from material_type")
+    parser.add_argument("--rmaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material name for ramp. If None, same as zone material")    
     parser.add_argument("--pmaterial",
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
                         help="Material name for probe. If None, samples from material_type")
+    parser.add_argument("--pfriction",
+                        action="store_true",
+                        help="Whether the probe object has friction")    
     parser.add_argument("--mmaterial",
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
@@ -431,6 +438,8 @@ class Dominoes(RigidbodiesDataset):
                  material_types=MATERIAL_TYPES,
                  target_material=None,
                  probe_material=None,
+                 probe_has_friction=False,
+                 ramp_material=None,
                  zone_material=None,
                  distractor_types=MODEL_NAMES,
                  distractor_categories=None,
@@ -470,6 +479,7 @@ class Dominoes(RigidbodiesDataset):
         # whether to use a ramp
         self.use_ramp = use_ramp
         self.ramp_color = ramp_color
+        self.ramp_material = ramp_material or self.zone_material
         self.ramp_scale = get_random_xyz_transform(ramp_scale)
         self.ramp_base_height_range = ramp_base_height_range
         self.ramp_physics_info = {}
@@ -479,6 +489,7 @@ class Dominoes(RigidbodiesDataset):
                 'static_friction': 0.1,
                 'dynamic_friction': 0.1,
                 'bounciness': 0.1})
+        self.probe_has_friction = probe_has_friction
 
         ## object generation properties
         self.target_scale_range = target_scale_range
@@ -700,7 +711,6 @@ class Dominoes(RigidbodiesDataset):
 
         if self.use_ramp:
             static_group.create_dataset("ramp_id", data=self.ramp_id)
-            static_group.create_dataset("ramp_scale", data=self.ramp_scale)            
             if self.ramp_base_height > 0.0:
                 static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
                 static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
@@ -992,22 +1002,21 @@ class Dominoes(RigidbodiesDataset):
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
-        
+
+        if self.probe_has_friction:
+            probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
+        else:
+            probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+            
         commands.extend(
             self.add_physics_object(
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
-                
-                # dynamic_friction=0.01,
-                # static_friction=0.01,
-                # bounciness=0,
-                dynamic_friction = 0.1,
-                static_friction = 0.1,
-                bounciness = 0.6,
-                
-                o_id=o_id))
+                o_id=o_id,
+                **probe_physics_info
+            ))
 
         # Set the probe material
         commands.extend(
@@ -1108,23 +1117,12 @@ class Dominoes(RigidbodiesDataset):
                 position=self.ramp_pos,
                 rotation=self.ramp_rot,
                 scale=self.ramp_scale,
-                material=self.zone_material,
+                material=self.ramp_material,
                 color=rgb,
                 o_id=self.ramp_id,
                 add_data=True,
                 **self.ramp_physics_info
             ))
-
-        # give the ramp a texture and color
-        # cmds.extend(
-        #     self.get_object_material_commands(
-        #         self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
-
-        # cmds.append(
-        #     {"$type": "set_color",
-        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-        #      "id": ramp_id})
-        # self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)        
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * self.ramp_scale['x'] * r_len - 0.15
@@ -1171,7 +1169,7 @@ class Dominoes(RigidbodiesDataset):
         # scale it, color it, fix it
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp_base, self.ramp_base_id, self.get_material_name(self.zone_material)))
+                self.ramp_base, self.ramp_base_id, self.get_material_name(self.ramp_material)))
         cmds.extend([
             {"$type": "scale_object",
              "scale_factor": self.ramp_base_scale,
