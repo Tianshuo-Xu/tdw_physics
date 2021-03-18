@@ -264,7 +264,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  "static_friction": static_friction,
                  "bounciness": bounciness}]
 
-
     def add_physics_object_default(self,
                                    name: str,
                                    position: Dict[str, float],
@@ -287,6 +286,87 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         return self.add_physics_object(o_id=o_id, record=info.record, position=position, rotation=rotation,
                                        mass=info.mass, dynamic_friction=info.dynamic_friction,
                                        static_friction=info.static_friction, bounciness=info.bounciness, add_data=add_data)
+
+    def add_primitive(self,
+                      record: ModelRecord,
+                      position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                      rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                      scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                      o_id: Optional[int] = None,
+                      material: Optional[str] = None,
+                      color: Optional[list] = None,
+                      exclude_color: Optional[list] = None,
+                      mass: Optional[float] = 2.0,
+                      dynamic_friction: Optional[float] = 0.1,
+                      static_friction: Optional[float] = 0.1,
+                      bounciness: Optional[float] = 0,
+                      add_data: Optional[bool] = True,
+                      scale_mass: Optional[bool] = True,
+                      make_kinematic: Optional[bool] = False,
+                      obj_list: Optional[list] = [],
+                      ) -> List[dict]:
+
+        cmds = []
+        
+        if o_id is None:
+            o_id = self._get_next_object_id()
+        
+        if scale_mass:
+            mass = mass * np.prod(xyz_to_arr(scale))
+
+        # add the physics stuff
+        cmds.extend(
+            self.add_physics_object(
+                record = record,
+                position = position,
+                rotation = rotation,
+                mass = mass,
+                dynamic_friction = dynamic_friction,
+                static_friction = static_friction,
+                bounciness = bounciness,
+                o_id = o_id,
+                add_data = add_data))
+
+        # scale the object
+        cmds.append(
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id})
+
+        # set the material and color
+        material = self.get_material_name(material)
+        cmds.extend(
+            self.get_object_material_commands(
+                record, o_id, material))
+
+        color = color or self.random_color(exclude=exclude_color)
+        cmds.append(
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": o_id})
+
+        if make_kinematic:
+            cmds.extend([
+                {"$type": "set_object_collision_detection_mode",
+                 "mode": "continuous_speculative",
+                 "id": o_id},
+                {"$type": "set_kinematic_state",
+                 "id": o_id,
+                 "is_kinematic": True,
+                 "use_gravity": True}])
+
+        if add_data:
+            data = {'name': record.name, 'id': o_id,
+                    'scale': scale, 'color': color, 'material': material,                    
+                    'mass': mass,
+                    'dynamic_friction': dynamic_friction,
+                    'static_friction': static_friction,
+                    'bounciness': bounciness}
+            self._add_name_scale_color(record, data)
+            obj_list.append((record, data))
+
+        return cmds
+
 
     def add_ramp(self,
                  record: ModelRecord,
@@ -355,9 +435,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
              "use_gravity": True}])
 
         if add_data:
-            self.model_names.append(record.name)
-            self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
-            self.scales.append(scale)
+            self._add_name_scale_color(record, {'color': color, 'scale': scale})
+            # self.model_names.append(record.name)
+            # self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
+            # self.scales.append(scale)
 
         return cmds
 

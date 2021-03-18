@@ -1109,7 +1109,8 @@ class Dominoes(RigidbodiesDataset):
         scale_x = (0.75 * self.collision_axis_length) / r_len        
         if self.ramp_scale is None:
             self.ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
-
+        self.ramp_end_x = self.ramp_pos['x'] + self.ramp_scale['x'] * r_len * 0.5
+        
         # optionally add base
         cmds.extend(self._add_ramp_base_to_ramp(color=rgb))
 
@@ -1142,6 +1143,7 @@ class Dominoes(RigidbodiesDataset):
 
         self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
         if self.ramp_base_height < 0.01:
+            self.ramp_base_scale = copy.deepcopy(self.ramp_scale)
             return []
         
         self.ramp_base = self.CUBE
@@ -1480,6 +1482,7 @@ class MultiDominoes(Dominoes):
         super()._write_static_data(static_group)
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
+        static_group.create_dataset("num_middle_objects", data=self.num_middle_objects)                
         static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])        
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)

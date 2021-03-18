@@ -212,7 +212,7 @@ class Tower(MultiDominoes):
         self.match_probe_and_target_color = False
 
         # how many blocks in tower, sans cap
-        self.num_blocks = num_blocks
+        self.num_blocks = self.num_middle_objects = num_blocks
 
         # how to scale the blocks
         self.middle_scale_gradient = middle_scale_gradient

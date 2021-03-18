@@ -43,9 +43,10 @@ class Dataset(Controller, ABC):
                  seed: int=0,
                  save_args=True
     ):
-        super().__init__(port=port,
-                         check_version=check_version,
-                         launch_build=launch_build)
+        if launch_build:
+            super().__init__(port=port,
+                             check_version=check_version,
+                             launch_build=True)
 
         # set random state
         self.randomize = randomize

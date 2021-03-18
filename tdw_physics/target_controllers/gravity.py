@@ -143,7 +143,7 @@ class Gravity(Dominoes):
                  remove_middle = False,
                  **kwargs):
 
-        super().__init__(port=port, **kwargs)
+        Dominoes.__init__(self, port=port, **kwargs)
 
         # always use a ramp for probe
         self.use_ramp = True
@@ -156,7 +156,7 @@ class Gravity(Dominoes):
         self.remove_middle = remove_middle
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
+        Dominoes._write_static_data(self, static_group)
         self.middle_type = type(self).__name__
         static_group.create_dataset("middle_type", data=self.middle_type)        
 
@@ -189,13 +189,13 @@ class Ramp(Gravity):
                  port: int = 1071,
                  middle_objects='ramp',
                  middle_scale_range=1.0,
+                 spacing_jitter=0.0,
                  **kwargs):
         
         super().__init__(port=port, **kwargs)
         
         self._middle_types = self.RAMPS
         self.middle_scale_range = middle_scale_range
-
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -241,17 +241,28 @@ class Ramp(Gravity):
 
         return commands
 
-class Pit(Gravity):
+class Pit(Gravity, MultiDominoes):
 
     def __init__(self,
-                 middle_scale_range={'x': 0.5, 'y': 1.0, 'z': 0.5},                 
+                 port=1071,
+                 num_middle_objects=2,
+                 middle_scale_range={'x': 0.5, 'y': 1.0, 'z': 0.5},
+                 spacing_jitter = 0.25,
+                 lateral_jitter = 0.0,
+                 middle_friction = 0.1,
                  **kwargs):
 
-        super().__init__(port=1071, **kwargs)
+        # middle config
+        Gravity.__init__(self, port=port, middle_friction=middle_friction, **kwargs)        
+        MultiDominoes.__init__(self, launch_build=False,
+                               middle_objects='cube',
+                               num_middle_objects=num_middle_objects,
+                               middle_scale_range=middle_scale_range,
+                               spacing_jitter=spacing_jitter,
+                               lateral_jitter=lateral_jitter,
+                               **kwargs)
 
         # raise the ramp
-
-        
         if hasattr(self.middle_scale_range, 'keys'):
             self.pit_max_height = get_range(self.middle_scale_range['y'])[1]
         elif hasattr(self.middle_scale_range, '__len__'):
@@ -263,15 +274,84 @@ class Pit(Gravity):
                                        for r in get_range(self.ramp_base_height_range)]
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
+        Gravity._write_static_data(self, static_group)
+        static_group.create_dataset("num_middle_objects", data=self.num_middle_objects)
+        static_group.create_dataset("pit_widths", data=self.pit_widths)
 
     def _build_intermediate_structure(self) -> List[dict]:
         
         commands = []
 
         print("THIS IS A PIT!")
+        print(self.num_middle_objects)
 
-        commands.extend(super()._build_intermediate_structure())
+        # get the scale of the total pit object
+        scale = get_random_xyz_transform(self.middle_scale_range)
+        self.pit_mass = random.uniform(*get_range(self.middle_mass_range))
+
+        # get color and texture
+        self.pit_color = self.middle_color or self.random_color(exclude=self.target_color)
+        self.pit_material = self.middle_material
+
+        # how wide are the pits?
+        # self.pit_widths = [
+        #     random.uniform(0.0, self.spacing_jitter) * scale['x']
+        #     for _ in range(self.num_middle_objects - 1)]
+        self.pit_widths = [0.3]
+
+        # make M cubes and scale in x accordingly
+        print("SCALE", scale)
+        x_remaining = scale['x'] - self.pit_widths[0]
+        x_filled = 0.0
+        
+        print("PIT WIDTHS", self.pit_widths)
+        
+        for m in range(self.num_middle_objects):
+            print("x_filled, remaining", x_filled, x_remaining)
+
+            m_rec = random.choice(self._middle_types)
+
+            x_scale = random.uniform(0.0, x_remaining)
+                
+            x_len,_,_ = self.get_record_dimensions(m_rec)
+            x_len *= x_scale
+            x_pos = self.ramp_end_x + x_filled + (0.5 * x_len)
+            z_pos = random.uniform(-self.lateral_jitter, self.lateral_jitter)
+
+            print(m)
+            print("ramp_end", self.ramp_end_x)
+            print("x_len", x_len)
+            print("x_scale", x_scale)
+            print("x_pos", x_pos)
+            print("z_pos", z_pos)
+
+            m_scale = arr_to_xyz([x_scale, scale['y'], scale['z']])
+
+            commands.extend(
+                self.add_primitive(
+                    record = m_rec,
+                    position=arr_to_xyz([x_pos, 0., z_pos]),
+                    rotation=TDWUtils.VECTOR3_ZERO,
+                    scale = m_scale,
+                    color = self.pit_color,
+                    exclude_color = self.target_color,
+                    material = self.pit_material,
+                    mass = self.pit_mass,
+                    dynamic_friction = self.middle_friction,
+                    static_friction = self.middle_friction,
+                    scale_mass = True,
+                    make_kinematic = True,
+                    add_data = True,
+                    obj_list = self.middle_objects))
+
+            if m < len(self.pit_widths):
+                x_filled += self.pit_widths[m] + x_len
+                x_remaining -= (self.pit_widths[m] + x_len)
+
+        commands.extend(Gravity._build_intermediate_structure(self))
+
+        print("INTERMEDIATE")
+        print(commands)
 
         return commands
 
@@ -306,6 +386,8 @@ if __name__ == '__main__':
         ramp_scale=args.rscale,
         ramp_has_friction=args.rfriction,
         probe_has_friction=args.pfriction,
+        spacing_jitter=args.spacing_jitter,
+        lateral_jitter=args.lateral_jitter,
         
         # domino specific
         target_zone=args.zone,
