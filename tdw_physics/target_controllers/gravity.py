@@ -86,7 +86,7 @@ def get_gravity_args(dataset_dir: str, parse=True):
     # camera
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=3.25,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -111,10 +111,6 @@ def get_gravity_args(dataset_dir: str, parse=True):
 
         args = domino_postproc(args)
         args.rheight = handle_random_transform_args(args.rheight)
-
-        # a bunch of different middle args
-        if 'ramp' in args.middle:
-            args.middle = 'ramp'
 
         return args
 
@@ -144,6 +140,7 @@ class Gravity(Dominoes):
                  middle_color=None,
                  middle_material=None,
                  middle_friction=0.1,
+                 remove_middle = False,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -156,15 +153,17 @@ class Gravity(Dominoes):
         self.middle_material = middle_material
         self.middle_friction = middle_friction
         self.middle_objects = []
+        self.remove_middle = remove_middle
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
-        assert self.middle_type is not None
+        self.middle_type = type(self).__name__
+        static_group.create_dataset("middle_type", data=self.middle_type)        
 
     @staticmethod
     def get_controller_label_funcs(classname = 'Gravity'):
 
-        funcs = super(Dominoes,Dominoes).get_controller_label_funcs(classname)
+        funcs = super(Gravity, Gravity).get_controller_label_funcs(classname)
 
         return funcs
 
@@ -190,19 +189,18 @@ class Ramp(Gravity):
                  port: int = 1071,
                  middle_objects='ramp',
                  middle_scale_range=1.0,
-                 remove_middle=False,                     
                  **kwargs):
         
         super().__init__(port=port, **kwargs)
         
         self._middle_types = self.RAMPS
         self.middle_scale_range = middle_scale_range
-        self.remove_middle = remove_middle
+
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
-        static_group.create_dataset("middle_type", data=str("ramp"))
+
         static_group.create_dataset("middle_material", data=self.middle_material)                
         static_group.create_dataset("middle_id", data=self.middle_id)
 
@@ -212,7 +210,6 @@ class Ramp(Gravity):
         ramp_rot = TDWUtils.VECTOR3_ZERO
 
         self.middle = random.choice(self._middle_types)
-        self.middle_type = self.middle.name
         self.middle_id = self._get_next_object_id()
         self.middle_scale = get_random_xyz_transform(self.middle_scale_range)
         rgb = self.middle_color or self.random_color(exclude=self.target_color)
@@ -244,15 +241,62 @@ class Ramp(Gravity):
 
         return commands
 
+class Pit(Gravity):
+
+    def __init__(self,
+                 middle_scale_range={'x': 0.5, 'y': 1.0, 'z': 0.5},                 
+                 **kwargs):
+
+        super().__init__(port=1071, **kwargs)
+
+        # raise the ramp
+
+        
+        if hasattr(self.middle_scale_range, 'keys'):
+            self.pit_max_height = get_range(self.middle_scale_range['y'])[1]
+        elif hasattr(self.middle_scale_range, '__len__'):
+            self.pit_max_height = self.middle_scale_range[1]
+        else:
+            self.pit_max_height = self.middle_scale_range
+
+        self.ramp_base_height_range = [r + self.pit_max_height
+                                       for r in get_range(self.ramp_base_height_range)]
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+
+    def _build_intermediate_structure(self) -> List[dict]:
+        
+        commands = []
+
+        print("THIS IS A PIT!")
+
+        commands.extend(super()._build_intermediate_structure())
+
+        return commands
+
+class Pendulum(Gravity):
+
+    def _build_intermediate_structure(self) -> List[dict]:
+        
+        commands = []
+
+        commands.extend(super()._build_intermediate_structure())
+        
+        return commands
+
 if __name__ == '__main__':
 
     args = get_gravity_args("gravity")
-
-    if args.middle == 'ramp':
-        classtype = Ramp
-    else:
-        classtype = Gravity
-
+    
+    classes = [Ramp, Pit, Pendulum]
+    for c in classes:
+        if args.middle[0].capitalize() == c.__name__:
+            classtype = c
+            break
+        else:
+            classtype = Gravity
+    
     GC = classtype(
 
         # gravity specific

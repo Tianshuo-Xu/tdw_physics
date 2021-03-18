@@ -171,6 +171,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
 
+    def _add_name_scale_color(self, record, data) -> None:
+        self.model_names.append(record.name)
+        self.scales.append(data['scale'])
+        self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1,3))], axis=0)
+
     def random_primitive(self,
                          object_types: List[ModelRecord],
                          scale: List[float] = [0.2, 0.3],
@@ -191,9 +196,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         }
 
         if add_data:
-            self.model_names.append(obj_data["name"])
-            self.scales.append(obj_data["scale"])
-            self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
+            self._add_name_scale_color(obj_record, obj_data)
+            # self.model_names.append(obj_data["name"])
+            # self.scales.append(obj_data["scale"])
+            # self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
         return obj_record, obj_data
 
     def add_physics_object(self,

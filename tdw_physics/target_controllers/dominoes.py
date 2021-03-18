@@ -480,7 +480,10 @@ class Dominoes(RigidbodiesDataset):
         self.use_ramp = use_ramp
         self.ramp_color = ramp_color
         self.ramp_material = ramp_material or self.zone_material
-        self.ramp_scale = get_random_xyz_transform(ramp_scale)
+        if ramp_scale is not None:
+            self.ramp_scale = get_random_xyz_transform(ramp_scale)
+        else:
+            self.ramp_scale = None
         self.ramp_base_height_range = ramp_base_height_range
         self.ramp_physics_info = {}
         if ramp_has_friction:
@@ -985,7 +988,8 @@ class Dominoes(RigidbodiesDataset):
                                              scale=self.probe_scale_range,
                                              color=self.probe_color,
                                              exclude_color=(self.target_color if exclude else None),
-                                             exclude_range=0.25)
+                                             exclude_range=0.25,
+                                             add_data=(not self.use_ramp))
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.probe = record
         self.probe_type = data["name"]
@@ -1015,6 +1019,7 @@ class Dominoes(RigidbodiesDataset):
                 rotation=rot,
                 mass=self.probe_mass,
                 o_id=o_id,
+                add_data=True,
                 **probe_physics_info
             ))
 
@@ -1023,8 +1028,9 @@ class Dominoes(RigidbodiesDataset):
             self.get_object_material_commands(
                 record, o_id, self.get_material_name(self.probe_material)))
 
-
         # Scale the object and set its color.
+        if self.use_ramp:
+            self._add_name_scale_color(record, data)
         commands.extend([
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1035,9 +1041,6 @@ class Dominoes(RigidbodiesDataset):
 
         # Set its collision mode
         commands.extend([
-            # {"$type": "set_object_collision_detection_mode",
-            #  "mode": "continuous_speculative",
-            #  "id": o_id},
             {"$type": "set_object_drag",
              "id": o_id,
              "drag": 0, "angular_drag": 0}])
