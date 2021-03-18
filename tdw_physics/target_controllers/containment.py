@@ -46,7 +46,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="Which type of object to use as the links")
     parser.add_argument("--mscale",
                         type=none_or_str,
-                        default="0.5,0.5,0.5",
+                        default="0.3,0.3,0.3",
                         help="The xyz scale ranges for each link object")
     parser.add_argument("--mmass",
                         type=none_or_str,
@@ -54,11 +54,11 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="The mass range of each link object")    
     parser.add_argument("--num_middle_range",
                         type=str,
-                        default="[1,2]",
+                        default="[1,5]",
                         help="How many links to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0.0,
+                        default=1,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
     parser.add_argument("--target_link_range",
@@ -68,11 +68,11 @@ def get_linking_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--attachment",
                         type=none_or_str,
-                        default='torus',
+                        default="bowl",
                         help="Which type of object to use as the attachment")
     parser.add_argument("--ascale",
                         type=none_or_str,
-                        default="0.6,0.6,0.6",
+                        default="0.7,0.7,0.7",
                         help="Scale range (xyz) for attachment object")
     parser.add_argument("--amass",
                         type=none_or_str,
@@ -96,11 +96,11 @@ def get_linking_args(dataset_dir: str, parse=True):
     # base
     parser.add_argument("--base",
                         type=none_or_str,
-                        default='torus',
+                        default='bowl',
                         help="Which type of object to use as the base")
     parser.add_argument("--bscale",
                         type=none_or_str,
-                        default="0.7",
+                        default="0.6",
                         help="Scale range (xyz) for base object")
     parser.add_argument("--bmass",
                         type=none_or_str,
@@ -122,7 +122,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                         help="Whether to place the probe object on the top of a ramp")
     parser.add_argument("--fscale",
                         type=str,
-                        default="4.0",
+                        default="5.0",
                         help="range of scales to apply to push force")
 
     # dominoes
