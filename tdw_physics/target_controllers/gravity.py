@@ -41,6 +41,10 @@ def get_gravity_args(dataset_dir: str, parse=True):
                         type=str,
                         default="ramp",
                         help="comma-separated list of possible middle objects/scenario types")
+    parser.add_argument("--num_middle_objects",
+                        type=int,
+                        default=2,
+                        help="The number of middle objects to place")    
     parser.add_argument("--mfriction",
                         type=float,
                         default=0.1,
@@ -294,13 +298,11 @@ class Pit(Gravity, MultiDominoes):
         self.pit_material = self.middle_material
 
         # how wide are the pits?
-        # self.pit_widths = [
-        #     random.uniform(0.0, self.spacing_jitter) * scale['x']
-        #     for _ in range(self.num_middle_objects - 1)]
-        self.pit_widths = [0.3]
+        self.pit_widths = [
+            random.uniform(0.0, self.spacing_jitter) * scale['x']
+            for _ in range(self.num_middle_objects - 1)]
 
         # make M cubes and scale in x accordingly
-        print("SCALE", scale)
         x_remaining = scale['x'] - self.pit_widths[0]
         x_filled = 0.0
         
@@ -380,6 +382,7 @@ if __name__ == '__main__':
     GC = classtype(
 
         # gravity specific
+        num_middle_objects=args.num_middle_objects,
         middle_scale_range=args.mscale,
         middle_friction=args.mfriction,
         ramp_base_height_range=args.rheight,
