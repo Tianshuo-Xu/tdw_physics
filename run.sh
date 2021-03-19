@@ -1,0 +1,1 @@
+python tdw_physics/target_controllers/towers.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-towers/pilot_towers_nb3_fr015_SJ025_mono1_tdwroom/commandline_args.txt --dir . --num 1 --height 128 --width 128
