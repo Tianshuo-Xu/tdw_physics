@@ -36,7 +36,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     ### zone
     parser.add_argument("--zscale",
                         type=str,
-                        default="3.0,0.01,3.0",
+                        default="1.0,0.01,1.0",
                         help="scale of target zone")
 
     parser.add_argument("--zone",
@@ -102,7 +102,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     return args
 
-class Collision(MultiDominoes):
+class Collision(Dominoes):
 
     def __init__(self,
                  port: int = 1071,
@@ -176,8 +176,8 @@ class Collision(MultiDominoes):
     def _build_intermediate_structure(self) -> List[dict]:
 
         # print("middle color", self.middle_color)
-        if self.randomize_colors_across_trials:
-            self.middle_color = self.random_color(exclude=self.target_color) if self.monochrome else None
+        # if self.randomize_colors_across_trials:
+        #     self.middle_color = self.random_color(exclude=self.target_color) if self.monochrome else None
 
         commands = []
 
@@ -194,23 +194,22 @@ class Collision(MultiDominoes):
     #     return []
 
     def _get_zone_location(self, scale):
-        """Where to place the target zone?"""
+        """Where to place the target zone? Right behind the target object."""
+        BUFFER = 0
         return {
-            "x": 1 * self.collision_axis_length,# + scale["x"] + 0.1,
+            "x": self.collision_axis_length + 0.5 * self.zone_scale_range['x'] + BUFFER,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
-
         # clear some other stuff
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
         # static_group.create_dataset("bridge_height", data=self.bridge_height)
-
 
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):
@@ -232,10 +231,7 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0"
 
     ColC = Collision(
-        # middle_objects=args.middle,
-        # bridge_height=args.bridge_height
         room=args.room,
-        num_middle_objects=args.num_middle_objects,
         randomize=args.random,
         seed=args.seed,
         target_zone=args.zone,
@@ -246,7 +242,6 @@ if __name__ == "__main__":
         zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
-        middle_objects=args.middle,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
         probe_rotation_range=args.prot,
@@ -254,19 +249,12 @@ if __name__ == "__main__":
         probe_mass_range=args.pmass,
         target_color=args.color,
         probe_color=args.pcolor,
-        middle_color=args.mcolor,
         collision_axis_length=args.collision_axis_length,
         force_scale_range=args.fscale,
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
         force_wait=args.fwait,
-        spacing_jitter=args.spacing_jitter,
-        lateral_jitter=args.lateral_jitter,
-        middle_scale_range=args.mscale,
-        middle_rotation_range=args.mrot,
-        middle_mass_range=args.mmass,
-        horizontal=args.horizontal,
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
         ## not scenario-specific
@@ -279,7 +267,6 @@ if __name__ == "__main__":
         material_types=args.material_types,
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
-        middle_material=args.mmaterial,
         distractor_types=args.distractor,
         distractor_categories=args.distractor_categories,
         num_distractors=args.num_distractors,
@@ -287,8 +274,6 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
-        remove_middle=args.remove_middle,
-        # ramp_color=args.rcolor
     )
 
     if bool(args.run):
