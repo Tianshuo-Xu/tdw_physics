@@ -23,6 +23,8 @@ from tdw_physics.util import (MODEL_LIBRARIES,
 
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
+import ipdb
+st=ipdb.set_trace
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
 M = MaterialLibrarian()
@@ -1493,6 +1495,7 @@ class MultiDominoes(Dominoes):
                                                  color=self.middle_color,
                                                  exclude_color=self.target_color
             )
+
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
             zpos = scale["z"] * random.uniform(-self.lateral_jitter, self.lateral_jitter)
             pos = arr_to_xyz([offset, 0., zpos])
@@ -1536,11 +1539,11 @@ if __name__ == "__main__":
     
     args = get_args("dominoes")
     
-    if platform.system() == 'Linux':
-        if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
-        else:
-            os.environ["DISPLAY"] = ":0"
+    # if platform.system() == 'Linux':
+    #     if args.gpu is not None:
+    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
+    #     else:
+    #         os.environ["DISPLAY"] = ":0"
 
     DomC = MultiDominoes(
         room=args.room,
@@ -1610,6 +1613,7 @@ if __name__ == "__main__":
                  save_passes=args.save_passes.split(','),
                  save_movies=args.save_movies,
                  save_labels=args.save_labels,
+                 save_meshes=args.save_meshes,
                  args_dict=vars(args))
     else:
         end = DomC.communicate({"$type": "terminate"})

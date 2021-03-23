@@ -9,3 +9,4 @@ notebooks/*.py~
 .DS_store
 tdw_physics/target_controller/D:*
 sourcethis.sh
+run.sh

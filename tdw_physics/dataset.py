@@ -7,13 +7,16 @@ import h5py, json
 from collections import OrderedDict
 import numpy as np
 import random
+import ipdb
+st=ipdb.set_trace
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors
+from tdw.output_data import OutputData, SegmentationColors, Meshes
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
                                                get_across_trial_stats_from)
+from tdw_physics.util import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
@@ -92,7 +95,7 @@ class Dataset(Controller, ABC):
             writelist.extend(["--"+str(k),str(v)])
 
         self._script_args = writelist
-        
+
         output_dir = Path(output_dir)
         filepath = output_dir.joinpath("args.txt")
         if not filepath.exists():
@@ -143,6 +146,7 @@ class Dataset(Controller, ABC):
             save_passes: List[str] = [],
             save_movies: bool = False,
             save_labels: bool = False,
+            save_meshes: bool = False,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -171,14 +175,17 @@ class Dataset(Controller, ABC):
             self.save_passes = self.save_passes.split(',')
         self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
+        self.save_meshes = save_meshes
 
         print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
+        print("save meshes", self.save_meshes)
+
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
-        
+
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
         if self.save_labels:
@@ -285,6 +292,12 @@ class Dataset(Controller, ABC):
                             use_parent_dir=False)
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
+                if self.save_meshes:
+                    for o_id in self.object_ids:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
+
             pbar.update(1)
         pbar.close()
 
@@ -316,6 +329,8 @@ class Dataset(Controller, ABC):
         commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
         commands.extend(self._get_send_data_commands())
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes"})
 
         # Send the commands and start the trial.
         r_types = ['']
@@ -328,6 +343,9 @@ class Dataset(Controller, ABC):
             print(r_types)
 
         self._set_segmentation_colors(resp)
+
+        self._get_object_meshes(resp)
+
         frame = 0
 
         # Write static data to disk.
@@ -391,12 +409,12 @@ class Dataset(Controller, ABC):
             vector: Dict[str, float],
             theta: float,
             degrees: bool = True) -> Dict[str, float]:
-        
+
         v_x = vector['x']
         v_z = vector['z']
         if degrees:
             theta = np.radians(theta)
-            
+
         v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
         v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
 
@@ -595,6 +613,7 @@ class Dataset(Controller, ABC):
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
+
         for r in resp:
             if OutputData.get_data_type_id(r) == 'segm':
                 seg = SegmentationColors(r)
@@ -609,3 +628,19 @@ class Dataset(Controller, ABC):
                             np.array(colors[o_id], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+
+    def _get_object_meshes(self, resp: List[bytes]) -> None:
+
+        self.object_meshes = dict()
+        # {object_id: (vertices, faces)}
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'mesh':
+                meshes = Meshes(r)
+                nmeshes = meshes.get_num()
+
+                assert(len(self.object_ids) == nmeshes)
+                for index in range(nmeshes):
+                    o_id = meshes.get_object_id(index)
+                    vertices = meshes.get_vertices(index)
+                    faces = meshes.get_triangles(index)
+                    self.object_meshes[o_id] = (vertices, faces)

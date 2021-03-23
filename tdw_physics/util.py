@@ -31,6 +31,17 @@ def arr_to_xyz(arr : np.ndarray):
         return xyz
     return arr
 
+def save_obj(vertices: np.ndarray, faces: np.ndarray, filepath: str):
+    with open(filepath, 'w') as f:
+        f.write("# OBJ file\n")
+        for v in vertices:
+            f.write("v %.4f %.4f %.4f\n" % (v[0],v[1],v[2]))
+        for face in faces:
+            f.write("f")
+            for vertex in face:
+                f.write(" %d" % (vertex + 1))
+            f.write("\n")
+
 def get_move_along_direction(pos: Dict[str, float], target: Dict[str, float], d: float, noise: float = 0) -> \
         Dict[str, float]:
     """
@@ -124,6 +135,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_passes", type=str, default='', help="Comma-separated list of Which passes to save to PNGs/MP4s: _img, _depth, _normals, _id, _flow")
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
+    parser.add_argument("--save_meshes", action='store_true', help="Whether to save object meshes in the trial.")
     return parser
 
 def get_args(dataset_dir: str):
