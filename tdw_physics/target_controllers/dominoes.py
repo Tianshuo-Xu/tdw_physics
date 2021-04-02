@@ -712,8 +712,8 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("push_time", data=int(self.force_wait))
 
         # distractors and occluders
-        static_group.create_dataset("distractors", data=[r.name for r in self.distractors.values()])
-        static_group.create_dataset("occluders", data=[r.name for r in self.occluders.values()])
+        static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
+        static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
