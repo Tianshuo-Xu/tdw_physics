@@ -32,6 +32,18 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 
+'''
+The containment controller generats stims in which the target object is 
+    potentially contained inside a base object. A probe object is launched at the base
+    and *may* displace the target from the base
+This controller pulls heavily from linking and tower controllers
+    renaming all of the features is still a WIP, so ignore some legacy naming conventions
+The logic is much the same, but with slightly different params
+Key (different) params;
+    "Container" is the base containing object
+    "middle" type of objects bing contained
+'''
+
 def get_linking_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
