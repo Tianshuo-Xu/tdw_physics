@@ -41,8 +41,13 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--zone",
                         type=str,
-                        default="cube",
+                        default="sphere",
                         help="comma-separated list of possible target zone shapes")
+
+    parser.add_argument("--zjitter",
+                        type=float,
+                        default=0.25,
+                        help="amount of z jitter applied to the target zone")
 
     ### probe
     parser.add_argument("--probe",
@@ -89,7 +94,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     ### layout
     parser.add_argument("--collision_axis_length",
                         type=float,
-                        default=1.0,
+                        default=2.0,
                         help="Length of spacing between probe and target objects at initialization.")
 
 
@@ -106,13 +111,11 @@ class Collision(Dominoes):
 
     def __init__(self,
                  port: int = 1071,
-                #  bridge_height=1.0,
+                 zjitter = 0,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
-
-        # do some Barrier-specific stuff
-        # self.bridge_height = bridge_height
+        self.zjitter = zjitter
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -197,9 +200,9 @@ class Collision(Dominoes):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
         return {
-            "x": self.collision_axis_length + 0.5 * self.zone_scale_range['x'] + BUFFER,
+            "x": self.collision_axis_length,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
             "y": 0.0 if not self.remove_zone else 10.0,
-            "z": 0.0 if not self.remove_zone else 10.0
+            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
         }
 
     def clear_static_data(self) -> None:
@@ -257,6 +260,7 @@ if __name__ == "__main__":
         force_wait=args.fwait,
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
+        zjitter = args.zjitter,
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
