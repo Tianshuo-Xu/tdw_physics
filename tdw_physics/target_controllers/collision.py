@@ -46,7 +46,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--zjitter",
                         type=float,
-                        default=0.25,
+                        default=0.35,
                         help="amount of z jitter applied to the target zone")
 
     ### probe
@@ -80,11 +80,6 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.5,
                         help="jitter around object centroid to apply force")
-    
-    parser.add_argument("--fuprot",
-                        type=float,
-                        default=0,
-                        help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically")
 
     
     ###target
@@ -103,9 +98,16 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.0,
                         help="Length of spacing between probe and target objects at initialization.")
+    
+    ## collision specific arguments
+    parser.add_argument("--fupforce",
+                        type=str,
+                        default='[0,0.3]',
+                        help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
 
 
     def postprocess(args):
+        args.fupforce = handle_random_transform_args(args.fupforce)
         return args
 
     args = parser.parse_args()
@@ -119,12 +121,12 @@ class Collision(Dominoes):
     def __init__(self,
                  port: int = 1071,
                  zjitter = 0,
-                 fuprot = 0,
+                 fupforce = 0,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
         self.zjitter = zjitter
-        self.fuprot = fuprot
+        self.fupforce = fupforce
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -269,7 +271,7 @@ class Collision(Dominoes):
         self.push_force = self.get_push_force(
             scale_range=self.probe_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range,
-            yforce=self.fuprot)
+            yforce=self.fupforce)
         self.push_force = self.rotate_vector_parallel_to_floor(
             self.push_force, -rot['y'], degrees=True)
 
@@ -371,7 +373,7 @@ if __name__ == "__main__":
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
         zjitter = args.zjitter,
-        fuprot = args.fuprot,
+        fupforce = args.fupforce,
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
