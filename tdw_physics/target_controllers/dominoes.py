@@ -805,10 +805,10 @@ class Dominoes(RigidbodiesDataset):
                     "y": random.uniform(*get_range(rot_range)),
                     "z": 0.}
 
-    def get_push_force(self, scale_range, angle_range):
+    def get_push_force(self, scale_range, angle_range, yforce = 0):
         # rotate a unit vector initially pointing in positive-x direction
         theta = np.radians(random.uniform(*get_range(angle_range)))
-        push = np.array([np.cos(theta), 0., np.sin(theta)])
+        push = np.array([np.cos(theta), yforce, np.sin(theta)])
 
         # scale it
         push *= random.uniform(*get_range(scale_range))

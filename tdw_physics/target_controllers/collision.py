@@ -41,7 +41,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--zone",
                         type=str,
-                        default="sphere",
+                        default="cube",
                         help="comma-separated list of possible target zone shapes")
 
     parser.add_argument("--zjitter",
@@ -57,13 +57,13 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--pscale",
                         type=str,
-                        default="0.5,0.5,0.5",
+                        default="0.35,0.35,0.35",
                         help="scale of probe objects")
 
     ### force
     parser.add_argument("--fscale",
                         type=str,
-                        default="[2.0,8.0]",
+                        default="[5.0,10.0]",
                         help="range of scales to apply to push force")
 
     parser.add_argument("--frot",
@@ -80,6 +80,13 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.5,
                         help="jitter around object centroid to apply force")
+    
+    parser.add_argument("--fuprot",
+                        type=float,
+                        default=0,
+                        help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically")
+
+    
     ###target
     parser.add_argument("--target",
                         type=str,
@@ -112,10 +119,12 @@ class Collision(Dominoes):
     def __init__(self,
                  port: int = 1071,
                  zjitter = 0,
+                 fuprot = 0,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
         self.zjitter = zjitter
+        self.fuprot = fuprot
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -190,11 +199,112 @@ class Collision(Dominoes):
 
         return commands
 
-    # def _place_barrier_foundation(self):
-    #     return []
+    def _place_and_push_probe_object(self) -> List[dict]:
+        """
+        Place a probe object at the other end of the collision axis, then apply a force to push it.
+        """
+        exclude = not (self.monochrome and self.match_probe_and_target_color)
+        record, data = self.random_primitive(self._probe_types,
+                                             scale=self.probe_scale_range,
+                                             color=self.probe_color,
+                                             exclude_color=(self.target_color if exclude else None),
+                                             exclude_range=0.25)
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.probe = record
+        self.probe_type = data["name"]
+        self.probe_scale = scale
+        self.probe_id = o_id
 
-    # def _build_bridge(self):
-    #     return []
+        # Add the object with random physics values
+        commands = []
+
+        ### TODO: better sampling of random physics values
+        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
+        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        rot = self.get_y_rotation(self.probe_rotation_range)
+
+        if self.use_ramp:
+            commands.extend(self._place_ramp_under_probe())
+        
+        commands.extend(
+            self.add_physics_object(
+                record=record,
+                position=self.probe_initial_position,
+                rotation=rot,
+                mass=self.probe_mass,
+                # dynamic_friction=0.5,
+                # static_friction=0.5,
+                # bounciness=0.1,
+                dynamic_friction=0.01,
+                static_friction=0.01,
+                bounciness=0,                
+                o_id=o_id))
+
+        # Set the probe material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.probe_material)))
+
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id},
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id}])
+
+        # Set its collision mode
+        commands.extend([
+            # {"$type": "set_object_collision_detection_mode",
+            #  "mode": "continuous_speculative",
+            #  "id": o_id},
+            {"$type": "set_object_drag",
+             "id": o_id,
+             "drag": 0, "angular_drag": 0}])
+            
+
+        # Apply a force to the probe object
+        self.push_force = self.get_push_force(
+            scale_range=self.probe_mass * np.array(self.force_scale_range),
+            angle_range=self.force_angle_range,
+            yforce=self.fuprot)
+        self.push_force = self.rotate_vector_parallel_to_floor(
+            self.push_force, -rot['y'], degrees=True)
+
+        self.push_position = self.probe_initial_position        
+        if self.use_ramp:
+            self.push_cmd = {
+                "$type": "apply_force_to_object",
+                "force": self.push_force,
+                "id": int(o_id)
+            }
+        else:
+            self.push_position = {
+                k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                    self.probe_scale, rot['y'])[k]
+                for k,v in self.push_position.items()}
+            self.push_position = {
+                k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                for k,v in self.push_position.items()}
+
+            self.push_cmd = {
+                "$type": "apply_force_at_position",
+                "force": self.push_force,
+                "position": self.push_position,
+                "id": int(o_id)
+            }
+
+        # decide when to apply the force
+        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+        print("force wait", self.force_wait)
+
+        if self.force_wait == 0:
+            commands.append(self.push_cmd)
+
+        return commands
+
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
@@ -261,6 +371,7 @@ if __name__ == "__main__":
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
         zjitter = args.zjitter,
+        fuprot = args.fuprot,
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
