@@ -55,19 +55,19 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--middle",
                         type=none_or_str,
                         default='sphere',
-                        help="Which type of object to use as the links")
+                        help="Which type of object to use as the contained objects")
     parser.add_argument("--mscale",
                         type=none_or_str,
                         default="0.3,0.3,0.3",
-                        help="The xyz scale ranges for each link object")
+                        help="The xyz scale ranges for each contained object")
     parser.add_argument("--mmass",
                         type=none_or_str,
                         default="2.0",
-                        help="The mass range of each link object")    
+                        help="The mass range of each contained object")    
     parser.add_argument("--num_middle_range",
                         type=str,
                         default="[1,5]",
-                        help="How many links to use")
+                        help="How many contained objects to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
                         default=1,
@@ -76,7 +76,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     parser.add_argument("--target_link_range",
                         type=none_or_str,
                         default=None,
-                        help="Which link to use as the target object. None is random, -1 is no target")
+                        help="Which contained object to use as the target object. None is random, -1 is no target")
 
     parser.add_argument("--attachment",
                         type=none_or_str,
