@@ -691,29 +691,84 @@ class Dominoes(RigidbodiesDataset):
         super()._write_static_data(static_group)
 
         # randomization
-        static_group.create_dataset("room", data=self.room)
-        static_group.create_dataset("seed", data=self.seed)
-        static_group.create_dataset("randomize", data=self.randomize)
-        static_group.create_dataset("trial_seed", data=self.trial_seed)
+        try:
+            static_group.create_dataset("room", data=self.room)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("seed", data=self.seed)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("randomize", data=self.randomize)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("trial_seed", data=self.trial_seed)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("trial_num", data=self._trial_num)        
         static_group.create_dataset("trial_num", data=self._trial_num)        
+            static_group.create_dataset("trial_num", data=self._trial_num)        
+        except AttributeError:
+            pass
 
         ## which objects are the zone, target, and probe
-        static_group.create_dataset("zone_id", data=self.zone_id)
-        static_group.create_dataset("target_id", data=self.target_id)
-        static_group.create_dataset("probe_id", data=self.probe_id)
+        try:
+            static_group.create_dataset("zone_id", data=self.zone_id)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("target_id", data=self.target_id)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("probe_id", data=self.probe_id)
+        except AttributeError:
+            pass
 
         ## color and scales of primitive objects
-        static_group.create_dataset("target_type", data=self.target_type)
-        static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-        static_group.create_dataset("probe_type", data=self.probe_type)
-        static_group.create_dataset("probe_mass", data=self.probe_mass)
-        static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-        static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-        static_group.create_dataset("push_time", data=int(self.force_wait))
+        try:
+            static_group.create_dataset("target_type", data=self.target_type)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("probe_type", data=self.probe_type)
+        except AttributeError:
+            pass
+        except TypeError:
+            pass
+        try:
+            static_group.create_dataset("probe_mass", data=self.probe_mass)
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("push_time", data=int(self.force_wait))
+        except AttributeError:
+            pass
 
         # distractors and occluders
-        static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
-        static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
+        try:
+            static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
+        except AttributeError:
+            pass
+        try:
+            static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
+        except AttributeError:
+            pass
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
