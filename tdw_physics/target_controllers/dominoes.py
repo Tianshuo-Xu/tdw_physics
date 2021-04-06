@@ -387,7 +387,7 @@ class Dominoes(RigidbodiesDataset):
     """
 
     MAX_TRIALS = 1000
-    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_special.json'].records if 'ramp_with_platform_30' in r.name]
+    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
     
     def __init__(self,
