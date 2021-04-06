@@ -693,81 +693,77 @@ class Dominoes(RigidbodiesDataset):
         # randomization
         try:
             static_group.create_dataset("room", data=self.room)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("seed", data=self.seed)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("randomize", data=self.randomize)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("trial_seed", data=self.trial_seed)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("trial_num", data=self._trial_num)        
-        static_group.create_dataset("trial_num", data=self._trial_num)        
-            static_group.create_dataset("trial_num", data=self._trial_num)        
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
 
         ## which objects are the zone, target, and probe
         try:
             static_group.create_dataset("zone_id", data=self.zone_id)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("target_id", data=self.target_id)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("probe_id", data=self.probe_id)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
 
         ## color and scales of primitive objects
         try:
             static_group.create_dataset("target_type", data=self.target_type)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("probe_type", data=self.probe_type)
-        except AttributeError:
-            pass
-        except TypeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("probe_mass", data=self.probe_mass)
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("push_time", data=int(self.force_wait))
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
 
         # distractors and occluders
         try:
             static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
-        except AttributeError:
+        except (AttributeError,TypeError):
             pass
 
     def _write_frame(self,
