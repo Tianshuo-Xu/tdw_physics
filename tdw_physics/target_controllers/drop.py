@@ -369,7 +369,11 @@ class Drop(Dominoes):
                 static_friction=random.uniform(0, 0.9),
                 bounciness=random.uniform(0, 1),
                 o_id=o_id))
-
+        
+        # Set the object material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.target_material)))
 
         # Scale the object and set its color.
         commands.extend([
@@ -428,7 +432,12 @@ class Drop(Dominoes):
                 static_friction=random.uniform(0, 0.9),
                 bounciness=random.uniform(0, 1),
                 o_id=o_id))
-
+                
+        # Set the object material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.target_material)))
+                
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
@@ -537,6 +546,8 @@ if __name__ == "__main__":
         camera_max_height=args.camera_max_height,
         monochrome=args.monochrome,
         room=args.room,
+        target_material=args.tmaterial,
+        probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
         zone_friction=args.zfriction,
