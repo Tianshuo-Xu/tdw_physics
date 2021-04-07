@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args, none_or_str, none_or_int
 import h5py
 import json
 import copy
@@ -19,12 +20,13 @@ from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
 
 
-def get_args(dataset_dir: str):
+def get_drop_args(dataset_dir: str):
     """
     Combine Drop-specific arguments with controller-common arguments
     """
     common = get_parser(dataset_dir, get_help=False)
-    parser = ArgumentParser(parents=[common])
+    domino, domino_postproc = get_args(dataset_dir, parse=False)
+    parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
     parser.add_argument("--drop",
                         type=str,
@@ -36,11 +38,11 @@ def get_args(dataset_dir: str):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--ymin",
                         type=float,
-                        default=0.75,
+                        default=1.25,
                         help="min height to drop object from")
     parser.add_argument("--ymax",
                         type=float,
-                        default=1.25,
+                        default=1.5,
                         help="max height to drop object from")
     parser.add_argument("--dscale",
                         type=str,
@@ -48,47 +50,84 @@ def get_args(dataset_dir: str):
                         help="scale of drop objects")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[0.2,0.3]",
+                        default="[0.4,0.6]",
                         help="scale of target objects")
     parser.add_argument("--drot",
                         type=str,
                         default=None,
                         help="comma separated list of initial drop rotation values")
-    parser.add_argument("--trot",
-                        type=str,
-                        default=None,
-                        help="comma separated list of initial target rotation values")
+    # parser.add_argument("--trot",
+    #                     type=str,
+    #                     default=None,
+    #                     help="comma separated list of initial target rotation values")
     parser.add_argument("--jitter",
                         type=float,
                         default=0.2,
                         help="amount to jitter initial drop object horizontal position across trials")
-    parser.add_argument("--color",
-                        type=str,
-                        default=None,
-                        help="comma-separated R,G,B values for the target object color. Defaults to random.")
-    parser.add_argument("--camera_distance",
-                        type=float,
-                        default=1.25,
-                        help="radial distance from camera to drop/target object pair")
-    parser.add_argument("--camera_min_angle",
-                        type=float,
-                        default=0,
-                        help="minimum angle of camera rotation around centerpoint")
-    parser.add_argument("--camera_max_angle",
-                        type=float,
-                        default=0,
-                        help="maximum angle of camera rotation around centerpoint")
-    parser.add_argument("--camera_min_height",
-                        type=float,
-                        default=1./3,
-                         help="min height of camera as a fraction of drop height")
-    parser.add_argument("--camera_max_height",
-                        type=float,
-                        default=2./3,
-                        help="max height of camera as a fraction of drop height")
+    # parser.add_argument("--camera_distance",
+    #                     type=float,
+    #                     default=1.25,
+    #                     help="radial distance from camera to drop/target object pair")
+    # parser.add_argument("--camera_min_angle",
+    #                     type=float,
+    #                     default=0,
+    #                     help="minimum angle of camera rotation around centerpoint")
+    # parser.add_argument("--camera_max_angle",
+    #                     type=float,
+    #                     default=0,
+    #                     help="maximum angle of camera rotation around centerpoint")
+    # parser.add_argument("--camera_min_height",
+    #                     type=float,
+    #                     default=1./3,
+    #                      help="min height of camera as a fraction of drop height")
+    # parser.add_argument("--camera_max_height",
+    #                     type=float,
+    #                     default=2./3,
+    #                     help="max height of camera as a fraction of drop height")
+
+    def postprocess(args):
+         # whether to set all objects same color
+        args.monochrome = bool(args.monochrome)
+
+        args.dscale = handle_random_transform_args(args.dscale)
+        # args.tscale = handle_random_transform_args(args.tscale)
+
+        args.drot = handle_random_transform_args(args.drot)
+        # args.trot = handle_random_transform_args(args.trot)
+
+        # choose a valid room
+        assert args.room in ['box', 'tdw', 'house'], args.room
+
+        if args.drop is not None:
+            drop_list = args.drop.split(',')
+            assert all([d in MODEL_NAMES for d in drop_list]), \
+                "All drop object names must be elements of %s" % MODEL_NAMES
+            args.drop = drop_list
+        else:
+            args.drop = MODEL_NAMES
+
+        # if args.target is not None:
+        #     targ_list = args.target.split(',')
+        #     assert all([t in MODEL_NAMES for t in targ_list]), \
+        #         "All target object names must be elements of %s" % MODEL_NAMES
+        #     args.target = targ_list
+        # else:
+        #     args.target = MODEL_NAMES
+
+        # if args.color is not None:
+        #     rgb = [float(c) for c in args.color.split(',')]
+        #     assert len(rgb) == 3, rgb
+        #     args.color = rgb
+
+        return args
 
     args = parser.parse_args()
+    args = domino_postproc(args)
+    args = postprocess(args)
 
+    return args
+
+    ### POSTPROCESSING HAPPENS HERE###
     # whether to set all objects same color
     args.monochrome = bool(args.monochrome)
 
@@ -97,6 +136,9 @@ def get_args(dataset_dir: str):
 
     args.drot = handle_random_transform_args(args.drot)
     args.trot = handle_random_transform_args(args.trot)
+
+    # choose a valid room
+    assert args.room in ['box', 'tdw', 'house'], args.room
 
     if args.drop is not None:
         drop_list = args.drop.split(',')
@@ -122,7 +164,7 @@ def get_args(dataset_dir: str):
     return args
 
 
-class Drop(RigidbodiesDataset):
+class Drop(Dominoes):
     """
     Drop a random Flex primitive object on another random Flex primitive object
     """
@@ -134,6 +176,7 @@ class Drop(RigidbodiesDataset):
                  height_range=[0.5, 1.5],
                  drop_scale_range=[0.2, 0.3],
                  target_scale_range=[0.2, 0.3],
+                 zone_scale_range={'x':2.,'y':0.001,'z':2.},
                  drop_jitter=0.02,
                  drop_rotation_range=None,
                  target_rotation_range=None,
@@ -143,10 +186,18 @@ class Drop(RigidbodiesDataset):
                  camera_max_angle=360,
                  camera_min_height=1./3,
                  camera_max_height=2./3,
+                 room = "box",
+                 target_zone=['sphere'],
                  **kwargs):
 
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
+
+        self.room = room
+
+        self.zone_scale_range = zone_scale_range
+
+        self.set_zone_types(target_zone)
 
         ## allowable object types
         self.set_drop_types(drop_objects)
@@ -168,10 +219,10 @@ class Drop(RigidbodiesDataset):
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
 
-    def get_types(self, objlist):
-        recs = MODEL_LIBRARIES["models_flex.json"].records
-        tlist = [r for r in recs if r.name in objlist]
-        return tlist
+    # def get_types(self, objlist):
+    #     recs = MODEL_LIBRARIES["models_flex.json"].records
+    #     tlist = [r for r in recs if r.name in objlist]
+    #     return tlist
 
     def set_drop_types(self, olist):
         tlist = self.get_types(olist)
@@ -196,7 +247,14 @@ class Drop(RigidbodiesDataset):
         return 55
 
     def get_scene_initialization_commands(self) -> List[dict]:
-        return [self.get_add_scene(scene_name="box_room_2018"),
+        #copied from Dominoes
+        if self.room == 'box':
+            add_scene = self.get_add_scene(scene_name="box_room_2018")
+        elif self.room == 'tdw':
+            add_scene = self.get_add_scene(scene_name="tdw_room")
+        elif self.room == 'house':
+            add_scene = self.get_add_scene(scene_name='archviz_house')
+        return [add_scene,
                 {"$type": "set_aperture",
                  "aperture": 8.0},
                 {"$type": "set_post_exposure",
@@ -213,10 +271,13 @@ class Drop(RigidbodiesDataset):
             random.seed(self._trial_num)
 
         # Choose and place a target object.
-        commands.extend(self._place_target_object())
+        commands.extend(self._place_intermediate_object())
 
         # Choose and drop an object.
         commands.extend(self._place_drop_object())
+
+        # Place target zone
+        commands.extend(self._place_target_zone())
 
         # Teleport the avatar to a reasonable position based on the drop height.
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
@@ -237,7 +298,7 @@ class Drop(RigidbodiesDataset):
              "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
         ])
         return commands
-
+    
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         return []
 
@@ -245,11 +306,11 @@ class Drop(RigidbodiesDataset):
         super()._write_static_data(static_group)
 
         ## color and scales of primitive objects
-        static_group.create_dataset("target_type", data=self.target_type)
+        # static_group.create_dataset("target_type", data=self.target_type)
         static_group.create_dataset("drop_type", data=self.drop_type)
         static_group.create_dataset("drop_position", data=xyz_to_arr(self.drop_position))
         static_group.create_dataset("drop_rotation", data=xyz_to_arr(self.drop_rotation))
-        static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
+        # static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -273,7 +334,7 @@ class Drop(RigidbodiesDataset):
         else:
             return get_random_xyz_transform(rot_range)
 
-    def _place_target_object(self) -> List[dict]:
+    def _place_intermediate_object(self) -> List[dict]:
         """
         Place a primitive object at the room center.
         """
@@ -284,10 +345,13 @@ class Drop(RigidbodiesDataset):
         # Consider integrating!
         record, data = self.random_primitive(self._target_types,
                                              scale=self.target_scale_range,
-                                             color=self.target_color)
+                                             color=self.probe_color)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.target_type = data["name"]
-        self.object_color = rgb if self.monochrome else None
+        self.target = record
+        # self.target_id = o_id #for internal purposes, the other object is the target
+        # self.object_color = rgb
+        self.target_position = TDWUtils.VECTOR3_ZERO
 
         # add the object
         commands = []
@@ -297,11 +361,7 @@ class Drop(RigidbodiesDataset):
         commands.extend(
             self.add_physics_object(
                 record=record,
-                position={
-                    "x": 0.,
-                    "y": 0.,
-                    "z": 0.
-                },
+                position=self.target_position,
                 rotation=self.target_rotation,
                 mass=random.uniform(2,7),
                 dynamic_friction=random.uniform(0, 0.9),
@@ -336,9 +396,11 @@ class Drop(RigidbodiesDataset):
         # Create an object to drop.
         record, data = self.random_primitive(self._drop_types,
                                              scale=self.drop_scale_range,
-                                             color=self.object_color)
+                                             color=self.target_color)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.drop_type = data["name"]
+
+        self.target_id = o_id # this is the target object as far as we're concerned for collision detection
 
         # Choose the drop position and pose.
         height = random.uniform(self.height_range[0], self.height_range[1])
@@ -377,9 +439,79 @@ class Drop(RigidbodiesDataset):
 
         return commands
 
+    def _place_target_zone(self) -> List[dict]:
+
+        # create a target zone (usually flat, with same texture as room)
+        record, data = self.random_primitive(self._zone_types,
+                                             scale=self.zone_scale_range,
+                                             color=self.zone_color,
+                                             add_data=True
+        )
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.zone = record
+        self.zone_type = data["name"]
+        self.zone_color = rgb
+        self.zone_id = o_id
+        self.zone_scale = scale
+        self.zone_location = TDWUtils.VECTOR3_ZERO
+
+        if any((s <= 0 for s in scale.values())):
+            self.remove_zone = True
+            self.scales = self.scales[:-1]
+            self.colors = self.colors[:-1]
+            self.model_names = self.model_names[:-1]
+
+        # place it just beyond the target object with an effectively immovable mass and high friction
+        commands = []
+        commands.extend(
+            self.add_physics_object(
+                record=record,
+                position=self.zone_location,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=500,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
+                bounciness=0,
+                o_id=o_id,
+                add_data=(not self.remove_zone)
+            ))
+
+        # set its material to be the same as the room
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.zone_material)))
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id},
+            {"$type": "scale_object",
+             "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
+             "id": o_id}])
+
+        # make it a "kinematic" object that won't move
+        commands.extend([
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": o_id},
+            {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": True}])            
+
+        # get rid of it if not using a target object
+        if self.remove_zone:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]
+
+        return commands
+
 if __name__ == "__main__":
 
-    args = get_args("drop")
+    args = get_drop_args("drop")
     print("all object types", MODEL_NAMES)
     print("drop objects", args.drop)
     print("target objects", args.target)
@@ -395,13 +527,18 @@ if __name__ == "__main__":
         target_objects=args.target,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
-        target_color=args.color,
+        target_color=args.color, 
+        probe_color = args.pcolor,
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
         camera_max_angle=args.camera_max_angle,
         camera_min_height=args.camera_min_height,
         camera_max_height=args.camera_max_height,
-        monochrome=args.monochrome
+        monochrome=args.monochrome,
+        room=args.room,
+        zone_material=args.zmaterial,
+        zone_color=args.zcolor,
+        zone_friction=args.zfriction,
     )
 
     if bool(args.run):
@@ -409,6 +546,12 @@ if __name__ == "__main__":
                output_dir=args.dir,
                temp_path=args.temp,
                width=args.width,
-               height=args.height)
+               height=args.height,
+               write_passes=args.write_passes.split(','),
+                save_passes=args.save_passes.split(','),
+                save_movies=args.save_movies,
+                save_labels=args.save_labels,
+                args_dict=vars(args))
     else:
-        DC.communicate({"$type": "terminate"})
+        end = DomC.communicate({"$type": "terminate"})
+        print([OutputData.get_data_type_id(r) for r in end])
