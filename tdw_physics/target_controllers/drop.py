@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args, none_or_str, none_or_int
+from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
 import h5py
 import json
 import copy
@@ -553,5 +554,5 @@ if __name__ == "__main__":
                 save_labels=args.save_labels,
                 args_dict=vars(args))
     else:
-        end = DomC.communicate({"$type": "terminate"})
+        end = DC.communicate({"$type": "terminate"})
         print([OutputData.get_data_type_id(r) for r in end])
