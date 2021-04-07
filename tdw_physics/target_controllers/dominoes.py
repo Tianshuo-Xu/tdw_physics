@@ -394,7 +394,7 @@ class Dominoes(RigidbodiesDataset):
                  port: int = 1071,
                  room='box',
                  target_zone=['cube'],
-                 zone_color=[0.0,0.5,1.0],
+                 zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
                  zone_scale_range=[0.5,0.001,0.5],
                  zone_friction=0.1,
