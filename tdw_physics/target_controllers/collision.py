@@ -121,7 +121,7 @@ class Collision(Dominoes):
     def __init__(self,
                  port: int = 1071,
                  zjitter = 0,
-                 fupforce = 0,
+                 fupforce = [0.,0.],
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
