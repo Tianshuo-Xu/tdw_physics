@@ -61,12 +61,20 @@ class Dataset(Controller, ABC):
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
         def stimulus_name(f):
-            stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            try:
+                stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            except TypeError:
+                # happens if we have an empty stimulus name
+                stim_name = "None"
             return stim_name
         def controller_name(f):
             return classname
         def git_commit(f):
-            return str(np.array(f['static']['git_commit'], dtype=str))
+            try:
+                return str(np.array(f['static']['git_commit'], dtype=str))
+            except TypeError:
+                # happens when no git commit
+                return "None"
 
         return [stimulus_name, controller_name, git_commit]
 
@@ -490,7 +498,7 @@ class Dataset(Controller, ABC):
         # stimulus name
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
-        static_group.create_dataset("model_names", data=self.model_names)
+        static_group.create_dataset("model_names", data=[s.encode('utf8') for s in self.model_names])
 
         if self.object_segmentation_colors is not None:
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
