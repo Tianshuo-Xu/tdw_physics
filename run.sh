@@ -13,4 +13,6 @@
 
 #python tdw_physics/target_controllers/dominoes.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-dominoes/pilot_dominoes_4mid_tdwroom/commandline_args.txt --dir log2/ --num 2 --height 512 --width 512
 
-python tdw_physics/target_controllers/dominoes.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir log2/ --num 2 --height 128 --width 128 --save_meshes
+#python tdw_physics/target_controllers/dominoes.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir log2/ --num 2 --height 128 --width 128 --save_meshes
+
+python tdw_physics/target_controllers/dominoes.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir log2/ --num 2 --height 128 --width 128 --mscale "0.1,0.5,0.25"  --save_meshes
