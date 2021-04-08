@@ -118,7 +118,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     # ramp
     parser.add_argument("--ramp",
                         type=int_or_bool,
-                        default=1,
+                        default=0,
                         help="Whether to place the probe object on the top of a ramp")
 
     # dominoes
