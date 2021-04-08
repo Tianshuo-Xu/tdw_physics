@@ -44,6 +44,23 @@ Key (different) params;
     "middle" type of objects bing contained
 '''
 
+'''
+Arguments:
+  Contained objects
+    --middle: 'sphere', 'cube'
+    --mscale: "0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"
+    --num_middle_range: "[1,6]"
+    --spacing_jitter: 0.5,1,1.5
+  Contained Container
+    --attachment: None, "bowl", "torus"
+    --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
+  Base Container
+    --base: "bowl", "torus"
+    --bscale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9", "1.1,1.1,1.1"
+  Probe
+    --fscale: "5.0", "7.0", "9.0"
+'''
+
 def get_linking_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
@@ -78,9 +95,10 @@ def get_linking_args(dataset_dir: str, parse=True):
                         default=None,
                         help="Which contained object to use as the target object. None is random, -1 is no target")
 
+#For "attachment" or dual containment
     parser.add_argument("--attachment",
                         type=none_or_str,
-                        default="bowl",
+                        default=None,
                         help="Which type of object to use as the attachment")
     parser.add_argument("--ascale",
                         type=none_or_str,
@@ -105,7 +123,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Whether the attachment object will have a fixed cap like the base")    
 
-    # base
+# base (container)
     parser.add_argument("--base",
                         type=none_or_str,
                         default='bowl',
