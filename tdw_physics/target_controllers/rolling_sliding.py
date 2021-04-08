@@ -111,7 +111,7 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
 
     return args
 
-class Rolling_Sliding(Dominoes):
+class RollingSliding(Dominoes):
 
     def __init__(self,
                  port: int = 1071,
@@ -494,7 +494,7 @@ if __name__ == "__main__":
         else:
             os.environ["DISPLAY"] = ":0"
 
-    ColC = Rolling_Sliding(
+    ColC = RollingSliding(
         room=args.room,
         randomize=args.random,
         seed=args.seed,
