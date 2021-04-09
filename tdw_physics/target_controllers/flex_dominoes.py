@@ -1,12 +1,16 @@
-import sys, os
+import sys, os, copy
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
-from tdw.librarian import ModelRecord, MaterialLibrarian
+from tdw.librarian import ModelRecord, MaterialLibrarian, ModelLibrarian
 from tdw_physics.target_controllers.dominoes import Dominoes, get_args
 from tdw_physics.flex_dataset import FlexDataset
+from tdw_physics.util import MODEL_LIBRARIES
 
 class FlexDominoes(Dominoes, FlexDataset):
+
+    FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
+    CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
 
     def __init__(self, port: int = 1071, **kwargs):
 
@@ -23,6 +27,9 @@ class FlexDominoes(Dominoes, FlexDataset):
         return FlexDataset._get_send_data_commands(self)
 
     def add_physics_object(self, *args, **kwargs):
+        """
+        Make sure controller knows to treat probe, zone, target, etc. as non-flex objects
+        """
 
         o_id = kwargs.get('o_id', None)
         if o_id is None:
@@ -31,6 +38,28 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         commands = Dominoes.add_physics_object(self, *args, **kwargs)
         self.non_flex_objects.append(o_id)
+
+        return commands
+
+    def drop_cloth(self) -> List[dict]:
+
+        self.cloth = self.CLOTH_RECORD
+        self.cloth_id = self._get_next_object_id()
+        self.cloth_position = copy.deepcopy(self.target_position)
+        self.cloth_position.update({"y": 2.0})
+
+        commands = self.add_cloth_object(
+            record = self.cloth,
+            position = self.cloth_position,
+            rotation = {k:0 for k in ['x','y','z']},
+            o_id = self.cloth_id)
+
+        return commands
+
+    def _build_intermediate_structure(self) -> List[dict]:
+
+        commands = []
+        commands.extend(self.drop_cloth())
 
         return commands
 
