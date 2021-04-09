@@ -701,12 +701,6 @@ class Dominoes(RigidbodiesDataset):
         super()._write_static_data(static_group)
 
         # randomization
-        static_group.create_dataset("room", data=self.room)
-        static_group.create_dataset("seed", data=self.seed)
-        static_group.create_dataset("randomize", data=self.randomize)
-        static_group.create_dataset("trial_seed", data=self.trial_seed)
-        static_group.create_dataset("trial_num", data=self._trial_num)
-
         try:
             static_group.create_dataset("room", data=self.room)
         except (AttributeError,TypeError):

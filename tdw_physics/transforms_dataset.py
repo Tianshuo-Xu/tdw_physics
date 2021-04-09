@@ -17,6 +17,7 @@ class TransformsDataset(Dataset, ABC):
     A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`.
     See README for more info.
     """
+
     def clear_static_data(self) -> None:
         super().clear_static_data()
 

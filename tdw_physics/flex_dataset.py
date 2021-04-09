@@ -84,6 +84,19 @@ class FlexDataset(TransformsDataset, ABC):
     def __init__(self, port: int = 1071):
         super().__init__(port=port)
 
+        self._clear_flex_data()
+
+        # self._flex_container_command: dict = {}
+        # self._solid_actors: List[_SolidActor] = []
+        # self._soft_actors: List[_SoftActor] = []
+        # self._cloth_actors: List[_ClothActor] = []
+        # self._fluid_actors: List[_FluidActor] = []
+
+        # # List of IDs of non-Flex objects (required for correctly destroying them).
+        # self.non_flex_objects: List[int] = []
+
+    def _clear_flex_data(self) -> None:
+
         self._flex_container_command: dict = {}
         self._solid_actors: List[_SolidActor] = []
         self._soft_actors: List[_SoftActor] = []

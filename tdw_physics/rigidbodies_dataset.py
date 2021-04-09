@@ -130,7 +130,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     """
 
     def __init__(self, port: int = 1071, monochrome: bool = False, **kwargs):
-        super().__init__(port=port, **kwargs)
+
+        TransformsDataset.__init__(self, port=port, **kwargs)
 
         self.physics_info: Dict[int, PhysicsInfo] = {}
 
@@ -307,10 +308,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                       ) -> List[dict]:
 
         cmds = []
-        
+
         if o_id is None:
             o_id = self._get_next_object_id()
-        
+
         if scale_mass:
             mass = mass * np.prod(xyz_to_arr(scale))
 
@@ -357,7 +358,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         if add_data:
             data = {'name': record.name, 'id': o_id,
-                    'scale': scale, 'color': color, 'material': material,                    
+                    'scale': scale, 'color': color, 'material': material,
                     'mass': mass,
                     'dynamic_friction': dynamic_friction,
                     'static_friction': static_friction,
@@ -404,7 +405,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 bounciness = bounciness or info.bounciness,
                 o_id = o_id,
                 add_data = add_data))
-        
+
         if o_id is None:
             o_id = cmds[-1]["id"]
 
@@ -417,7 +418,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # texture and color it
         cmds.extend(
             self.get_object_material_commands(
-                record, o_id, self.get_material_name(material)))        
+                record, o_id, self.get_material_name(material)))
 
         cmds.append(
             {"$type": "set_color",

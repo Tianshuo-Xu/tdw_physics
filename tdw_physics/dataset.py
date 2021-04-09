@@ -41,7 +41,8 @@ class Dataset(Controller, ABC):
                  launch_build: bool=False,
                  randomize: int=0,
                  seed: int=0,
-                 save_args=True
+                 save_args=True,
+                 **kwargs
     ):
         # if launch_build:
         super().__init__(port=port,
