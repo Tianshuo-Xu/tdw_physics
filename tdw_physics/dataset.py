@@ -38,15 +38,15 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=True,
+                 launch_build: bool=False,
                  randomize: int=0,
                  seed: int=0,
                  save_args=True
     ):
-        if launch_build:
-            super().__init__(port=port,
-                             check_version=check_version,
-                             launch_build=True)
+        # if launch_build:
+        super().__init__(port=port,
+                         check_version=check_version,
+                         launch_build=launch_build)
 
         # set random state
         self.randomize = randomize
@@ -99,7 +99,7 @@ class Dataset(Controller, ABC):
             writelist.extend(["--"+str(k),str(v)])
 
         self._script_args = writelist
-        
+
         output_dir = Path(output_dir)
         filepath = output_dir.joinpath("args.txt")
         if not filepath.exists():
@@ -185,7 +185,7 @@ class Dataset(Controller, ABC):
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
-        
+
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
         if self.save_labels:
@@ -398,12 +398,12 @@ class Dataset(Controller, ABC):
             vector: Dict[str, float],
             theta: float,
             degrees: bool = True) -> Dict[str, float]:
-        
+
         v_x = vector['x']
         v_z = vector['z']
         if degrees:
             theta = np.radians(theta)
-            
+
         v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
         v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
 
@@ -618,7 +618,7 @@ class Dataset(Controller, ABC):
         commands = TDWUtils.set_visual_material(
             self, record.substructure, object_id, material, quality="high")
         return commands
-    
+
 
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 

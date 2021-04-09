@@ -82,4 +82,10 @@ class Draping(ClothDataset):
 
 if __name__ == "__main__":
     args = get_args("draping")
-    Draping().run(num=args.num, output_dir=args.dir, temp_path=args.temp, width=args.width, height=args.height)
+    Draping().run(num=args.num, output_dir=args.dir, temp_path=args.temp, width=args.width, height=args.height,
+                  write_passes=args.write_passes.split(','),
+                  save_passes=args.save_passes.split(','),
+                  save_movies=args.save_movies,
+                  save_labels=args.save_labels,
+                  args_dict=vars(args)
+    )
