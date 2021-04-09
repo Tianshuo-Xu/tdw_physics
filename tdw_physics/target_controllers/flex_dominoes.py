@@ -17,6 +17,22 @@ class FlexDominoes(Dominoes, FlexDataset):
         Dominoes.__init__(self, port=port, **kwargs)
         self._clear_flex_data()
 
+    def get_scene_initialization_commands(self) -> List[dict]:
+
+        commands = Dominoes.get_scene_initialization_commands(self)
+        create_container = {
+            "$type": "create_flex_container",
+            "collision_distance": 0.001,
+            "static_friction": 1.0,
+            "dynamic_friction": 1.0,
+            "iteration_count": 12,
+            "substep_count": 12,
+            "radius": 0.1875,
+            "damping": 0,
+            "drag": 0}
+        commands.append(create_container)
+        return commands
+
     def get_trial_initialization_commands(self) -> List[dict]:
 
         # clear the flex data
@@ -26,20 +42,20 @@ class FlexDominoes(Dominoes, FlexDataset):
     def _get_send_data_commands(self) -> List[dict]:
         return FlexDataset._get_send_data_commands(self)
 
-    def add_physics_object(self, *args, **kwargs):
-        """
-        Make sure controller knows to treat probe, zone, target, etc. as non-flex objects
-        """
+    # def add_physics_object(self, *args, **kwargs):
+    #     """
+    #     Make sure controller knows to treat probe, zone, target, etc. as non-flex objects
+    #     """
 
-        o_id = kwargs.get('o_id', None)
-        if o_id is None:
-            o_id: int = self.get_unique_id()
-            kwargs['o_id'] = o_id
+    #     o_id = kwargs.get('o_id', None)
+    #     if o_id is None:
+    #         o_id: int = self.get_unique_id()
+    #         kwargs['o_id'] = o_id
 
-        commands = Dominoes.add_physics_object(self, *args, **kwargs)
-        self.non_flex_objects.append(o_id)
+    #     commands = Dominoes.add_physics_object(self, *args, **kwargs)
+    #     self.non_flex_objects.append(o_id)
 
-        return commands
+    #     return commands
 
     def drop_cloth(self) -> List[dict]:
 
@@ -63,33 +79,34 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
-    # def add_physics_object(self,
-    #                        record: ModelRecord,
-    #                        position: Dict[str, float],
-    #                        rotation: Dict[str, float],
-    #                        mesh_expansion: float = 0,
-    #                        particle_spacing: float = 0.125,
-    #                        mass: float = 1,
-    #                        scale: Optional[Dict[str, float]] = {"x": 1.0, "y": 1.0, "z": 1.0},                                      o_id: Optional[int] = None,
-    #                        add_data: Optional[bool] = True,
-    #                        **kwargs) -> List[dict]:
+    def add_physics_object(self,
+                           record: ModelRecord,
+                           position: Dict[str, float],
+                           rotation: Dict[str, float],
+                           mesh_expansion: float = 0,
+                           particle_spacing: float = 0.125,
+                           mass: float = 1,
+                           scale: Optional[Dict[str, float]] = {"x": 0.1, "y": 0.5, "z": 0.25},
+                           o_id: Optional[int] = None,
+                           add_data: Optional[bool] = True,
+                           **kwargs) -> List[dict]:
 
-    #     mass_scale = mass
+        mass_scale = mass
 
-    #     commands = FlexDataset.add_solid_object(
-    #         self,
-    #         record = record,
-    #         position = position,
-    #         rotation = rotation,
-    #         scale = scale,
-    #         mesh_expansion = mesh_expansion,
-    #         particle_spacing = particle_spacing,
-    #         mass_scale = mass_scale,
-    #         o_id = o_id)
+        commands = FlexDataset.add_solid_object(
+            self,
+            record = record,
+            position = position,
+            rotation = rotation,
+            scale = scale,
+            mesh_expansion = mesh_expansion,
+            particle_spacing = particle_spacing,
+            mass_scale = mass_scale,
+            o_id = o_id)
 
-    #     # TODO add data
+        # TODO add data
 
-    #     return commands
+        return commands
 
 
 if __name__ == '__main__':
