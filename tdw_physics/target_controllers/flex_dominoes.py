@@ -12,14 +12,24 @@ class FlexDominoes(Dominoes, FlexDataset):
     FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
 
-    def __init__(self, port: int = 1071, **kwargs):
+    def __init__(self, port: int = 1071, all_flex_objects=False, **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
         self._clear_flex_data()
 
+        self.all_flex_objects = all_flex_objects
+        self._set_add_physics_object()
+
+    def _set_add_physics_object(self):
+        if self.all_flex_objects:
+            self.add_physics_object = self.add_flex_solid_object
+        else:
+            self.add_physics_object = self.add_rigid_physics_object
+
     def get_scene_initialization_commands(self) -> List[dict]:
 
         commands = Dominoes.get_scene_initialization_commands(self)
+        commands[0].update({'convexify': True})
         create_container = {
             "$type": "create_flex_container",
             "collision_distance": 0.001,
@@ -42,44 +52,25 @@ class FlexDominoes(Dominoes, FlexDataset):
     def _get_send_data_commands(self) -> List[dict]:
         return FlexDataset._get_send_data_commands(self)
 
-    # def add_physics_object(self, *args, **kwargs):
-    #     """
-    #     Make sure controller knows to treat probe, zone, target, etc. as non-flex objects
-    #     """
+    def add_rigid_physics_object(self, *args, **kwargs):
+        """
+        Make sure controller knows to treat probe, zone, target, etc. as non-flex objects
+        """
 
-    #     o_id = kwargs.get('o_id', None)
-    #     if o_id is None:
-    #         o_id: int = self.get_unique_id()
-    #         kwargs['o_id'] = o_id
+        o_id = kwargs.get('o_id', None)
+        if o_id is None:
+            o_id: int = self.get_unique_id()
+            kwargs['o_id'] = o_id
 
-    #     commands = Dominoes.add_physics_object(self, *args, **kwargs)
-    #     self.non_flex_objects.append(o_id)
+        commands = Dominoes.add_physics_object(self, *args, **kwargs)
+        self.non_flex_objects.append(o_id)
 
-    #     return commands
-
-    def drop_cloth(self) -> List[dict]:
-
-        self.cloth = self.CLOTH_RECORD
-        self.cloth_id = self._get_next_object_id()
-        self.cloth_position = copy.deepcopy(self.target_position)
-        self.cloth_position.update({"y": 2.0})
-
-        commands = self.add_cloth_object(
-            record = self.cloth,
-            position = self.cloth_position,
-            rotation = {k:0 for k in ['x','y','z']},
-            o_id = self.cloth_id)
+        print("Add rigid physics object", o_id)
 
         return commands
 
-    def _build_intermediate_structure(self) -> List[dict]:
 
-        commands = []
-        commands.extend(self.drop_cloth())
-
-        return commands
-
-    def add_physics_object(self,
+    def add_flex_solid_object(self,
                            record: ModelRecord,
                            position: Dict[str, float],
                            rotation: Dict[str, float],
@@ -101,12 +92,41 @@ class FlexDominoes(Dominoes, FlexDataset):
             scale = scale,
             mesh_expansion = mesh_expansion,
             particle_spacing = particle_spacing,
-            mass_scale = mass_scale,
+            mass_scale = 1,
             o_id = o_id)
 
         # TODO add data
+        print("Add FLEX physics object", o_id)
 
         return commands
+
+    def drop_cloth(self) -> List[dict]:
+
+        self.cloth = self.CLOTH_RECORD
+        self.cloth_id = self._get_next_object_id()
+        self.cloth_position = copy.deepcopy(self.target_position)
+        self.cloth_position.update({"y": 1.5})
+
+        commands = self.add_cloth_object(
+            record = self.cloth,
+            position = self.cloth_position,
+            rotation = {k:0 for k in ['x','y','z']},
+            mass_scale = 1,
+            mesh_tesselation = 1,
+            tether_stiffness = 1.0,
+            bend_stiffness = 1.0,
+            stretch_stiffness = 1.0,
+            o_id = self.cloth_id)
+
+        return commands
+
+    def _build_intermediate_structure(self) -> List[dict]:
+
+        commands = []
+        commands.extend(self.drop_cloth())
+
+        return commands
+
 
 
 if __name__ == '__main__':
@@ -125,6 +145,7 @@ if __name__ == '__main__':
         launch_build = True
 
     C = FlexDominoes(
+        all_flex_objects=False,
         launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
