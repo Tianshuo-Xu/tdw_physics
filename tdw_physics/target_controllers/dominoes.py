@@ -62,6 +62,14 @@ def get_args(dataset_dir: str, parse=True):
                         type=int,
                         default=0,
                         help="Whether to place the probe object on the top of a ramp")
+    parser.add_argument("--rscale",
+                        type=none_or_str,
+                        default=None,
+                        help="The xyz scale of the ramp")
+    parser.add_argument("--rfriction",
+                        action="store_true",
+                        help="Whether the ramp has friction")    
+    
     parser.add_argument("--zscale",
                         type=str,
                         default="0.5,0.01,2.0",
@@ -206,10 +214,17 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="wood_european_ash",
                         help="Material name for target. If None, samples from material_type")
+    parser.add_argument("--rmaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material name for ramp. If None, same as zone material")    
     parser.add_argument("--pmaterial",
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
                         help="Material name for probe. If None, samples from material_type")
+    parser.add_argument("--pfriction",
+                        action="store_true",
+                        help="Whether the probe object has friction")    
     parser.add_argument("--mmaterial",
                         type=none_or_str,
                         default="parquet_wood_red_cedar",
@@ -257,6 +272,7 @@ def get_args(dataset_dir: str, parse=True):
         args.monochrome = bool(args.monochrome)
 
         # scaling and rotating of objects
+        args.rscale = handle_random_transform_args(args.rscale)
         args.zscale = handle_random_transform_args(args.zscale)
         args.zlocation = handle_random_transform_args(args.zlocation)
         args.tscale = handle_random_transform_args(args.tscale)
@@ -302,8 +318,6 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.middle is not None:
             middle_list = args.middle.split(',')
-            assert all([t in MODEL_NAMES for t in middle_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
             args.middle = middle_list
 
         if args.color is not None:
@@ -424,6 +438,8 @@ class Dominoes(RigidbodiesDataset):
                  material_types=MATERIAL_TYPES,
                  target_material=None,
                  probe_material=None,
+                 probe_has_friction=False,
+                 ramp_material=None,
                  zone_material=None,
                  distractor_types=MODEL_NAMES,
                  distractor_categories=None,
@@ -433,8 +449,9 @@ class Dominoes(RigidbodiesDataset):
                  num_occluders=0,
                  occlusion_scale=0.6,
                  use_ramp=False,
+                 ramp_has_friction=False,
                  ramp_scale=None,
-                 ramp_color=None,
+                 ramp_color=[0.75,0.75,1.0],
                  ramp_base_height_range=0,
                  **kwargs):
 
@@ -462,8 +479,20 @@ class Dominoes(RigidbodiesDataset):
         # whether to use a ramp
         self.use_ramp = use_ramp
         self.ramp_color = ramp_color
-        self.ramp_scale = ramp_scale
+        self.ramp_material = ramp_material or self.zone_material
+        if ramp_scale is not None:
+            self.ramp_scale = get_random_xyz_transform(ramp_scale)
+        else:
+            self.ramp_scale = None
         self.ramp_base_height_range = ramp_base_height_range
+        self.ramp_physics_info = {}
+        if ramp_has_friction:
+            self.ramp_physics_info.update({
+                'mass': 1000,
+                'static_friction': 0.1,
+                'dynamic_friction': 0.1,
+                'bounciness': 0.1})
+        self.probe_has_friction = probe_has_friction
 
         ## object generation properties
         self.target_scale_range = target_scale_range
@@ -537,25 +566,6 @@ class Dominoes(RigidbodiesDataset):
         tlist = self.get_types(olist)
         self._zone_types = tlist
 
-    def get_material_name(self, material):
-
-        if material is not None:
-            if material in MATERIAL_TYPES:
-                mat = random.choice(MATERIAL_NAMES[material])
-            else:
-                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
-                    (material, self.material_types)
-                mat = material
-        else:
-            mtype = random.choice(self.material_types)
-            mat = random.choice(MATERIAL_NAMES[mtype])
-
-        return mat
-
-    def get_object_material_commands(self, record, object_id, material):
-        commands = TDWUtils.set_visual_material(
-            self, record.substructure, object_id, material, quality="high")
-        return commands
 
     def clear_static_data(self) -> None:
         super().clear_static_data()
@@ -725,6 +735,12 @@ class Dominoes(RigidbodiesDataset):
             static_group.create_dataset("probe_id", data=self.probe_id)
         except (AttributeError,TypeError):
             pass
+
+        if self.use_ramp:
+            static_group.create_dataset("ramp_id", data=self.ramp_id)
+            if self.ramp_base_height > 0.0:
+                static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
+                static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
 
         ## color and scales of primitive objects
         try:
@@ -1025,7 +1041,8 @@ class Dominoes(RigidbodiesDataset):
                                              scale=self.probe_scale_range,
                                              color=self.probe_color,
                                              exclude_color=(self.target_color if exclude else None),
-                                             exclude_range=0.25)
+                                             exclude_range=0.25,
+                                             add_data=(not self.use_ramp))
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.probe = record
         self.probe_type = data["name"]
@@ -1042,28 +1059,31 @@ class Dominoes(RigidbodiesDataset):
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
-        
+
+        if self.probe_has_friction:
+            probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
+        else:
+            probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+            
         commands.extend(
             self.add_physics_object(
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
-                # dynamic_friction=0.5,
-                # static_friction=0.5,
-                # bounciness=0.1,
-                dynamic_friction=0.01,
-                static_friction=0.01,
-                bounciness=0,                
-                o_id=o_id))
+                o_id=o_id,
+                add_data=True,
+                **probe_physics_info
+            ))
 
         # Set the probe material
         commands.extend(
             self.get_object_material_commands(
                 record, o_id, self.get_material_name(self.probe_material)))
 
-
         # Scale the object and set its color.
+        if self.use_ramp:
+            self._add_name_scale_color(record, data)
         commands.extend([
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1074,9 +1094,6 @@ class Dominoes(RigidbodiesDataset):
 
         # Set its collision mode
         commands.extend([
-            # {"$type": "set_object_collision_detection_mode",
-            #  "mode": "continuous_speculative",
-            #  "id": o_id},
             {"$type": "set_object_drag",
              "id": o_id,
              "drag": 0, "angular_drag": 0}])
@@ -1089,7 +1106,10 @@ class Dominoes(RigidbodiesDataset):
         self.push_force = self.rotate_vector_parallel_to_floor(
             self.push_force, -rot['y'], degrees=True)
 
-        self.push_position = self.probe_initial_position        
+        self.push_position = self.probe_initial_position
+
+        print("PROBE MASS", self.probe_mass)
+        print("PUSH FORCE", self.push_force)
         if self.use_ramp:
             self.push_cmd = {
                 "$type": "apply_force_to_object",
@@ -1127,84 +1147,112 @@ class Dominoes(RigidbodiesDataset):
 
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
-        rgb = self.ramp_color or np.array([0.75,0.75,1.0])        
+        rgb = self.ramp_color or self.random_color(exclude=self.target_color)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
         ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
+
+        self.ramp_pos = ramp_pos
+        self.ramp_rot = ramp_rot
+        self.ramp_id = ramp_id
 
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
         scale_x = (0.75 * self.collision_axis_length) / r_len        
         if self.ramp_scale is None:
             self.ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
-
+        self.ramp_end_x = self.ramp_pos['x'] + self.ramp_scale['x'] * r_len * 0.5
+        
         # optionally add base
-        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
-        if self.ramp_base_height > 0.01:
-            self.ramp_base = self.CUBE
-            self.ramp_base_scale = arr_to_xyz([
-                float(scale_x * r_len), float(self.ramp_base_height), float(0.75 * scale_x * r_dep)])
-            self.ramp_base_id = self._get_next_object_id()
-            cmds.extend(
-                self.add_physics_object(
-                    record=self.ramp_base,
-                    position=copy.deepcopy(ramp_pos),
-                    rotation=TDWUtils.VECTOR3_ZERO,
-                    mass=500,
-                    dynamic_friction=0.01,
-                    static_friction=0.01,
-                    bounciness=0.0,
-                    o_id=self.ramp_base_id,
-                    add_data=True))
-            _,rb_height,_ = self.get_record_dimensions(self.ramp_base)
-            ramp_pos['y'] += self.ramp_base_scale['y']
+        cmds.extend(self._add_ramp_base_to_ramp(color=rgb))
 
-            # scale it, color it, fix it
-            cmds.extend(
-                self.get_object_material_commands(
-                    self.ramp_base, self.ramp_base_id, self.get_material_name(self.zone_material)))
-            cmds.extend([
-                {"$type": "scale_object",
-                 "scale_factor": self.ramp_base_scale,
-                 "id": self.ramp_base_id},
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": self.ramp_base_id},                        
-                {"$type": "set_object_collision_detection_mode",
-                 "mode": "continuous_speculative",
-                 "id": self.ramp_base_id},
-                {"$type": "set_kinematic_state",
-                 "id": self.ramp_base_id,
-                 "is_kinematic": True,
-                 "use_gravity": True}])                        
-
+        # add the ramp
         cmds.extend(
             self.add_ramp(
                 record = self.ramp,
-                position=ramp_pos,
-                rotation=ramp_rot,
+                position=self.ramp_pos,
+                rotation=self.ramp_rot,
                 scale=self.ramp_scale,
-                o_id=ramp_id,
-                add_data=True))
-
-        # give the ramp a texture and color
-        cmds.extend(
-            self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
-
-        cmds.append(
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": ramp_id})            
-        print("ramp commands")
-        print(cmds)
+                material=self.ramp_material,
+                color=rgb,
+                o_id=self.ramp_id,
+                add_data=True,
+                **self.ramp_physics_info
+            ))
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * self.ramp_scale['x'] * r_len - 0.15
         self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height
 
         return cmds
+
+    def _add_ramp_base_to_ramp(self, color=None) -> None:
+
+        cmds = []
+
+        if color is None:
+            color = self.random_color(exclude=self.target_color)
+
+        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
+        if self.ramp_base_height < 0.01:
+            self.ramp_base_scale = copy.deepcopy(self.ramp_scale)
+            return []
+        
+        self.ramp_base = self.CUBE
+        r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
+        self.ramp_base_scale = arr_to_xyz([
+            float(self.ramp_scale['x'] * r_len),
+            float(self.ramp_base_height),
+            float(self.ramp_scale['z'] * r_dep)])
+        self.ramp_base_id = self._get_next_object_id()
+
+        # add the base
+        ramp_base_physics_info = {
+            'mass': 500,
+            'dynamic_friction': 0.01,
+            'static_friction': 0.01,
+            'bounciness': 0}
+        if self.ramp_physics_info.get('dynamic_friction', None) is not None:
+            ramp_base_physics_info.update(self.ramp_physics_info)
+        cmds.extend(
+            self.add_physics_object(
+                record=self.ramp_base,
+                position=copy.deepcopy(self.ramp_pos),
+                rotation=TDWUtils.VECTOR3_ZERO,
+                o_id=self.ramp_base_id,
+                add_data=True,
+                **ramp_base_physics_info))
+
+        # scale it, color it, fix it
+        cmds.extend(
+            self.get_object_material_commands(
+                self.ramp_base, self.ramp_base_id, self.get_material_name(self.ramp_material)))
+        cmds.extend([
+            {"$type": "scale_object",
+             "scale_factor": self.ramp_base_scale,
+             "id": self.ramp_base_id},
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": self.ramp_base_id},                                    
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": self.ramp_base_id},
+            {"$type": "set_kinematic_state",
+             "id": self.ramp_base_id,
+             "is_kinematic": True,
+             "use_gravity": True}])
+
+        # add data
+        self.model_names.append(self.ramp_base.name)
+        self.scales.append(self.ramp_base_scale)
+        self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)        
+        
+        # raise the ramp
+        self.ramp_pos['y'] += self.ramp_base_scale['y']        
+
+        return cmds
+
 
     def _replace_target_with_object(self, record, data):
         self.target = record
@@ -1488,6 +1536,8 @@ class MultiDominoes(Dominoes):
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
         static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])        
+        static_group.create_dataset("num_middle_objects", data=self.num_middle_objects)                
+
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
 
@@ -1594,6 +1644,8 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
+
+
 
     DomC = MultiDominoes(
         room=args.room,

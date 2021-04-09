@@ -120,6 +120,10 @@ def get_linking_args(dataset_dir: str, parse=True):
                         type=int_or_bool,
                         default=0,
                         help="Whether to place the probe object on the top of a ramp")
+    parser.add_argument("--rheight",
+                        type=none_or_str,
+                        default=0.5,
+                        help="Height of the ramp base")        
 
     # dominoes
     parser.add_argument("--collision_axis_length",
@@ -159,6 +163,9 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
+
+        # ramp
+        args.rheight = handle_random_transform_args(args.rheight)        
 
         # num links
         args.num_middle_range = handle_random_transform_args(args.num_middle_range)
@@ -296,7 +303,8 @@ class Linking(Tower):
         static_group.create_dataset("attachent_type", data=self.attachment_type)
         static_group.create_dataset("use_attachment", data=self.use_attachment)                
         static_group.create_dataset("link_type", data=self.middle_type)
-        static_group.create_dataset("num_links", data=self.num_links)        
+        static_group.create_dataset("num_links", data=self.num_links)
+        static_group.create_dataset("num_middle_objects", data=self.num_links)                
         static_group.create_dataset("target_link_idx", data=self.target_link_idx)
         static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
         static_group.create_dataset("use_cap", data=self.use_cap)                        
@@ -654,7 +662,8 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        ramp_base_height_range=args.rheight                
     )
 
     if bool(args.run):

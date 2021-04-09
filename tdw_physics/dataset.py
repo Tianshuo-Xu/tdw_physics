@@ -10,6 +10,8 @@ import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors
+from tdw.librarian import ModelRecord, MaterialLibrarian
+
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
@@ -17,6 +19,10 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+M = MaterialLibrarian()
+MATERIAL_TYPES = M.get_material_types()
+MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
+                  for mtype in MATERIAL_TYPES}
 
 class Dataset(Controller, ABC):
     """
@@ -37,9 +43,10 @@ class Dataset(Controller, ABC):
                  seed: int=0,
                  save_args=True
     ):
-        super().__init__(port=port,
-                         check_version=check_version,
-                         launch_build=launch_build)
+        if launch_build:
+            super().__init__(port=port,
+                             check_version=check_version,
+                             launch_build=True)
 
         # set random state
         self.randomize = randomize
@@ -599,6 +606,27 @@ class Dataset(Controller, ABC):
     def _get_next_object_id(self) -> int:
         self._increment_object_id()
         return int(self._object_id_counter)
+
+    def get_material_name(self, material):
+
+        if material is not None:
+            if material in MATERIAL_TYPES:
+                mat = random.choice(MATERIAL_NAMES[material])
+            else:
+                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
+                    (material, self.material_types)
+                mat = material
+        else:
+            mtype = random.choice(self.material_types)
+            mat = random.choice(MATERIAL_NAMES[mtype])
+
+        return mat
+
+    def get_object_material_commands(self, record, object_id, material):
+        commands = TDWUtils.set_visual_material(
+            self, record.substructure, object_id, material, quality="high")
+        return commands
+    
 
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
