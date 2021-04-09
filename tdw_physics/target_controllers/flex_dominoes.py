@@ -12,7 +12,7 @@ class FlexDominoes(Dominoes, FlexDataset):
     FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
 
-    def __init__(self, port: int = 1071, all_flex_objects=False, **kwargs):
+    def __init__(self, port: int = 1071, all_flex_objects=True, **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
         self._clear_flex_data()
@@ -95,6 +95,8 @@ class FlexDominoes(Dominoes, FlexDataset):
             mass_scale = 1,
             o_id = o_id)
 
+        # TODO set mass
+
         # TODO add data
         print("Add FLEX physics object", o_id)
 
@@ -145,7 +147,7 @@ if __name__ == '__main__':
         launch_build = True
 
     C = FlexDominoes(
-        all_flex_objects=False,
+        all_flex_objects=True,
         launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
