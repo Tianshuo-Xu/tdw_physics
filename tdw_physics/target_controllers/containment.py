@@ -32,6 +32,35 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 
+'''
+The containment controller generats stims in which the target object is 
+    potentially contained inside a base object. A probe object is launched at the base
+    and *may* displace the target from the base
+This controller pulls heavily from linking and tower controllers
+    renaming all of the features is still a WIP, so ignore some legacy naming conventions
+The logic is much the same, but with slightly different params
+Key (different) params;
+    "Container" is the base containing object
+    "middle" type of objects bing contained
+'''
+
+'''
+Arguments:
+  Contained objects
+    --middle: 'sphere', 'cube'
+    --mscale: "0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"
+    --num_middle_range: "[1,6]"
+    --spacing_jitter: 0.5,1,1.5
+  Contained Container
+    --attachment: None, "bowl", "torus"
+    --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
+  Base Container
+    --base: "bowl", "torus"
+    --bscale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9", "1.1,1.1,1.1"
+  Probe
+    --fscale: "5.0", "7.0", "9.0"
+'''
+
 def get_linking_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
@@ -42,37 +71,38 @@ def get_linking_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--middle",
                         type=none_or_str,
-                        default='torus',
-                        help="Which type of object to use as the links")
+                        default='sphere',
+                        help="Which type of object to use as the contained objects")
     parser.add_argument("--mscale",
                         type=none_or_str,
-                        default="0.5,0.5,0.5",
-                        help="The xyz scale ranges for each link object")
+                        default="0.3,0.3,0.3",
+                        help="The xyz scale ranges for each contained object")
     parser.add_argument("--mmass",
                         type=none_or_str,
                         default="2.0",
-                        help="The mass range of each link object")    
+                        help="The mass range of each contained object")    
     parser.add_argument("--num_middle_range",
                         type=str,
-                        default="[1,6]",
-                        help="How many links to use")
+                        default="[1,5]",
+                        help="How many contained objects to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0.0,
+                        default=1,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
     parser.add_argument("--target_link_range",
                         type=none_or_str,
                         default=None,
-                        help="Which link to use as the target object. None is random, -1 is no target")
+                        help="Which contained object to use as the target object. None is random, -1 is no target")
 
+#For "attachment" or dual containment
     parser.add_argument("--attachment",
                         type=none_or_str,
-                        default="cylinder",
+                        default=None,
                         help="Which type of object to use as the attachment")
     parser.add_argument("--ascale",
                         type=none_or_str,
-                        default="0.2,2.0,0.2",
+                        default="0.7,0.7,0.7",
                         help="Scale range (xyz) for attachment object")
     parser.add_argument("--amass",
                         type=none_or_str,
@@ -93,14 +123,14 @@ def get_linking_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Whether the attachment object will have a fixed cap like the base")    
 
-    # base
+# base (container)
     parser.add_argument("--base",
                         type=none_or_str,
-                        default=None,
+                        default='bowl',
                         help="Which type of object to use as the base")
     parser.add_argument("--bscale",
                         type=none_or_str,
-                        default="0.5",
+                        default="0.6",
                         help="Scale range (xyz) for base object")
     parser.add_argument("--bmass",
                         type=none_or_str,
@@ -120,10 +150,10 @@ def get_linking_args(dataset_dir: str, parse=True):
                         type=int_or_bool,
                         default=0,
                         help="Whether to place the probe object on the top of a ramp")
-    parser.add_argument("--rheight",
-                        type=none_or_str,
-                        default=0.5,
-                        help="Height of the ramp base")        
+    parser.add_argument("--fscale",
+                        type=str,
+                        default="5.0",
+                        help="range of scales to apply to push force")
 
     # dominoes
     parser.add_argument("--collision_axis_length",
@@ -163,9 +193,6 @@ def get_linking_args(dataset_dir: str, parse=True):
 
         # parent postprocess
         args = tower_postproc(args)
-
-        # ramp
-        args.rheight = handle_random_transform_args(args.rheight)        
 
         # num links
         args.num_middle_range = handle_random_transform_args(args.num_middle_range)
@@ -227,7 +254,7 @@ class Linking(Tower):
                  base_material=None,
                  
                  # what object the links attach to
-                 use_attachment=True,
+                 use_attachment=False,
                  attachment_object='cylinder',
                  attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
                  attachment_mass_range=3.0,
@@ -303,8 +330,7 @@ class Linking(Tower):
         static_group.create_dataset("attachent_type", data=self.attachment_type)
         static_group.create_dataset("use_attachment", data=self.use_attachment)                
         static_group.create_dataset("link_type", data=self.middle_type)
-        static_group.create_dataset("num_links", data=self.num_links)
-        static_group.create_dataset("num_middle_objects", data=self.num_links)                
+        static_group.create_dataset("num_links", data=self.num_links)        
         static_group.create_dataset("target_link_idx", data=self.target_link_idx)
         static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
         static_group.create_dataset("use_cap", data=self.use_cap)                        
@@ -662,8 +688,7 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor,
-        ramp_base_height_range=args.rheight                
+        ramp_color=args.rcolor
     )
 
     if bool(args.run):

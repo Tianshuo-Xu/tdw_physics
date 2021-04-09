@@ -30,6 +30,28 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
+'''
+The tower controller generats stims in which the target object is 
+    amongst a set of stacked objects. A probe object is launched at the base
+    and *may* knock over the tower
+'''
+
+'''
+Arguments:
+  Contained objects
+    --middle: 'sphere', 'cube'
+    --mscale: "0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"
+    --num_middle_range: "[1,6]"
+    --spacing_jitter: 0.5,1,1.5
+  Contained Container
+    --attachment: None, "bowl", "torus"
+    --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
+  Base Container
+    --base: "bowl", "torus"
+    --bscale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9", "1.1,1.1,1.1"
+  Probe
+    --fscale: "5.0", "7.0", "9.0"
+'''
 
 def get_tower_args(dataset_dir: str, parse=True):
     """

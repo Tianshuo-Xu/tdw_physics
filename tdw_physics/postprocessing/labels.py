@@ -336,11 +336,17 @@ def get_across_trial_stats_from(paths, funcs, agg_func=avg_label):
         f = h5py.File(path)
         res_f = OrderedDict()
         for func in funcs:
-            res_f[func.__name__ + '/' + agg_func.__name__] = func(f)
+            try:
+                res_f[func.__name__ + '/' + agg_func.__name__] = func(f)
+            except Exception as e:
+                print("Error occured during trials stats collection:",e)
         res.append(res_f)
         f.close()
 
-    keys = res[0].keys()
+    try:
+        keys = res[0].keys()
+    except IndexError:
+        keys = []
     stats = {
         k: agg_func([res[i][k] for i in range(len(res))])
         for k in keys}
