@@ -32,14 +32,14 @@ class FlexDominoes(Dominoes, FlexDataset):
         commands[0].update({'convexify': True})
         create_container = {
             "$type": "create_flex_container",
-            "collision_distance": 0.001,
-            "static_friction": 1.0,
-            "dynamic_friction": 1.0,
-            "iteration_count": 12,
-            "substep_count": 12,
-            "radius": 0.1875,
-            "damping": 0,
-            "drag": 0}
+            "collision_distance": 0.01}
+            # "static_friction": 1.0,
+            # "dynamic_friction": 1.0,
+            # "iteration_count": 12,
+            # "substep_count": 12}
+            # "radius": 0.1875,
+            # "damping": 0,
+            # "drag": 0}
         commands.append(create_container)
         return commands
 
@@ -75,7 +75,8 @@ class FlexDominoes(Dominoes, FlexDataset):
                            position: Dict[str, float],
                            rotation: Dict[str, float],
                            mesh_expansion: float = 0,
-                           particle_spacing: float = 0.125,
+                           # particle_spacing: float = 0.125,
+                              particle_spacing: float = 0.025,
                            mass: float = 1,
                            scale: Optional[Dict[str, float]] = {"x": 0.1, "y": 0.5, "z": 0.25},
                            o_id: Optional[int] = None,
@@ -83,6 +84,8 @@ class FlexDominoes(Dominoes, FlexDataset):
                            **kwargs) -> List[dict]:
 
         mass_scale = mass
+
+        position = {'x': position['x'], 'y': position['y'] + 0.1, 'z': position['z']}
 
         commands = FlexDataset.add_solid_object(
             self,
@@ -101,6 +104,17 @@ class FlexDominoes(Dominoes, FlexDataset):
         print("Add FLEX physics object", o_id)
 
         return commands
+
+    def _get_push_cmd(self, o_id, position_or_particle=None):
+        if not self.all_flex_objects:
+            return Dominoes._get_push_cmd(self, o_id, position_or_particle)
+        cmd = {"$type": "apply_force_to_flex_object",
+               "force": self.push_force,
+               "id": o_id,
+               "particle": -1}
+        print("PUSH CMD FLEX")
+        print(cmd)
+        return cmd
 
     def drop_cloth(self) -> List[dict]:
 

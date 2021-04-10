@@ -885,6 +885,20 @@ class Dominoes(RigidbodiesDataset):
         # convert to xyz
         return arr_to_xyz(push)
 
+    def _get_push_cmd(self, o_id, position_or_particle=None):
+        if position_or_particle is None:
+            cmd = {
+                "$type": "apply_force_to_object",
+                "force": self.push_force,
+                "id": o_id}
+        else:
+            cmd = {
+                "$type": "apply_force_at_position",
+                "force": self.push_force,
+                "position": position_or_particle,
+                "id": o_id}
+        return cmd
+
     def _get_zone_location(self, scale):
         return {
             "x": 0.5 * self.collision_axis_length + scale["x"] + 0.1,
@@ -1111,11 +1125,13 @@ class Dominoes(RigidbodiesDataset):
         print("PROBE MASS", self.probe_mass)
         print("PUSH FORCE", self.push_force)
         if self.use_ramp:
-            self.push_cmd = {
-                "$type": "apply_force_to_object",
-                "force": self.push_force,
-                "id": int(o_id)
-            }
+            print("CHANGE TO FLEX FORCE")
+            self.push_cmd = self._get_push_cmd(o_id, None)
+            # self.push_cmd = {
+            #     "$type": "apply_force_to_object",
+            #     "force": self.push_force,
+            #     "id": int(o_id)
+            # }
         else:
             self.push_position = {
                 k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
@@ -1125,12 +1141,13 @@ class Dominoes(RigidbodiesDataset):
                 k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
                 for k,v in self.push_position.items()}
 
-            self.push_cmd = {
-                "$type": "apply_force_at_position",
-                "force": self.push_force,
-                "position": self.push_position,
-                "id": int(o_id)
-            }
+            self.push_cmd = self._get_push_cmd(o_id, self.push_position)
+            # self.push_cmd = {
+            #     "$type": "apply_force_at_position",
+            #     "force": self.push_force,
+            #     "position": self.push_position,
+            #     "id": int(o_id)
+            # }
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
