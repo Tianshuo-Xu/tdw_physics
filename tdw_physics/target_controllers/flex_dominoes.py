@@ -3,9 +3,50 @@ from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
 from tdw.librarian import ModelRecord, MaterialLibrarian, ModelLibrarian
-from tdw_physics.target_controllers.dominoes import Dominoes, get_args
+from tdw_physics.target_controllers.dominoes import Dominoes, get_args, ArgumentParser
 from tdw_physics.flex_dataset import FlexDataset
-from tdw_physics.util import MODEL_LIBRARIES
+from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
+
+def get_flex_args(dataset_dir: str, parse=True):
+
+    common = get_parser(dataset_dir, get_help=False)
+    domino, domino_postproc = get_args(dataset_dir, parse=False)
+    parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
+
+    parser.add_argument("--all_flex_objects",
+                        type=int,
+                        default=1,
+                        help="Whether all rigid objects should be FLEX")
+    parser.add_argument("--cloth",
+                        action="store_true",
+                        help="Demo: whether to drop a cloth")
+    parser.add_argument("--squishy",
+                        action="store_true",
+                        help="Demo: whether to drop a squishy ball")
+    parser.add_argument("--fluid",
+                        action="store_true",
+                        help="Demo: whether to drop fluid")
+    parser.add_argument("--fwait",
+                        type=none_or_str,
+                        default="30",
+                        help="How many frames to wait before applying the force")
+
+
+    def postprocess(args):
+
+        args = domino_postproc(args)
+        args.all_flex_objects = bool(int(args.all_flex_objects))
+
+        return args
+
+    if not parse:
+        return (parser, postproccess)
+
+    args = parser.parse_args()
+    args = postprocess(args)
+
+    return args
+
 
 class FlexDominoes(Dominoes, FlexDataset):
 
@@ -13,13 +54,22 @@ class FlexDominoes(Dominoes, FlexDataset):
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
     SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
 
-    def __init__(self, port: int = 1071, all_flex_objects=True, **kwargs):
+    def __init__(self, port: int = 1071,
+                 all_flex_objects=True,
+                 use_cloth=False,
+                 use_squishy=False,
+                 use_fluid=False,
+                 **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
         self._clear_flex_data()
 
         self.all_flex_objects = all_flex_objects
         self._set_add_physics_object()
+
+        self.use_cloth = use_cloth
+        self.use_squishy = use_squishy
+        self.use_fluid = use_fluid
 
     def _set_add_physics_object(self):
         if self.all_flex_objects:
@@ -164,13 +214,14 @@ class FlexDominoes(Dominoes, FlexDataset):
 
     def drop_squishy(self) -> List[dict]:
 
-        position = {'x': 0., 'y': 1.0, 'z': 0.}
-        rotation = {k:0 for k in ['x','y','z']}
+        self.squishy = self.SOFT_RECORD
         self.squishy_id = self._get_next_object_id()
+        self.squishy_position = {'x': 0., 'y': 1.0, 'z': 0.}
+        rotation = {k:0 for k in ['x','y','z']}
 
         commands = self.add_soft_object(
-            record = self.SOFT_RECORD,
-            position = position,
+            record = self.squishy
+            position = self.squishy_position,
             rotation = rotation,
             scale={k:0.5 for k in ['x','y','z']},
             o_id = self.squishy_id)
@@ -180,8 +231,8 @@ class FlexDominoes(Dominoes, FlexDataset):
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
-        # commands.extend(self.drop_cloth())
-        commands.extend(self.drop_squishy())
+        commands.extend(self.drop_cloth() if self.use_cloth else [])
+        commands.extend(self.drop_squishy() if self.use_squishy else [])
 
         return commands
 
@@ -190,7 +241,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 if __name__ == '__main__':
     import platform, os
 
-    args = get_args("flex_dominoes")
+    args = get_flex_args("flex_dominoes")
 
     if platform.system() == 'Linux':
         if args.gpu is not None:
@@ -203,8 +254,11 @@ if __name__ == '__main__':
         launch_build = True
 
     C = FlexDominoes(
-        all_flex_objects=True,
         launch_build=launch_build,
+        all_flex_objects=args.all_flex_objects,
+        use_cloth=args.cloth,
+        use_squishy=args.squishy,
+        use_fluid=args.fluid,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
