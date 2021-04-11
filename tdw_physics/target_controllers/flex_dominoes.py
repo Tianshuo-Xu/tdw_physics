@@ -11,6 +11,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
     FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
+    SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
 
     def __init__(self, port: int = 1071, all_flex_objects=True, **kwargs):
 
@@ -42,7 +43,6 @@ class FlexDominoes(Dominoes, FlexDataset):
         }
             # "iteration_count": 12,
             # "substep_count": 12}
-
             # "damping": 0,
             # "drag": 0}
         commands.append(create_container)
@@ -162,10 +162,26 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
+    def drop_squishy(self) -> List[dict]:
+
+        position = {'x': 0., 'y': 1.0, 'z': 0.}
+        rotation = {k:0 for k in ['x','y','z']}
+        self.squishy_id = self._get_next_object_id()
+
+        commands = self.add_soft_object(
+            record = self.SOFT_RECORD,
+            position = position,
+            rotation = rotation,
+            scale={k:0.5 for k in ['x','y','z']},
+            o_id = self.squishy_id)
+
+        return commands
+
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
-        commands.extend(self.drop_cloth())
+        # commands.extend(self.drop_cloth())
+        commands.extend(self.drop_squishy())
 
         return commands
 
