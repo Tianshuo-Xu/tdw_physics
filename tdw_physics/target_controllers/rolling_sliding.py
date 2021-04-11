@@ -117,14 +117,15 @@ class RollingSliding(Dominoes):
                  port: int = 1071,
                  zjitter = 0,
                  fupforce = [0.,0.],
-                 ramp_scale = [1.,1.,1.],
-                 rolling_sliding_axis_length = 1.,
+                 ramp_scale = [0.2,0.25,0.5],
+                 rolling_sliding_axis_length = 1.15,
+                 use_ramp = True,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
         self.zjitter = zjitter
         self.fupforce = fupforce
-        self.use_ramp = True
+        self.use_ramp = use_ramp
         self.ramp_scale = ramp_scale
         self.rolling_sliding_axis_length = self.collision_axis_length = rolling_sliding_axis_length
 
