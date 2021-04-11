@@ -335,12 +335,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
              "id": o_id})
 
         # set the material and color
-        material = self.get_material_name(material)
         cmds.extend(
             self.get_object_material_commands(
-                record, o_id, material))
+                record, o_id, self.get_material_name(material)))
 
-        color = color or self.random_color(exclude=exclude_color)
+        color = color if color is not None else self.random_color(exclude=exclude_color)
         cmds.append(
             {"$type": "set_color",
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},

@@ -104,7 +104,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="whether the probe is horizontal")
     parser.add_argument("--mscale",
                         type=str,
-                        default="0.5",
+                        default="0.1,0.5,0.25",
                         help="Scale or scale range for middle objects")
     parser.add_argument("--mmass",
                         type=str,
@@ -930,35 +930,35 @@ class Dominoes(RigidbodiesDataset):
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
-        # commands.extend(
-        #     self.add_primitive(
-        #         record=record,
-        #         position=(self.zone_location or self._get_zone_location(scale)),
-        #         rotation=TDWUtils.VECTOR3_ZERO,
-        #         scale=self.zone_scale,
-        #         material=self.zone_material,
-        #         color=self.zone_color,
-        #         mass=500,
-        #         dynamic_friction=self.zone_friction,
-        #         static_friction=(10.0 * self.zone_friction),
-        #         bounciness=0,
-        #         o_id=o_id,
-        #         add_data=(not self.remove_zone),
-        #         make_kinematic=True # zone shouldn't move
-        #     ))
-
         commands.extend(
-            self.add_physics_object(
+            self.add_primitive(
                 record=record,
                 position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
+                scale=scale,
+                material=self.zone_material,
+                color=rgb,
                 mass=500,
                 dynamic_friction=self.zone_friction,
                 static_friction=(10.0 * self.zone_friction),
                 bounciness=0,
                 o_id=o_id,
-                add_data=(not self.remove_zone)
+                add_data=(not self.remove_zone),
+                make_kinematic=True # zone shouldn't move
             ))
+
+        # commands.extend(
+        #     self.add_physics_object(
+        #         record=record,
+        #         position=(self.zone_location or self._get_zone_location(scale)),
+        #         rotation=TDWUtils.VECTOR3_ZERO,
+        #         mass=500,
+        #         dynamic_friction=self.zone_friction,
+        #         static_friction=(10.0 * self.zone_friction),
+        #         bounciness=0,
+        #         o_id=o_id,
+        #         add_data=(not self.remove_zone)
+        #     ))
 
         # set its material to be the same as the room
         # commands.extend(

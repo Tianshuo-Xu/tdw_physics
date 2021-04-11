@@ -37,7 +37,9 @@ class FlexDominoes(Dominoes, FlexDataset):
             "collision_distance": 0.001,
             "static_friction": 1.0,
             "dynamic_friction": 1.0,
-            "radius": 0.1875}
+            "radius": 0.1875,
+            'max_particles': 200000
+        }
             # "iteration_count": 12,
             # "substep_count": 12}
 
@@ -77,7 +79,7 @@ class FlexDominoes(Dominoes, FlexDataset):
                               position: Dict[str, float],
                               rotation: Dict[str, float],
                               mesh_expansion: float = 0,
-                              particle_spacing: float = 0.025,
+                              particle_spacing: float = 0.035,
                               mass: float = 1,
                               scale: Optional[Dict[str, float]] = {"x": 0.1, "y": 0.5, "z": 0.25},
                               material: Optional[str] = None,
