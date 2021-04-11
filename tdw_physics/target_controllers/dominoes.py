@@ -930,6 +930,23 @@ class Dominoes(RigidbodiesDataset):
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
+        # commands.extend(
+        #     self.add_primitive(
+        #         record=record,
+        #         position=(self.zone_location or self._get_zone_location(scale)),
+        #         rotation=TDWUtils.VECTOR3_ZERO,
+        #         scale=self.zone_scale,
+        #         material=self.zone_material,
+        #         color=self.zone_color,
+        #         mass=500,
+        #         dynamic_friction=self.zone_friction,
+        #         static_friction=(10.0 * self.zone_friction),
+        #         bounciness=0,
+        #         o_id=o_id,
+        #         add_data=(not self.remove_zone),
+        #         make_kinematic=True # zone shouldn't move
+        #     ))
+
         commands.extend(
             self.add_physics_object(
                 record=record,
@@ -944,28 +961,28 @@ class Dominoes(RigidbodiesDataset):
             ))
 
         # set its material to be the same as the room
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.zone_material)))
+        # commands.extend(
+        #     self.get_object_material_commands(
+        #         record, o_id, self.get_material_name(self.zone_material)))
 
         # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
-             "id": o_id}])
+        # commands.extend([
+            # {"$type": "set_color",
+            #  "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+            #  "id": o_id},
+            # {"$type": "scale_object",
+            #  "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
+            #  "id": o_id}])
 
         # make it a "kinematic" object that won't move
-        commands.extend([
-            {"$type": "set_object_collision_detection_mode",
-             "mode": "continuous_speculative",
-             "id": o_id},
-            {"$type": "set_kinematic_state",
-             "id": o_id,
-             "is_kinematic": True,
-             "use_gravity": True}])
+        # commands.extend([
+        #     {"$type": "set_object_collision_detection_mode",
+        #      "mode": "continuous_speculative",
+        #      "id": o_id},
+        #     {"$type": "set_kinematic_state",
+        #      "id": o_id,
+        #      "is_kinematic": True,
+        #      "use_gravity": True}])
 
         # get rid of it if not using a target object
         if self.remove_zone:

@@ -23,8 +23,10 @@ class FlexDominoes(Dominoes, FlexDataset):
     def _set_add_physics_object(self):
         if self.all_flex_objects:
             self.add_physics_object = self.add_flex_solid_object
+            self.add_primitive = self.add_flex_solid_object
         else:
             self.add_physics_object = self.add_rigid_physics_object
+
 
     def get_scene_initialization_commands(self) -> List[dict]:
 
@@ -70,20 +72,22 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
-
     def add_flex_solid_object(self,
-                           record: ModelRecord,
-                           position: Dict[str, float],
-                           rotation: Dict[str, float],
-                           mesh_expansion: float = 0,
-                           # particle_spacing: float = 0.125,
+                              record: ModelRecord,
+                              position: Dict[str, float],
+                              rotation: Dict[str, float],
+                              mesh_expansion: float = 0,
                               particle_spacing: float = 0.025,
-                           mass: float = 1,
-                           scale: Optional[Dict[str, float]] = {"x": 0.1, "y": 0.5, "z": 0.25},
-                           o_id: Optional[int] = None,
-                           add_data: Optional[bool] = True,
-                           **kwargs) -> List[dict]:
+                              mass: float = 1,
+                              scale: Optional[Dict[str, float]] = {"x": 0.1, "y": 0.5, "z": 0.25},
+                              material: Optional[str] = None,
+                              color: Optional[list] = None,
+                              exclude_color: Optional[list] = None,
+                              o_id: Optional[int] = None,
+                              add_data: Optional[bool] = True,
+                              **kwargs) -> List[dict]:
 
+        # so objects don't get stuck in each other -- an unfortunate feature of FLEX
         position = {'x': position['x'], 'y': position['y'] + 0.1, 'z': position['z']}
 
         commands = FlexDataset.add_solid_object(
@@ -101,6 +105,20 @@ class FlexDominoes(Dominoes, FlexDataset):
         commands.append({"$type": "set_flex_object_mass",
                          "mass": mass,
                          "id": o_id})
+
+        # set material and color
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(material)))
+
+        color = color if color is not None else self.random_color(exclude=exclude_color)
+        commands.append(
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": o_id})
+
+        print("CoMMANDS")
+        print(commands)
 
         # step physics
         commands.append({"$type": "step_physics",
