@@ -32,12 +32,13 @@ class FlexDominoes(Dominoes, FlexDataset):
         commands[0].update({'convexify': True})
         create_container = {
             "$type": "create_flex_container",
-            "collision_distance": 0.01}
-            # "static_friction": 1.0,
-            # "dynamic_friction": 1.0,
+            "collision_distance": 0.001,
+            "static_friction": 1.0,
+            "dynamic_friction": 1.0,
+            "radius": 0.1875}
             # "iteration_count": 12,
             # "substep_count": 12}
-            # "radius": 0.1875,
+
             # "damping": 0,
             # "drag": 0}
         commands.append(create_container)
@@ -83,8 +84,6 @@ class FlexDominoes(Dominoes, FlexDataset):
                            add_data: Optional[bool] = True,
                            **kwargs) -> List[dict]:
 
-        mass_scale = mass
-
         position = {'x': position['x'], 'y': position['y'] + 0.1, 'z': position['z']}
 
         commands = FlexDataset.add_solid_object(
@@ -98,9 +97,16 @@ class FlexDominoes(Dominoes, FlexDataset):
             mass_scale = 1,
             o_id = o_id)
 
-        # TODO set mass
+        # set mass
+        commands.append({"$type": "set_flex_object_mass",
+                         "mass": mass,
+                         "id": o_id})
 
-        # TODO add data
+        # step physics
+        commands.append({"$type": "step_physics",
+                         "frames": 50})
+
+        # add data
         print("Add FLEX physics object", o_id)
 
         return commands
