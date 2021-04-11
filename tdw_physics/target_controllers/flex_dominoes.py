@@ -2,10 +2,17 @@ import sys, os, copy
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
+import random
+import numpy as np
+
 from tdw.librarian import ModelRecord, MaterialLibrarian, ModelLibrarian
+from tdw.tdw_utils import TDWUtils
 from tdw_physics.target_controllers.dominoes import Dominoes, get_args, ArgumentParser
 from tdw_physics.flex_dataset import FlexDataset
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
+
+# fluid
+from tdw.flex.fluid_types import FluidTypes
 
 def get_flex_args(dataset_dir: str, parse=True):
 
@@ -53,6 +60,8 @@ class FlexDominoes(Dominoes, FlexDataset):
     FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
     SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
+    RECEPTACLE_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("fluid_receptacle1x1")
+    FLUID_TYPES = FluidTypes()
 
     def __init__(self, port: int = 1071,
                  all_flex_objects=True,
@@ -70,6 +79,9 @@ class FlexDominoes(Dominoes, FlexDataset):
         self.use_cloth = use_cloth
         self.use_squishy = use_squishy
         self.use_fluid = use_fluid
+
+        if self.use_fluid:
+            self.ft_selection = random.choice(self.FLUID_TYPES.fluid_type_names)
 
     def _set_add_physics_object(self):
         if self.all_flex_objects:
@@ -89,13 +101,24 @@ class FlexDominoes(Dominoes, FlexDataset):
             "static_friction": 1.0,
             "dynamic_friction": 1.0,
             "radius": 0.1875,
-            'max_particles': 200000
-        }
-            # "iteration_count": 12,
-            # "substep_count": 12}
-            # "damping": 0,
-            # "drag": 0}
+            'max_particles': 200000}
+
+        if self.use_fluid:
+            create_container.update({
+                'viscosity': self.FLUID_TYPES.fluid_types[self.ft_selection].viscosity,
+                'adhesion': self.FLUID_TYPES.fluid_types[self.ft_selection].adhesion,
+                'cohesion': self.FLUID_TYPES.fluid_types[self.ft_selection].cohesion,
+                'fluid_rest': 0.05,
+                'damping': 0.01,
+                'subsetp_count': 5,
+                'iteration_count': 8,
+                'buoyancy': 1.0})
+
         commands.append(create_container)
+
+        if self.use_fluid:
+            commands.append({"$type": "set_time_step", "time_step": 0.005})
+
         return commands
 
     def get_trial_initialization_commands(self) -> List[dict]:
@@ -216,11 +239,11 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         self.squishy = self.SOFT_RECORD
         self.squishy_id = self._get_next_object_id()
-        self.squishy_position = {'x': 0., 'y': 1.0, 'z': 0.}
+        self.squishy_position = {'x': 0., 'y': 1.5, 'z': 0.}
         rotation = {k:0 for k in ['x','y','z']}
 
         commands = self.add_soft_object(
-            record = self.squishy
+            record = self.squishy,
             position = self.squishy_position,
             rotation = rotation,
             scale={k:0.5 for k in ['x','y','z']},
@@ -228,15 +251,45 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
+    def drop_fluid(self) -> List[dict]:
+
+        commands = []
+
+        # create a pool for the fluid
+        self.pool_id = self._get_next_object_id()
+        self.non_flex_objects.append(self.pool_id)
+        commands.append(self.add_transforms_object(record=self.RECEPTACLE_RECORD,
+                                                   position=TDWUtils.VECTOR3_ZERO,
+                                                   rotation=TDWUtils.VECTOR3_ZERO,
+                                                   o_id=self.pool_id,
+                                                   add_data=True))
+        commands.append({"$type": "set_kinematic_state",
+                         "id": self.pool_id,
+                         "is_kinematic": True,
+                         "use_gravity": False})
+
+        # add the fluid; this will also step physics forward 500 times
+        self.fluid_id = self._get_next_object_id()
+        commands.extend(self.add_fluid_object(
+            position={"x": 0.0, "y": 1.0, "z": 0.0},
+            rotation=TDWUtils.VECTOR3_ZERO,
+            o_id=self.fluid_id,
+            fluid_type=self.ft_selection))
+        self.fluid_object_ids.append(self.fluid_id)
+
+        # restore usual time step
+        commands.append({"$type": "set_time_step", "time_step": 0.01})
+
+        return commands
+
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
+        commands.extend(self.drop_fluid() if self.use_fluid else [])
         commands.extend(self.drop_cloth() if self.use_cloth else [])
         commands.extend(self.drop_squishy() if self.use_squishy else [])
 
         return commands
-
-
 
 if __name__ == '__main__':
     import platform, os
@@ -252,6 +305,9 @@ if __name__ == '__main__':
         launch_build = False
     else:
         launch_build = True
+
+    if platform.system() != 'Windows' and args.fluid:
+        print("WARNING: Flex fluids are only supported in Windows")
 
     C = FlexDominoes(
         launch_build=launch_build,

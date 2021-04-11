@@ -58,6 +58,9 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
 
+        # fluid actors need to be handled separately
+        self.fluid_object_ids = []
+
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
         self.model_names = []
@@ -632,17 +635,17 @@ class Dataset(Controller, ABC):
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
-        for r in resp:
-            if OutputData.get_data_type_id(r) == 'segm':
-                seg = SegmentationColors(r)
-                colors = {}
-                for i in range(seg.get_num()):
-                    colors[seg.get_object_id(i)] = seg.get_object_color(i)
+        # for r in resp:
+        #     if OutputData.get_data_type_id(r) == 'segm':
+        #         seg = SegmentationColors(r)
+        #         colors = {}
+        #         for i in range(seg.get_num()):
+        #             colors[seg.get_object_id(i)] = seg.get_object_color(i)
 
-                self.object_segmentation_colors = []
-                for o_id in self.object_ids:
-                    if o_id in colors.keys():
-                        self.object_segmentation_colors.append(
-                            np.array(colors[o_id], dtype=np.uint8).reshape(1,3))
+        #         self.object_segmentation_colors = []
+        #         for o_id in self.object_ids:
+        #             if o_id in colors.keys():
+        #                 self.object_segmentation_colors.append(
+        #                     np.array(colors[o_id], dtype=np.uint8).reshape(1,3))
 
-                self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+        #         self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
