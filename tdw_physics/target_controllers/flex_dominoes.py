@@ -192,15 +192,14 @@ class FlexDominoes(Dominoes, FlexDataset):
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
              "id": o_id})
 
-        print("CoMMANDS")
-        print(commands)
-
         # step physics
         commands.append({"$type": "step_physics",
                          "frames": 50})
 
         # add data
         print("Add FLEX physics object", o_id)
+        if add_data:
+            self.masses = np.append(self.masses, mass)
 
         return commands
 
