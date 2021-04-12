@@ -199,6 +199,7 @@ class FlexDominoes(Dominoes, FlexDataset):
         # add data
         print("Add FLEX physics object", o_id)
         if add_data:
+            self._add_name_scale_color(record, {'color': color, 'scale': scale, 'id': o_id})
             self.masses = np.append(self.masses, mass)
 
         return commands
@@ -220,17 +221,36 @@ class FlexDominoes(Dominoes, FlexDataset):
         self.cloth_id = self._get_next_object_id()
         self.cloth_position = copy.deepcopy(self.target_position)
         self.cloth_position.update({"y": 1.5})
+        self.cloth_color = [0.8,0.5,1.0]
+        self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
+        self.cloth_mass = 0.5
 
         commands = self.add_cloth_object(
             record = self.cloth,
             position = self.cloth_position,
             rotation = {k:0 for k in ['x','y','z']},
+            scale=self.cloth_scale,
             mass_scale = 1,
             mesh_tesselation = 1,
-            tether_stiffness = 1.0,
-            bend_stiffness = 1.0,
-            stretch_stiffness = 1.0,
+            tether_stiffness = 1.,
+            bend_stiffness = 1.,
+            stretch_stiffness = 1.,
             o_id = self.cloth_id)
+
+        # set mass
+        commands.append({"$type": "set_flex_object_mass",
+                         "mass": self.cloth_mass,
+                         "id": self.cloth_id})
+
+        # color cloth
+        commands.append(
+            {"$type": "set_color",
+             "color": {"r": self.cloth_color[0], "g": self.cloth_color[1], "b": self.cloth_color[2], "a": 1.},
+             "id": self.cloth_id})
+
+        self._add_name_scale_color(
+            self.cloth, {'color': self.cloth_color, 'scale': self.cloth_scale, 'id': self.cloth_id})
+        self.masses = np.append(self.masses, self.cloth_mass)
 
         return commands
 
@@ -241,12 +261,30 @@ class FlexDominoes(Dominoes, FlexDataset):
         self.squishy_position = {'x': 0., 'y': 1.5, 'z': 0.}
         rotation = {k:0 for k in ['x','y','z']}
 
+        self.squishy_color = [0.0,0.8,1.0]
+        self.squishy_scale = {k:0.5 for k in ['x','y','z']}
+        self.squishy_mass = 2.0
+
         commands = self.add_soft_object(
             record = self.squishy,
             position = self.squishy_position,
             rotation = rotation,
-            scale={k:0.5 for k in ['x','y','z']},
+            scale=self.squishy_scale,
             o_id = self.squishy_id)
+
+        # set mass
+        commands.append({"$type": "set_flex_object_mass",
+                         "mass": self.squishy_mass,
+                         "id": self.squishy_id})
+
+        commands.append(
+            {"$type": "set_color",
+             "color": {"r": self.squishy_color[0], "g": self.squishy_color[1], "b": self.squishy_color[2], "a": 1.},
+             "id": self.squishy_id})
+
+        self._add_name_scale_color(
+            self.squishy, {'color': self.squishy_color, 'scale': self.squishy_scale, 'id': self.squishy_id})
+        self.masses = np.append(self.masses, self.squishy_mass)
 
         return commands
 
