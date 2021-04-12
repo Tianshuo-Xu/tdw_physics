@@ -4,16 +4,18 @@
 middle objects (one of which is the target) stacked and falling into the containter.
 
 Values that make sense to change over are marked in **bold**.
+I would recommend only changing the vlaues below that are specific to containment, as most of the rest are all generic to towers or mulitdominoes.
+
+*Key arguments specific to containment:*
+| Argument | Description | Sensible value | Comment | Suggested range |
+|**`middle`** | The contained objects | `'sphere'` | --- | `'sphere', 'cube'`
+|**`mscale`** | Size of contained objects | `"0.3,0.3,0.3"` | --- | `"0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"`
+|**`num_middle_range`** | Range for number of middle objects | `[1,6]` | will randomly sample within range | `[1,6]`
+|**`num_middle_range`** | Range for number of middle objects | `[1,6]` | will randomly sample within range | `[1,6]`
+|**`spacing_jitter`** | jitter of contained objects | `0.5` | as a fraction of uniform spacing | `0.5,1,1.5`
 
 *inherited from `Tower`:*
 | Argument | Description | Sensible value | Comment | Suggested range |
-`middle` | The contained objects | `'sphere'` | --- | `'sphere', 'cube'`
---- | --- | --- | --- | ---
---- | --- | --- | --- | ---
---- | --- | --- | --- | ---
---- | --- | --- | --- | ---
---- | --- | --- | --- | ---
---- | --- | --- | --- | ---
 | **`room`** | Room   | 'box'  | | `'box', 'tdw', 'house'`
 | `target_zone` | Target zone object | `['cube']` 
 | `zone_color` | Target zone color | `[1.0,1.0,0.0]` |  Yellow is default
