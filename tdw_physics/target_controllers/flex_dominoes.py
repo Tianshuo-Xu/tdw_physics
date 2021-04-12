@@ -97,11 +97,13 @@ class FlexDominoes(Dominoes, FlexDataset):
         commands[0].update({'convexify': True})
         create_container = {
             "$type": "create_flex_container",
-            "collision_distance": 0.001,
+            # "collision_distance": 0.001,
+            "collision_distance": 0.025,
             "static_friction": 1.0,
             "dynamic_friction": 1.0,
             "radius": 0.1875,
-            'max_particles': 200000}
+            'max_particles': 50000}
+            # 'max_particles': 200000}
 
         if self.use_fluid:
             create_container.update({
@@ -128,7 +130,9 @@ class FlexDominoes(Dominoes, FlexDataset):
         return Dominoes.get_trial_initialization_commands(self)
 
     def _get_send_data_commands(self) -> List[dict]:
-        return FlexDataset._get_send_data_commands(self)
+        commands = Dominoes._get_send_data_commands(self)
+        commands.extend(FlexDataset._get_send_data_commands(self))
+        return commands
 
     def add_rigid_physics_object(self, *args, **kwargs):
         """
@@ -194,7 +198,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         # step physics
         commands.append({"$type": "step_physics",
-                         "frames": 50})
+                         "frames": 100})
 
         # add data
         print("Add FLEX physics object", o_id)
@@ -332,6 +336,11 @@ class FlexDominoes(Dominoes, FlexDataset):
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
+        # step physics
+        # if self.all_flex_objects:
+        #     commands.append({"$type": "step_physics",
+        #                      "frames": 50})
+
         commands.extend(self.drop_fluid() if self.use_fluid else [])
         commands.extend(self.drop_cloth() if self.use_cloth else [])
         commands.extend(self.drop_squishy() if self.use_squishy else [])

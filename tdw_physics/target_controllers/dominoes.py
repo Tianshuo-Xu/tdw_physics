@@ -1182,7 +1182,8 @@ class Dominoes(RigidbodiesDataset):
         if self.ramp_physics_info.get('dynamic_friction', None) is not None:
             ramp_base_physics_info.update(self.ramp_physics_info)
         cmds.extend(
-            self.add_physics_object(
+            RigidbodiesDataset.add_physics_object(
+                self,
                 record=self.ramp_base,
                 position=copy.deepcopy(self.ramp_pos),
                 rotation=TDWUtils.VECTOR3_ZERO,

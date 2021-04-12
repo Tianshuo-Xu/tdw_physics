@@ -528,6 +528,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         sleeping = True
 
+        print(frame_num, [OutputData.get_data_type_id(r) for r in resp[:-1]])
+
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
             if r_id == "rigi":
