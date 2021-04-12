@@ -913,7 +913,7 @@ class Dominoes(RigidbodiesDataset):
         record, data = self.random_primitive(self._zone_types,
                                              scale=self.zone_scale_range,
                                              color=self.zone_color,
-                                             add_data=True
+                                             add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.zone = record
@@ -939,6 +939,7 @@ class Dominoes(RigidbodiesDataset):
                 material=self.zone_material,
                 color=rgb,
                 mass=500,
+                scale_mass=False,
                 dynamic_friction=self.zone_friction,
                 static_friction=(10.0 * self.zone_friction),
                 bounciness=0,
@@ -1002,7 +1003,7 @@ class Dominoes(RigidbodiesDataset):
         record, data = self.random_primitive(self._target_types,
                                              scale=self.target_scale_range,
                                              color=self.target_color,
-                                             add_data=(not self.remove_target)
+                                             add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.target = record
@@ -1028,31 +1029,49 @@ class Dominoes(RigidbodiesDataset):
         # Commands for adding hte object
         commands = []
         commands.extend(
-            self.add_physics_object(
+            self.add_primitive(
                 record=record,
                 position=self.target_position,
                 rotation=self.target_rotation,
+                scale=scale,
+                material=self.target_material,
+                color=rgb,
                 mass=2.0,
+                scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
                 bounciness=0.0,
                 o_id=o_id,
-                add_data=(not self.remove_target)
+                add_data=(not self.remove_target),
+                make_kinematic=False
             ))
 
-        # Set the object material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.target_material)))
+        # commands.extend(
+        #     self.add_physics_object(
+        #         record=record,
+        #         position=self.target_position,
+        #         rotation=self.target_rotation,
+        #         mass=2.0,
+        #         dynamic_friction=0.5,
+        #         static_friction=0.5,
+        #         bounciness=0.0,
+        #         o_id=o_id,
+        #         add_data=(not self.remove_target)
+        #     ))
 
-        # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale if not self.remove_target else TDWUtils.VECTOR3_ZERO,
-             "id": o_id}])
+        # # Set the object material
+        # commands.extend(
+        #     self.get_object_material_commands(
+        #         record, o_id, self.get_material_name(self.target_material)))
+
+        # # Scale the object and set its color.
+        # commands.extend([
+        #     {"$type": "set_color",
+        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+        #      "id": o_id},
+        #     {"$type": "scale_object",
+        #      "scale_factor": scale if not self.remove_target else TDWUtils.VECTOR3_ZERO,
+        #      "id": o_id}])
 
         # If this scene won't have a target
         if self.remove_target:
@@ -1073,7 +1092,7 @@ class Dominoes(RigidbodiesDataset):
                                              color=self.probe_color,
                                              exclude_color=(self.target_color if exclude else None),
                                              exclude_range=0.25,
-                                             add_data=(not self.use_ramp))
+                                             add_data=False)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.probe = record
         self.probe_type = data["name"]
@@ -1097,31 +1116,48 @@ class Dominoes(RigidbodiesDataset):
             probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
         commands.extend(
-            self.add_physics_object(
+            self.add_primitive(
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
+                scale=scale,
+                material=self.probe_material,
+                color=rgb,
                 mass=self.probe_mass,
+                scale_mass=False,
                 o_id=o_id,
                 add_data=True,
+                make_kinematic=False,
                 **probe_physics_info
             ))
 
-        # Set the probe material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.probe_material)))
+
+        # commands.extend(
+        #     self.add_physics_object(
+        #         record=record,
+        #         position=self.probe_initial_position,
+        #         rotation=rot,
+        #         mass=self.probe_mass,
+        #         o_id=o_id,
+        #         add_data=True,
+        #         **probe_physics_info
+        #     ))
+
+        # # Set the probe material
+        # commands.extend(
+        #     self.get_object_material_commands(
+        #         record, o_id, self.get_material_name(self.probe_material)))
 
         # Scale the object and set its color.
-        if self.use_ramp:
-            self._add_name_scale_color(record, data)
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id}])
+        # if self.use_ramp:
+        #     self._add_name_scale_color(record, data)
+        # commands.extend([
+        #     {"$type": "set_color",
+        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+        #      "id": o_id},
+        #     {"$type": "scale_object",
+        #      "scale_factor": scale,
+        #      "id": o_id}])
 
         # Set its collision mode
         commands.extend([
