@@ -257,6 +257,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         # create a pool for the fluid
         self.pool_id = self._get_next_object_id()
+        print("POOL ID", self.pool_id)
         self.non_flex_objects.append(self.pool_id)
         commands.append(self.add_transforms_object(record=self.RECEPTACLE_RECORD,
                                                    position=TDWUtils.VECTOR3_ZERO,
@@ -270,6 +271,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         # add the fluid; this will also step physics forward 500 times
         self.fluid_id = self._get_next_object_id()
+        print("FLUID ID", self.fluid_id)
         commands.extend(self.add_fluid_object(
             position={"x": 0.0, "y": 1.0, "z": 0.0},
             rotation=TDWUtils.VECTOR3_ZERO,
