@@ -948,43 +948,6 @@ class Dominoes(RigidbodiesDataset):
                 make_kinematic=True # zone shouldn't move
             ))
 
-        # commands.extend(
-        #     self.add_physics_object(
-        #         record=record,
-        #         position=(self.zone_location or self._get_zone_location(scale)),
-        #         rotation=TDWUtils.VECTOR3_ZERO,
-        #         mass=500,
-        #         dynamic_friction=self.zone_friction,
-        #         static_friction=(10.0 * self.zone_friction),
-        #         bounciness=0,
-        #         o_id=o_id,
-        #         add_data=(not self.remove_zone)
-        #     ))
-
-        # set its material to be the same as the room
-        # commands.extend(
-        #     self.get_object_material_commands(
-        #         record, o_id, self.get_material_name(self.zone_material)))
-
-        # Scale the object and set its color.
-        # commands.extend([
-            # {"$type": "set_color",
-            #  "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-            #  "id": o_id},
-            # {"$type": "scale_object",
-            #  "scale_factor": scale if not self.remove_zone else TDWUtils.VECTOR3_ZERO,
-            #  "id": o_id}])
-
-        # make it a "kinematic" object that won't move
-        # commands.extend([
-        #     {"$type": "set_object_collision_detection_mode",
-        #      "mode": "continuous_speculative",
-        #      "id": o_id},
-        #     {"$type": "set_kinematic_state",
-        #      "id": o_id,
-        #      "is_kinematic": True,
-        #      "use_gravity": True}])
-
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(
@@ -1046,33 +1009,6 @@ class Dominoes(RigidbodiesDataset):
                 make_kinematic=False
             ))
 
-        # commands.extend(
-        #     self.add_physics_object(
-        #         record=record,
-        #         position=self.target_position,
-        #         rotation=self.target_rotation,
-        #         mass=2.0,
-        #         dynamic_friction=0.5,
-        #         static_friction=0.5,
-        #         bounciness=0.0,
-        #         o_id=o_id,
-        #         add_data=(not self.remove_target)
-        #     ))
-
-        # # Set the object material
-        # commands.extend(
-        #     self.get_object_material_commands(
-        #         record, o_id, self.get_material_name(self.target_material)))
-
-        # # Scale the object and set its color.
-        # commands.extend([
-        #     {"$type": "set_color",
-        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-        #      "id": o_id},
-        #     {"$type": "scale_object",
-        #      "scale_factor": scale if not self.remove_target else TDWUtils.VECTOR3_ZERO,
-        #      "id": o_id}])
-
         # If this scene won't have a target
         if self.remove_target:
             commands.append(
@@ -1131,34 +1067,6 @@ class Dominoes(RigidbodiesDataset):
                 **probe_physics_info
             ))
 
-
-        # commands.extend(
-        #     self.add_physics_object(
-        #         record=record,
-        #         position=self.probe_initial_position,
-        #         rotation=rot,
-        #         mass=self.probe_mass,
-        #         o_id=o_id,
-        #         add_data=True,
-        #         **probe_physics_info
-        #     ))
-
-        # # Set the probe material
-        # commands.extend(
-        #     self.get_object_material_commands(
-        #         record, o_id, self.get_material_name(self.probe_material)))
-
-        # Scale the object and set its color.
-        # if self.use_ramp:
-        #     self._add_name_scale_color(record, data)
-        # commands.extend([
-        #     {"$type": "set_color",
-        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-        #      "id": o_id},
-        #     {"$type": "scale_object",
-        #      "scale_factor": scale,
-        #      "id": o_id}])
-
         # Set its collision mode
         commands.extend([
             {"$type": "set_object_drag",
@@ -1178,13 +1086,7 @@ class Dominoes(RigidbodiesDataset):
         print("PROBE MASS", self.probe_mass)
         print("PUSH FORCE", self.push_force)
         if self.use_ramp:
-            print("CHANGE TO FLEX FORCE")
             self.push_cmd = self._get_push_cmd(o_id, None)
-            # self.push_cmd = {
-            #     "$type": "apply_force_to_object",
-            #     "force": self.push_force,
-            #     "id": int(o_id)
-            # }
         else:
             self.push_position = {
                 k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
@@ -1195,12 +1097,6 @@ class Dominoes(RigidbodiesDataset):
                 for k,v in self.push_position.items()}
 
             self.push_cmd = self._get_push_cmd(o_id, self.push_position)
-            # self.push_cmd = {
-            #     "$type": "apply_force_at_position",
-            #     "force": self.push_force,
-            #     "position": self.push_position,
-            #     "id": int(o_id)
-            # }
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
@@ -1775,6 +1671,7 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
+        use_ramp=bool(args.ramp),
         ramp_color=args.rcolor
     )
 

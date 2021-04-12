@@ -283,6 +283,14 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
+    def _place_ramp_under_probe(self) -> List[dict]:
+
+        cmds = Dominoes._place_ramp_under_probe(self)
+        self.non_flex_objects.append(self.ramp_id)
+        if self.ramp_base_height >= 0.01:
+            self.non_flex_objects.append(self.ramp_base_id)
+        return cmds
+
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
@@ -370,6 +378,7 @@ if __name__ == '__main__':
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
+        use_ramp=bool(args.ramp),
         ramp_color=args.rcolor
     )
 
