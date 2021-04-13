@@ -64,7 +64,7 @@ I would recommend only changing the vlaues below that are specific to containmen
 | `ramp_base_height_range` | Height of the base of the ramp? | `0`
 | 'monochrome' | Should all objects share a color? | `True` | 
 
-
+<!---
 *specific to `MultiDominoes`*:
 | Argument | Description | Sensible value | Comment | Suggested range |
 --- | --- | --- | --- | ---
@@ -77,3 +77,4 @@ I would recommend only changing the vlaues below that are specific to containmen
 | `horizontal` | Whether to rotate middle objects horizontally  |` False` |
 | **`spacing_jitter`** | jitter in how to space middle objects, as a fraction of uniform spacing |` 0.2` | | `[0.0,0.2]`
 | **`lateral_jitter`** | lateral jitter in how to space middle objects, as a fraction of object width |` 
+-->
