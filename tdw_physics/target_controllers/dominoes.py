@@ -134,7 +134,7 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="[0,0]",
                         help="How many frames to wait before applying the force")    
-    parser.add_argument("--color",
+    parser.add_argument("--tcolor",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
                         help="comma-separated R,G,B values for the target object color. None to random.")
@@ -306,10 +306,12 @@ def get_args(dataset_dir: str, parse=True):
                 "All target object names must be elements of %s" % MODEL_NAMES
             args.middle = middle_list
 
-        if args.color is not None:
-            rgb = [float(c) for c in args.color.split(',')]
+        if args.tcolor is not None:
+            rgb = [float(c) for c in args.tcolor.split(',')]
             assert len(rgb) == 3, rgb
-            args.color = rgb
+            args.tcolor = args.color = rgb
+        else:
+            args.color = None
 
         if args.zcolor is not None:
             rgb = [float(c) for c in args.zcolor.split(',')]
@@ -444,6 +446,11 @@ class Dominoes(RigidbodiesDataset):
         ## which room to use
         self.room = room
 
+        ## color randomization
+        self._random_target_color = (target_color is None)
+        self._random_zone_color = (zone_color is None)
+        self._random_probe_color = (probe_color is None)
+
         ## target zone
         self.set_zone_types(target_zone)
         self.zone_location = zone_location
@@ -559,6 +566,14 @@ class Dominoes(RigidbodiesDataset):
 
     def clear_static_data(self) -> None:
         super().clear_static_data()
+
+        ## randomize colors
+        if self._random_zone_color:
+            self.zone_color = None
+        if self._random_target_color:
+            self.target_color = None
+        if self._random_probe_color:
+            self.probe_color = None
 
         ## scenario-specific metadata: object types and drop position
         self.target_type = None
