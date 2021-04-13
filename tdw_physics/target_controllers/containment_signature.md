@@ -12,8 +12,12 @@ I would recommend only changing the vlaues below that are specific to containmen
 |**`middle`** | The contained objects | `'sphere'` | --- | `'sphere', 'cube'`
 |**`mscale`** | Size of contained objects | `"0.3,0.3,0.3"` | --- | `"0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"`
 |**`num_middle_range`** | Range for number of middle objects | `[1,6]` | will randomly sample within range | `[1,6]`
-|**`num_middle_range`** | Range for number of middle objects | `[1,6]` | will randomly sample within range | `[1,6]`
 |**`spacing_jitter`** | jitter of contained objects | `0.5` | as a fraction of uniform spacing | `0.5,1,1.5`
+|**`attachment`** | The contained container (e.g. bowl stacked on bowl) | `None` | --- | `None, "bowl", "torus"`
+|**`ascale`** | Size on contained container | `"0.5,0.5,0.5"` | --- | `"0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"`
+|**`base`** | Base Container | `'bowl'` | --- | `"bowl", "torus"`
+|**`bscale`** | Size on base container | `"0.7,0.7,0.7"` | --- | `"0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"`
+|**`fscale`** | Force applied to probe | `"5.0"` | In my experience >7 can knock over the bowls | `"5.0", "7.0", "9.0"`
 
 *inherited from `Tower`:*
 | Argument | Description | Sensible value | Comment | Suggested range |
