@@ -1,7 +1,7 @@
 # Containment signature
 
 **Note**: The `Containment.py` controller subclasses off of the Towers controller. In essence, each scenario is a base (container) with 
-middle objects (one of which is the target) stacked and falling into the containter.
+middle objects (one of which is the target) stacked and falling into the container.
 
 Values that make sense to change over are marked in **bold**.
 I would recommend only changing the vlaues below that are specific to containment, as most of the rest are all generic to towers or mulitdominoes.
