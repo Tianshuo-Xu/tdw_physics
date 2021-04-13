@@ -8,6 +8,7 @@ I would recommend only changing the vlaues below that are specific to containmen
 
 *Key arguments specific to containment:*
 | Argument | Description | Sensible value | Comment | Suggested range |
+--- | --- | --- | --- | ---
 |**`middle`** | The contained objects | `'sphere'` | --- | `'sphere', 'cube'`
 |**`mscale`** | Size of contained objects | `"0.3,0.3,0.3"` | --- | `"0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"`
 |**`num_middle_range`** | Range for number of middle objects | `[1,6]` | will randomly sample within range | `[1,6]`
@@ -16,6 +17,7 @@ I would recommend only changing the vlaues below that are specific to containmen
 
 *inherited from `Tower`:*
 | Argument | Description | Sensible value | Comment | Suggested range |
+--- | --- | --- | --- | ---
 | **`room`** | Room   | 'box'  | | `'box', 'tdw', 'house'`
 | `target_zone` | Target zone object | `['cube']` 
 | `zone_color` | Target zone color | `[1.0,1.0,0.0]` |  Yellow is default
