@@ -31,6 +31,33 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
+'''
+The linking controller generats stims in which the target object is 
+    linked to, or partially contained within a base object. A probe object is launched at the base
+    and *may* displace the target from the base
+This controller pulls heavily from dominoes and tower controllers
+The logic is much the same, but with slightly different params
+Key (different) params;
+    "attachment" is the linking object (what is being linked to)
+    "middle" type of objects bing linked
+'''
+
+'''
+Arguments:
+  Linked objects
+    --middle: 'torus'
+    --mscale: "0.5,0.5,0.5", "0.7,0.7,0.7"
+    --num_middle_range: "[1,4]"
+    --spacing_jitter: 0.0,0.1
+  linking Container
+    --attachment: cylinder, "triangular_prism"
+    --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
+  Base Container
+    --base: None,"cylinder"
+    --bscale: "0.5", "0.9"
+  Probe
+    --fscale: "5.0", "7.0", "9.0"
+'''
 
 def get_linking_args(dataset_dir: str, parse=True):
     """
@@ -96,7 +123,7 @@ def get_linking_args(dataset_dir: str, parse=True):
     # base
     parser.add_argument("--base",
                         type=none_or_str,
-                        default=None,
+                        default="cylinder",
                         help="Which type of object to use as the base")
     parser.add_argument("--bscale",
                         type=none_or_str,
