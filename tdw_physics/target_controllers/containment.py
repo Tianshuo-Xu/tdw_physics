@@ -245,7 +245,7 @@ class Containment(Tower):
     def __init__(self,
                  port: int = 1071,
                  
-                 # stand base
+                 # base container
                  use_base=False,
                  base_object='bowl',
                  base_scale_range=0.5,
@@ -253,7 +253,7 @@ class Containment(Tower):
                  base_color=[0.8,0.8,0.8],
                  base_material=None,
                  
-                 # what object the links attach to
+                 # A Contained container (e.g. bowl stacked on base bowl)
                  use_attachment=False,
                  attachment_object='bowl',
                  attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
@@ -263,7 +263,7 @@ class Containment(Tower):
                  attachment_material=None,
                  use_cap=False,
                  
-                 # what the links are, how many, and which is the target
+                 # what the contained objects are
                  contained_objects='sphere',
                  contained_scale_range=0.5,
                  contained_scale_gradient=0.0,
@@ -273,7 +273,7 @@ class Containment(Tower):
                  target_contained_range=None,
 
                  # generic
-                 use_ramp=True,
+                 use_ramp=False,
                  **kwargs):
 
         super().__init__(port=port, tower_cap=[], **kwargs)
