@@ -40,7 +40,7 @@ def pngs_to_mp4(
     cmd += ['-s', str(size[0]) + 'x' + str(size[1])]
 
     # filenames
-    cmd += ['-i', str(Path(png_dir).joinpath(image_stem + '%04d.png'))]
+    cmd += ['-i', '"' + str(Path(png_dir).joinpath(image_stem + '%04d.png')) + '"']
 
     # all other args
     cmd += ffmpeg_args
@@ -52,13 +52,13 @@ def pngs_to_mp4(
         filename = filename.split('/')
         filename = '/'.join(filename[:-1]) + '/' + png_dir.parent.name + '_' + filename[-1]
         print("writing %s" % filename)
-    cmd += [str(filename)]
+    cmd += ['"' + str(filename) + '"']
 
     make_video = subprocess.Popen(' '.join(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     stdout, stderr = make_video.communicate(input=(b'y' if overwrite else b'N'))
 
     if remove_pngs:
-        rm = subprocess.run('rm ' + str(png_dir) + '/' + image_stem + '*.png', shell=True)
+        rm = subprocess.run('rm '  +str(png_dir).replace(' ','\ ') + '/' + image_stem + '*.png', shell=True)
 
     return cmd, stdout, stderr
 
