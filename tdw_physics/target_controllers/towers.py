@@ -38,19 +38,15 @@ The tower controller generats stims in which the target object is
 
 '''
 Arguments:
-  Contained objects
-    --middle: 'sphere', 'cube'
-    --mscale: "0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"
-    --num_middle_range: "[1,6]"
-    --spacing_jitter: 0.5,1,1.5
-  Contained Container
-    --attachment: None, "bowl", "torus"
-    --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
-  Base Container
-    --base: "bowl", "torus"
-    --bscale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9", "1.1,1.1,1.1"
+  Tower objects (all but cap will be cube)
+    --num_blocks: 2,3,4,5
+    --mscale: "[0.4,0.4]","[0.5,0.5]", "[0.6,0.6]"
+    --spacing_jitter: 0.2,0.5,0.7
+    --tower_cap: "bowl", "torus", "cube", "triangular_prism"
   Probe
     --fscale: "5.0", "7.0", "9.0"
+  Target:
+    (still need to figure out what to do about this one...)
 '''
 
 def get_tower_args(dataset_dir: str, parse=True):
@@ -87,11 +83,11 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="Size of block scale gradient going from top to bottom of tower")
     parser.add_argument("--tower_cap",
                         type=none_or_str,
-                        default="bowl",
+                        default="cube",
                         help="Object types to use as a capper on the tower")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0.25,
+                        default=0.3,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")
     parser.add_argument("--mrot",
                         type=str,
@@ -131,7 +127,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="scale of target zone")    
     parser.add_argument("--fscale",
                         type=str,
-                        default="1.0",
+                        default="7.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
