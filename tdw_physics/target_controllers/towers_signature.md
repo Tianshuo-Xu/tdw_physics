@@ -3,7 +3,8 @@
 `Towers` extends the `MultiDominoes` class.
 
 Values that make sense to change over are marked in **bold**.
-**NOTE:** This controller is particularly amenable to gridsearching over parameters
+
+**NOTE:** This controller is particularly amenable to gridsearching over parameters. TO generate a wide variety of passibilities, start with gridsearching over the first table of parameter values below.
 
 These arguments are specific to generating varied sets of towers. All others are generic to inherited classes.
 | Argument | Description | Sensible value | Comment | Suggested range |
