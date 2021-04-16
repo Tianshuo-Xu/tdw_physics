@@ -24,6 +24,10 @@ def get_flex_args(dataset_dir: str, parse=True):
                         type=int,
                         default=1,
                         help="Whether all rigid objects should be FLEX")
+    parser.add_argument("--step_physics",
+                        type=int,
+                        default=0,
+                        help="How many physics steps to run forward after adding a solid FLEX object")
     parser.add_argument("--cloth",
                         action="store_true",
                         help="Demo: whether to drop a cloth")
@@ -68,6 +72,7 @@ class FlexDominoes(Dominoes, FlexDataset):
                  use_cloth=False,
                  use_squishy=False,
                  use_fluid=False,
+                 step_physics=False,
                  **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
@@ -76,6 +81,7 @@ class FlexDominoes(Dominoes, FlexDataset):
         self.all_flex_objects = all_flex_objects
         self._set_add_physics_object()
 
+        self.step_physics = step_physics
         self.use_cloth = use_cloth
         self.use_squishy = use_squishy
         self.use_fluid = use_fluid
@@ -197,8 +203,9 @@ class FlexDominoes(Dominoes, FlexDataset):
              "id": o_id})
 
         # step physics
-        commands.append({"$type": "step_physics",
-                         "frames": 100})
+        if bool(self.step_physics):
+            commands.append({"$type": "step_physics",
+                             "frames": self.step_physics})
 
         # add data
         print("Add FLEX physics object", o_id)
@@ -207,6 +214,9 @@ class FlexDominoes(Dominoes, FlexDataset):
             self.masses = np.append(self.masses, mass)
 
         return commands
+
+    def _place_and_push_probe_object(self):
+        return []
 
     def _get_push_cmd(self, o_id, position_or_particle=None):
         if not self.all_flex_objects:
@@ -223,8 +233,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         self.cloth = self.CLOTH_RECORD
         self.cloth_id = self._get_next_object_id()
-        self.cloth_position = copy.deepcopy(self.target_position)
-        self.cloth_position.update({"y": 1.5})
+        self.cloth_position = copy.deepcopy({'x':1.0, 'y':1.5,'z':0.0})
         self.cloth_color = [0.8,0.5,1.0]
         self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
         self.cloth_mass = 0.5
@@ -371,6 +380,7 @@ if __name__ == '__main__':
         use_cloth=args.cloth,
         use_squishy=args.squishy,
         use_fluid=args.fluid,
+        step_physics=args.step_physics,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
