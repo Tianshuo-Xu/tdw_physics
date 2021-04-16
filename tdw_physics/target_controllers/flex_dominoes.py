@@ -26,7 +26,7 @@ def get_flex_args(dataset_dir: str, parse=True):
                         help="Whether all rigid objects should be FLEX")
     parser.add_argument("--step_physics",
                         type=int,
-                        default=50,
+                        default=100,
                         help="How many physics steps to run forward after adding a solid FLEX object")
     parser.add_argument("--cloth",
                         action="store_true",
