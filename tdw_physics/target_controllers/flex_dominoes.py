@@ -26,7 +26,7 @@ def get_flex_args(dataset_dir: str, parse=True):
                         help="Whether all rigid objects should be FLEX")
     parser.add_argument("--step_physics",
                         type=int,
-                        default=0,
+                        default=50,
                         help="How many physics steps to run forward after adding a solid FLEX object")
     parser.add_argument("--cloth",
                         action="store_true",
@@ -204,6 +204,7 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         # step physics
         if bool(self.step_physics):
+            print("stepping physics forward", self.step_physics)
             commands.append({"$type": "step_physics",
                              "frames": self.step_physics})
 
@@ -215,8 +216,8 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self):
-        return []
+    # def _place_and_push_probe_object(self):
+    #     return []
 
     def _get_push_cmd(self, o_id, position_or_particle=None):
         if not self.all_flex_objects:
