@@ -15,6 +15,16 @@ These classes create a generic structure for generating physics datasets using T
 1. `cd path/to/tdw_physics`
 2. `pip3 install -e .` (This installs the `tdw_physics` module).
 
+pip install trimesh
+
+- use binvox:
+download [binvox](https://www.patrickmin.com/binvox/), but put the binary under ./bin.
+change access
+```
+chmod 777 binvox
+```
+
+
 ## Controllers
 
 See the `controllers/` directory for controllers that use `tdw_physics` as well as [documentation](controllers/README.md). See below for the output .hdf5 file structure.
@@ -37,7 +47,7 @@ tdw_physics provides abstract Controller classes. To write your own physics data
 
 **Every tdw_physics controller will do the following:**
 
-1. When a dataset controller is initially launched, it will always sent [these commands](https://github.com/alters-mit/tdw_physics/blob/30314b753860f3fd92ddc72fdb182816856632d6/tdw_physics/dataset.py#L52-L76). 
+1. When a dataset controller is initially launched, it will always sent [these commands](https://github.com/alters-mit/tdw_physics/blob/30314b753860f3fd92ddc72fdb182816856632d6/tdw_physics/dataset.py#L52-L76).
 2. Initialize a scene (these commands get sent only once in the entire dataset).
 3. Run a series of trials:
    1. Initialize the trial.
@@ -126,7 +136,7 @@ class MyDataset(RigidbodiesDataset):
         # Your code here.
         lib = ModelLibrarian("models_full.json")
         record = lib.get_record("iron_box")
-        commands.extend(self.add_physics_object(record=record, 
+        commands.extend(self.add_physics_object(record=record,
                                                 position={"x": 0, "y": 0, "z": 0},
                                                 rotation={"x": 0, "y": 0, "z": 0},
                                                 o_id=0,
@@ -162,7 +172,7 @@ class MyDataset(RigidbodiesDataset):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
         # Your code here.
-        commands.extend(self.add_physics_object_default(name="iron_box", 
+        commands.extend(self.add_physics_object_default(name="iron_box",
                                                         position={"x": 0, "y": 0, "z": 0},
                                                         rotation={"x": 0, "y": 0, "z": 0},
                                                         o_id=0))
@@ -306,7 +316,7 @@ class MyDataset(TransformsDataset):
         # Your code here.
 ```
 
-A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`. 
+A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`.
 
 ### Ending a trial
 
@@ -336,7 +346,7 @@ class MyDataset(TransformsDataset):
         # Your code here.
         lib = ModelLibrarian("models_full.json")
         record = lib.get_record("iron_box")
-        commands.append(self.add_transforms_object(record=record, 
+        commands.append(self.add_transforms_object(record=record,
                                                    position={"x": 0, "y": 0, "z": 0},
                                                    rotation={"x": 0, "y": 0, "z": 0},
                                                    o_id=0))
@@ -401,7 +411,7 @@ class MyDataset(FlexDataset):
         # Your code here.
 ```
 
-A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`, and `FlexParticles`. 
+A dataset creator that receives and writes per frame: `Transforms`, `Images`, `CameraMatrices`, and `FlexParticles`.
 
 ### Adding objects
 
@@ -422,7 +432,7 @@ class MyDataset(FlexDataset):
         # Your code here.
         lib = ModelLibrarian("models_full.json")
         record = lib.get_record("microwave")
-        commands.extend(self.add_solid_object(record=record, 
+        commands.extend(self.add_solid_object(record=record,
                                               position={"x": 0, "y": 0, "z": 0},
                                               rotation={"x": 0, "y": 0, "z": 0},
                                               scale={"x": 1, "y": 1, "z": 1},
@@ -459,7 +469,7 @@ class MyDataset(FlexDataset):
         # Your code here.
         lib = ModelLibrarian("models_full.json")
         record = lib.get_record("microwave")
-        commands.extend(self.add_soft_object(record=record, 
+        commands.extend(self.add_soft_object(record=record,
                                              position={"x": 0, "y": 0, "z": 0},
                                              rotation={"x": 0, "y": 0, "z": 0},
                                              scale={"x": 1, "y": 1, "z": 1},
@@ -508,7 +518,7 @@ class MyDataset(FlexDataset):
         # Your code here.
         lib = ModelLibrarian("models_special.json")
         record = lib.get_record("cloth_square")
-        commands.extend(self.add_cloth_object(record=record, 
+        commands.extend(self.add_cloth_object(record=record,
                                               position={"x": 0, "y": 0, "z": 0},
                                               rotation={"x": 0, "y": 0, "z": 0},
                                               scale={"x": 1, "y": 1, "z": 1},
@@ -550,13 +560,13 @@ from tdw_physics.flex_dataset import FlexDataset
 class MyDataset(FlexDataset):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
-        
+
         # Your code here.
-        
+
         # Cache the pool ID to destroy it correctly.
         pool_id = Controller.get_unique_id()
         self.non_flex_objects.append(pool_id)
-        
+
         # Add the pool.
         lib = ModelLibrarian("models_special.json")
         receptacle_record = lib.get_record("fluid_receptacle1x1")
@@ -564,9 +574,9 @@ class MyDataset(FlexDataset):
                                                          position={"x": 0, "y": 0, "z": 0},
                                                          rotation={"x": 0, "y": 0, "z": 0},
                                                          o_id=pool_id))
-        
+
         # Add a container here.
-        
+
         # Add the fluid.
         fluid_id = Controller.get_unique_id()
         commands.extend(self.add_fluid_object(position={"x": 0, "y": 1.0, "z": 0},
@@ -705,7 +715,7 @@ from tdw_physics.rigidbodies_dataset import RigidbodiesDataset
 
 class MyDataset(RigidbodiesDataset):
     # Your code here.
-    
+
 if __name__ == "__main__":
     args = get_args("my_dataset")
     MyDataset().run(num=args.num, output_dir=args.dir, temp_path=args.temp, width=args.width, height=args.height)

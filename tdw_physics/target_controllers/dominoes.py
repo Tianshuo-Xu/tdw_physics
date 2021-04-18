@@ -582,7 +582,7 @@ class Dominoes(RigidbodiesDataset):
         funcs += get_all_label_funcs()
 
         def room(f):
-            return str(np.array(f['static']['room'], dtype=str))
+            return str(np.array(f['static']['room']).astype(str))
         def trial_seed(f):
             return int(np.array(f['static']['trial_seed']))
         def num_distractors(f):

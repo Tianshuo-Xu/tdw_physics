@@ -11,7 +11,7 @@ import ipdb
 st=ipdb.set_trace
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors, Meshes
+from tdw.output_data import OutputData, SegmentationColors, Meshes, FlexParticles
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
@@ -64,12 +64,12 @@ class Dataset(Controller, ABC):
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
         def stimulus_name(f):
-            stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            stim_name = str(np.array(f['static']['stimulus_name']).astype(str))
             return stim_name
         def controller_name(f):
             return classname
         def git_commit(f):
-            return str(np.array(f['static']['git_commit'], dtype=str))
+            return str(np.array(f['static']['git_commit']).astype(str))
 
         return [stimulus_name, controller_name, git_commit]
 
@@ -331,6 +331,7 @@ class Dataset(Controller, ABC):
         commands.extend(self._get_send_data_commands())
         if self.save_meshes:
             commands.append({"$type": "send_meshes"})
+            #commands.append({"$type": "send_flex_particles"})
 
         # Send the commands and start the trial.
         r_types = ['']
@@ -345,6 +346,7 @@ class Dataset(Controller, ABC):
         self._set_segmentation_colors(resp)
 
         self._get_object_meshes(resp)
+        #self._get_object_particles(resp)
 
         frame = 0
 
@@ -635,6 +637,34 @@ class Dataset(Controller, ABC):
         # {object_id: (vertices, faces)}
         for r in resp:
             if OutputData.get_data_type_id(r) == 'mesh':
+                meshes = Meshes(r)
+                nmeshes = meshes.get_num()
+
+                assert(len(self.object_ids) == nmeshes)
+                for index in range(nmeshes):
+                    o_id = meshes.get_object_id(index)
+                    vertices = meshes.get_vertices(index)
+                    faces = meshes.get_triangles(index)
+                    self.object_meshes[o_id] = (vertices, faces)
+
+    def _get_object_particles(self, resp: List[bytes]) -> None:
+
+        self.object_meshes = dict()
+        # {object_id: (vertices, faces)}
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'flex':
+
+                fp = FlexParticles(r)
+                for i in range(fp.get_num_objects()):
+                    particle_id = -1
+
+
+                    for p in fp.get_particles(i):
+                        particle_position = p[:-1] # (x, y, z)
+                        particle_mass = p[3]
+                        particle_id += 1
+
+
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
 
