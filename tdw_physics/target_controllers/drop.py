@@ -171,7 +171,7 @@ class Drop(Dominoes):
     """
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  drop_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
                  height_range=[0.5, 1.5],

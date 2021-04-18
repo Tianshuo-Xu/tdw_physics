@@ -236,7 +236,7 @@ class Linking(Tower):
     STANDARD_MASS_FACTOR = 0.25 
     
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  
                  # stand base
                  use_base=False,

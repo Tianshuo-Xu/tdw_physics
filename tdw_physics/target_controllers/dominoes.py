@@ -393,7 +393,7 @@ class Dominoes(RigidbodiesDataset):
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
     
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  room='box',
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
@@ -439,6 +439,9 @@ class Dominoes(RigidbodiesDataset):
                  ramp_color=None,
                  ramp_base_height_range=0,
                  **kwargs):
+
+        ## get random port unless one is specified
+        if port is None: port = np.random.randint(1000,4000)
 
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
@@ -1443,7 +1446,7 @@ class Dominoes(RigidbodiesDataset):
 class MultiDominoes(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  middle_objects=None,
                  num_middle_objects=1,
                  middle_color=None,

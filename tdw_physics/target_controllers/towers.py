@@ -211,7 +211,7 @@ class Tower(MultiDominoes):
     STANDARD_MASS_FACTOR = 1.0 # cubes
     
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  num_blocks=3,
                  middle_scale_range=[0.5,0.5],
                  middle_scale_gradient=0.0,

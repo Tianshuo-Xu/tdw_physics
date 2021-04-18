@@ -114,7 +114,7 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
 class RollingSliding(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
                  ramp_scale = [0.2,0.25,0.5],
