@@ -192,7 +192,7 @@ class Drop(Dominoes):
                  **kwargs):
 
         ## initializes static data and RNG
-        super().__init__(port=port, **kwargs)
+        super().__init__(port=port, target_color=target_color, **kwargs)
 
         self.room = room
 
@@ -268,8 +268,12 @@ class Drop(Dominoes):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
+# randomization across trials
         if not(self.randomize):
-            random.seed(self._trial_num)
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            random.seed(self.trial_seed)
+        else:
+            self.trial_seed = -1 # not used
 
         # Choose and place a target object.
         commands.extend(self._place_intermediate_object())
@@ -404,7 +408,7 @@ class Drop(Dominoes):
                                              color=self.target_color)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.drop_type = data["name"]
-
+        self.target_color = rgb
         self.target_id = o_id # this is the target object as far as we're concerned for collision detection
 
         # Choose the drop position and pose.
