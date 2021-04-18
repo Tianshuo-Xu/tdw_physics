@@ -57,6 +57,10 @@ def get_drop_args(dataset_dir: str):
                         type=str,
                         default=None,
                         help="comma separated list of initial drop rotation values")
+    parser.add_argument("--zscale",
+                        type=str,
+                        default="2.0,0.001,2.0",
+                        help="scale of target zone")
     # parser.add_argument("--trot",
     #                     type=str,
     #                     default=None,
@@ -189,6 +193,7 @@ class Drop(Dominoes):
                  camera_max_height=2./3,
                  room = "box",
                  target_zone=['sphere'],
+                 zone_location = None,
                  **kwargs):
 
         ## initializes static data and RNG
@@ -197,6 +202,9 @@ class Drop(Dominoes):
         self.room = room
 
         self.zone_scale_range = zone_scale_range
+
+        if zone_location is None: zone_location = TDWUtils.VECTOR3_ZERO
+        self.zone_location = zone_location
 
         self.set_zone_types(target_zone)
 
@@ -467,7 +475,7 @@ class Drop(Dominoes):
         self.zone_color = rgb
         self.zone_id = o_id
         self.zone_scale = scale
-        self.zone_location = TDWUtils.VECTOR3_ZERO
+        # self.zone_location = TDWUtils.VECTOR3_ZERO
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
@@ -551,6 +559,9 @@ if __name__ == "__main__":
         monochrome=args.monochrome,
         room=args.room,
         target_material=args.tmaterial,
+        target_zone=args.zone,
+        zone_location=args.zlocation,
+        zone_scale_range = args.zscale,
         probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
