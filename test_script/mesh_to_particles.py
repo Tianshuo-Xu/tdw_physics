@@ -3,6 +3,7 @@ import copy
 import numpy as np
 #import pyvoxsurf
 import os
+import matplotlib.pyplot as plt
 
 import ipdb
 st = ipdb.set_trace
@@ -13,30 +14,53 @@ https://github.com/YunzhuLi/PyFleX/blob/1391799c77b0bd8f5ab5a2a01f1f2ee64fb5a929
 
 """
 
+def as_mesh(scene_or_mesh):
+    """
+    Convert a possible scene to a mesh.
 
-filename = "/home/htung/Documents/2021/example_meshes/0000_obj1_1.binvox"
+    If conversion occurs, the returned mesh has only vertex and face data.
+    """
+    if isinstance(scene_or_mesh, trimesh.Scene):
+        if len(scene_or_mesh.geometry) == 0:
+            mesh = None  # empty scene
+        else:
+            # we lose texture information here
+            mesh = trimesh.util.concatenate(
+                tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+                    for g in scene_or_mesh.geometry.values()))
+    else:
+        assert(isinstance(scene_or_mesh, trimesh.Trimesh))
+        mesh = scene_or_mesh
+    return mesh
+
+
+#filename = "/home/htung/Documents/2021/example_meshes/0000_obj1_1.binvox"
 import tdw_physics.binvox_rw as binvox_rw
 
-with open(filename, 'rb') as f:
-     m1 = binvox_rw.read_as_3d_array(f)
 
 
-st()
+
 
 # for visualization
 axis = trimesh.creation.axis(axis_length=1)
 
 # the size of the voxel grid in real-world scale
-spacing = 0.02 # what is the distance between 2 particles
+spacing = 0.2 # what is the distance between 2 particles
 
-mesh_filename = "/home/htung/Documents/2021/example_meshes/0000_obj1.obj"
+mesh_filename = "/home/htung/Documents/2021/example_meshes/Rubber_duck.obj"
+output_binvox_filename = mesh_filename.replace(".obj", ".binvox")
+
+# check if output file exists
+assert not os.path.isfile(output_binvox_filename), f"binvox file {output_binvox_filename} exists, please delete it first"
+
 #tmp_mesh_fname = "/home/htung/Documents/2021/tmp/input.obj"
-tmp_binvox_filename = "tmp.binvox"
-mesh = trimesh.load_mesh(mesh_filename)
+mesh = as_mesh(trimesh.load_mesh(mesh_filename, process=True))
 # make the mesh transparent
 mesh.visual.face_colors[:,3] = 120
 #(axis + mesh).show()
+mesh_ori = copy.deepcopy(mesh)
 
+(axis + mesh).show()
 edges = mesh.bounding_box.extents
 maxEdge = max(edges)
 meshLower0 = mesh.bounds[0,:]
@@ -44,7 +68,7 @@ meshUpper0 = mesh.bounds[1,:]
 
 # shift the mesh to it is in some bounding box [0, +x], [0, +y], [0, z]
 mesh.vertices -= meshLower0
-(axis + mesh).show()
+#(axis + mesh).show()
 
 
 edges = mesh.bounding_box.extents
@@ -96,17 +120,29 @@ meshUpper_spaced = meshLower_spaced + maxDim_spaced * spacing + 2 * spacingEps_p
 #print(meshLower_spaced, meshUpper_spaced)
 #print(f'binvox -aw -dc -d {maxDim_spaced} -pb -bb {meshLower_spaced[0]} {meshLower_spaced[1]} {meshLower_spaced[2]} {meshUpper_spaced[0]} {meshUpper_spaced[1]} {meshUpper_spaced[2]} -t binvox {mesh_filename}')
 os.system(f'binvox -aw -dc -d {maxDim_spaced} -pb -bb {meshLower_spaced[0]} {meshLower_spaced[1]} {meshLower_spaced[2]} {meshUpper_spaced[0]} {meshUpper_spaced[1]} {meshUpper_spaced[2]} -t binvox {mesh_filename}')
-print(meshLower_spaced, meshUpper_spaced)
+#print(meshLower_spaced, meshUpper_spaced)
 
 # binvox -aw -dc -d 5 -pb -bb -0.9 -0.4 -0.9 0.9 1.4 0.9 -t binvox {mesh_filename}
 #os.system(f"binvox -aw -dc -d 5 -pb -bb -0.9 -0.4 -0.9 0.9 1.4 0.9 -t binvox {mesh_filename}")
+
+# convert voxel into points
+
+with open(output_binvox_filename, 'rb') as f:
+     m1 = binvox_rw.read_as_3d_array(f)
+
+adjusted_spacing = (maxDim_spaced * spacing + 2 * spacingEps_p)/maxDim_spaced
+
+x, y, z = np.nonzero(m1.data)
+
+points = np.expand_dims(meshLower_spaced, 0) + np.stack([(x + 0.5)*adjusted_spacing, (y + 0.5)*adjusted_spacing, (z + 0.5)*adjusted_spacing], axis=1)
+
+
+pcd = trimesh.PointCloud(points)
+(trimesh.Scene(pcd) + axis).show()
+
+os.remove(output_binvox_filename)
+
 st()
-voxelgrid = trimesh.voxel.creation.voxelize(mesh, spacing)
-
-voxelgrid.show()
-
-
-
 
 # add transformation
 # add rotation
