@@ -16,7 +16,7 @@ from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
                                                get_across_trial_stats_from)
-from tdw_physics.util import save_obj
+from tdw_physics.util_geom import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
@@ -262,6 +262,7 @@ class Dataset(Controller, ABC):
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
             if not filepath.exists():
@@ -400,6 +401,7 @@ class Dataset(Controller, ABC):
 
         # Close the file.
         f.close()
+
         # Move the file.
         try:
             temp_path.replace(filepath)

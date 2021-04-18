@@ -11,7 +11,11 @@ from tdw.librarian import ModelRecord
 from tdw.tdw_utils import TDWUtils
 from tdw_physics.transforms_dataset import TransformsDataset
 from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
+from tdw_physics.util_geom import save_obj, mesh_to_particles
 
+
+import ipdb
+st=ipdb.set_trace
 
 def handle_random_transform_args(args):
 
@@ -308,7 +312,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 rotation = rotation,
                 o_id = o_id,
                 add_data = add_data))
-        
+
         print("add ramp command")
         print(cmds)
 
@@ -404,6 +408,34 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
         static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
         static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
+
+        mesh_group = static_group.create_group("mesh")
+
+
+        obj_points = []
+        for idx, object_id in enumerate(self.object_ids):
+            vertices, faces = self.object_meshes[object_id]
+            mesh_group.create_dataset(f"faces_{idx}", data=faces)
+            mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
+
+
+        # create particle state of the object => move this to particle-based dynamic preprocessing
+
+        # obj_points = []
+        # for idx, object_id in enumerate(self.object_ids):
+        #     vertices, faces = self.object_meshes[object_id]
+        #     # save it in temporary file
+        #     obj_filename = f"tmp/{idx}.obj"
+        #     vertices[:,0] *= self.scales[idx]["x"]
+        #     vertices[:,1] *= self.scales[idx]["y"]
+        #     vertices[:,2] *= self.scales[idx]["z"]
+
+        #     save_obj(vertices, faces, obj_filename)
+        #     points = mesh_to_particles(obj_filename, spacing=0.02, visualization=True)
+        #     obj_points.append(points)
+        #     os.remove(obj_filename)
+
+
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:

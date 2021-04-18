@@ -1,18 +1,25 @@
+import numpy as np
+import os
 import trimesh
 import copy
-import numpy as np
-#import pyvoxsurf
-import os
 import matplotlib.pyplot as plt
+import tdw_physics.binvox_rw as binvox_rw
 
 import ipdb
 st = ipdb.set_trace
 
-"""
-try to replicate the function from pyflex
-https://github.com/YunzhuLi/PyFleX/blob/1391799c77b0bd8f5ab5a2a01f1f2ee64fb5a929/bindings/helpers.h#L154
 
-"""
+def save_obj(vertices: np.ndarray, faces: np.ndarray, filepath: str):
+    with open(filepath, 'w') as f:
+        f.write("# OBJ file\n")
+        for v in vertices:
+            f.write("v %.4f %.4f %.4f\n" % (v[0],v[1],v[2]))
+        for face in faces:
+            f.write("f")
+            for vertex in face:
+                f.write(" %d" % (vertex + 1))
+            f.write("\n")
+
 
 def as_mesh(scene_or_mesh):
     """
@@ -134,11 +141,3 @@ def mesh_to_particles(mesh_filename, spacing=0.2, visualization=False):
         (trimesh.Scene(pcd) + axis).show()
 
     return points
-
-
-
-if __name__ == '__main__':
-    mesh_filename = "/home/htung/Documents/2021/example_meshes/Garlic.obj"
-    points = mesh_to_particles(mesh_filename, spacing=0.2, visualization=True)
-    st()
-    print("hello")
