@@ -110,6 +110,7 @@ class FlexDominoes(Dominoes, FlexDataset):
             "$type": "create_flex_container",
             # "collision_distance": 0.001,
             "collision_distance": 0.025,
+            # "collision_distance": 0.1,
             "static_friction": 1.0,
             "dynamic_friction": 1.0,
             "radius": 0.1875,
