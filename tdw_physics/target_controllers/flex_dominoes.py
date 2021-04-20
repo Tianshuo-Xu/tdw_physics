@@ -10,6 +10,7 @@ from tdw.tdw_utils import TDWUtils
 from tdw_physics.target_controllers.dominoes import Dominoes, get_args, ArgumentParser
 from tdw_physics.flex_dataset import FlexDataset
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
+from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
 
 # fluid
 from tdw.flex.fluid_types import FluidTypes
@@ -73,6 +74,7 @@ class FlexDominoes(Dominoes, FlexDataset):
                  use_squishy=False,
                  use_fluid=False,
                  step_physics=False,
+                 middle_scale_range=0.5,
                  **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
@@ -85,6 +87,9 @@ class FlexDominoes(Dominoes, FlexDataset):
         self.use_cloth = use_cloth
         self.use_squishy = use_squishy
         self.use_fluid = use_fluid
+
+        self.middle_scale_range = middle_scale_range
+        print("MIDDLE SCALE RANGE", self.middle_scale_range)
 
         if self.use_fluid:
             self.ft_selection = random.choice(self.FLUID_TYPES.fluid_type_names)
@@ -105,11 +110,12 @@ class FlexDominoes(Dominoes, FlexDataset):
             "$type": "create_flex_container",
             # "collision_distance": 0.001,
             "collision_distance": 0.025,
+            # "collision_distance": 0.1,
             "static_friction": 1.0,
             "dynamic_friction": 1.0,
             "radius": 0.1875,
             'max_particles': 50000}
-            # 'max_particles': 200000}
+            # 'max_particles': 250000}
 
         if self.use_fluid:
             create_container.update({
@@ -272,11 +278,11 @@ class FlexDominoes(Dominoes, FlexDataset):
 
         self.squishy = self.SOFT_RECORD
         self.squishy_id = self._get_next_object_id()
-        self.squishy_position = {'x': 0., 'y': 1.5, 'z': 0.}
+        self.squishy_position = {'x': 0., 'y': 1.0, 'z': 0.}
         rotation = {k:0 for k in ['x','y','z']}
 
         self.squishy_color = [0.0,0.8,1.0]
-        self.squishy_scale = {k:0.5 for k in ['x','y','z']}
+        self.squishy_scale = get_random_xyz_transform(self.middle_scale_range)
         self.squishy_mass = 2.0
 
         commands = self.add_soft_object(

@@ -15,7 +15,7 @@ from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
 from tdw.flex.fluid_types import FluidTypes
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
-MODEL_CORE = [r.name for r in MODEL_LIBRARIES['models_core.json'].records] 
+MODEL_CORE = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
 
 def get_flex_args(dataset_dir: str, parse=True):
 
@@ -102,14 +102,14 @@ class ClothSagging(Dominoes, FlexDataset):
 
         if self.use_fluid:
             self.ft_selection = random.choice(self.FLUID_TYPES.fluid_type_names)
-            
+
         self.drape_object = drape_object
         self.tether_stiffness_range = tether_stiffness_range
         self.bend_stiffness_range = bend_stiffness_range
         self.stretch_stiffness_range = stretch_stiffness_range
         self.distance_ratio_range = distance_ratio_range
         self.anchor_locations = anchor_locations
-        self.anchor_jitter = anchor_jitter      
+        self.anchor_jitter = anchor_jitter
         self.height_jitter = height_jitter
 
     def _set_add_physics_object(self):
@@ -224,7 +224,7 @@ class ClothSagging(Dominoes, FlexDataset):
             {"$type": "set_color",
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
              "id": o_id})
-        
+
         # step physics
         if bool(self.step_physics):
             print("stepping physics forward", self.step_physics)
@@ -259,7 +259,7 @@ class ClothSagging(Dominoes, FlexDataset):
         self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
         self.cloth_mass = 0.5
         self.cloth_data = {"name": "cloth_square", "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
-        
+
         commands = self.add_cloth_object(
             record = self.cloth,
             position = self.cloth_position,
@@ -286,9 +286,9 @@ class ClothSagging(Dominoes, FlexDataset):
         self._add_name_scale_color(
             self.cloth, {'color': self.cloth_color, 'scale': self.cloth_scale, 'id': self.cloth_id})
         self.masses = np.append(self.masses, self.cloth_mass)
-        
+
         self._replace_target_with_object(self.cloth, self.cloth_data)
-        
+
         return commands
 
     def drop_squishy(self) -> List[dict]:
@@ -365,12 +365,12 @@ class ClothSagging(Dominoes, FlexDataset):
         if self.ramp_base_height >= 0.01:
             self.non_flex_objects.append(self.ramp_base_id)
         return cmds
-    
+
     def _place_and_push_probe_object(self):
         return []
-        
+
     def _get_zone_location(self, scale):
-        dratio = random.uniform(self.distance_ratio_range[0], self.distance_ratio_range[1]) 
+        dratio = random.uniform(self.distance_ratio_range[0], self.distance_ratio_range[1])
         dist = max(self.anchor_locations) - min(self.anchor_locations)
         zonedist =  dratio * dist
         return {
@@ -378,14 +378,14 @@ class ClothSagging(Dominoes, FlexDataset):
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
-        
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame >= 150
-        
+
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
-        
+
         # add two objects on each side of a target object
         self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
         self.objrec1_id = self._get_next_object_id()
@@ -403,7 +403,7 @@ class ClothSagging(Dominoes, FlexDataset):
                               scale = self.objrec1_scale,
                               o_id = self.objrec1_id,
                               ))
-        
+
         self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
         self.objrec2_id = self._get_next_object_id()
         self.objrec2_position = {'x': max(self.anchor_locations)+random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
@@ -419,8 +419,8 @@ class ClothSagging(Dominoes, FlexDataset):
                                mass = self.objrec2_mass,
                                scale = self.objrec2_scale,
                                o_id = self.objrec2_id,
-                               )) 
-                               
+                               ))
+
         self.objrec3 = MODEL_LIBRARIES["models_core.json"].get_record(self.drape_object)
         self.objrec3_id = self._get_next_object_id()
         self.objrec3_rotation = {k:0 for k in ['x','y','z']}
@@ -453,17 +453,17 @@ class ClothSagging(Dominoes, FlexDataset):
                                mass = self.objrec3_mass,
                                scale = self.objrec3_scale,
                                o_id = self.objrec3_id,
-                               )) 
-                               
+                               ))
+
         commands.extend(self.drop_cloth() if self.use_cloth else [])
-        
+
         return commands
 
 if __name__ == '__main__':
     import platform, os
 
     args = get_flex_args("flex_dominoes")
-    
+
     print("core object types", MODEL_CORE)
     print("flex object types", MODEL_NAMES)
     
