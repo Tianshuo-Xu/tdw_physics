@@ -79,12 +79,12 @@ class ClothSagging(Dominoes, FlexDataset):
                  use_squishy=False,
                  use_fluid=False,
                  step_physics=False,
-                 drape_object="alma_floor_lamp", #alma_floor_lamp, metal_sculpture, white_lamp, vase_01, linbrazil_diz_armchair, desk_lamp
+                 drape_object="alma_floor_lamp", #alma_floor_lamp, metal_sculpture, white_lamp, vase_01, linbrazil_diz_armchair, desk_lamp, buddah, hiker_backpack
                  tether_stiffness_range = [0.1, 1.0],
                  bend_stiffness_range = [0.1, 1.0],#[0.0, 1.0],
                  stretch_stiffness_range = [0.1, 1.0],
-                 distance_ratio_range = [0.25,0.45],#[0.2, 0.8],
-                 anchor_locations = [-0.4, 0.4],
+                 distance_ratio_range = [0.3,0.7],#[0.2, 0.8],
+                 anchor_locations = [-0.5, 0.4],
                  anchor_jitter = 0.2,#0.2,
                  height_jitter = 0.3,#0.3,
                  **kwargs):
@@ -254,7 +254,7 @@ class ClothSagging(Dominoes, FlexDataset):
 
         self.cloth = self.CLOTH_RECORD
         self.cloth_id = self._get_next_object_id()
-        self.cloth_position = {"x": 0.0, "y": 1.5, "z":-0.6}
+        self.cloth_position = {"x": 0.0, "y": 1.8, "z":-0.5}
         self.cloth_color = [0.8,0.0,0.0]
         self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
         self.cloth_mass = 0.5
@@ -423,10 +423,27 @@ class ClothSagging(Dominoes, FlexDataset):
                                
         self.objrec3 = MODEL_LIBRARIES["models_core.json"].get_record(self.drape_object)
         self.objrec3_id = self._get_next_object_id()
-        self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.5}
         self.objrec3_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec3_scale = {'x': 1.0, 'y': 0.8, 'z': 1.0}
         self.objrec3_mass = 100.0
+        
+        print("drape object",self.drape_object)
+        if self.drape_object == "alma_floor_lamp":        
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.3}
+            self.objrec3_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
+        elif self.drape_object == "linbrazil_diz_armchair":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.8}
+            self.objrec3_scale = {'x': 1.5, 'y': 2.0, 'z': 1.0}
+        elif self.drape_object == "buddah":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.3}
+            self.objrec3_scale = {'x': 1.3, 'y': 1.3, 'z': 1.3}
+        elif self.drape_object == "desk_lamp":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.3}
+            self.objrec3_scale = {'x': 1.5, 'y': 1.5, 'z': 1.5}
+        elif self.drape_object == "vase_03":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.3}
+            self.objrec3_scale = {'x': 1.5, 'y': 1.5, 'z': 1.5}
+            
+            
         commands.extend(self.add_flex_solid_object(
                                record = self.objrec3,
                                position = self.objrec3_position,
@@ -448,7 +465,8 @@ if __name__ == '__main__':
     args = get_flex_args("flex_dominoes")
     
     print("core object types", MODEL_CORE)
-
+    print("flex object types", MODEL_NAMES)
+    
     if platform.system() == 'Linux':
         if args.gpu is not None:
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
