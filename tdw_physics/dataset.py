@@ -649,6 +649,7 @@ class Dataset(Controller, ABC):
                     faces = meshes.get_triangles(index)
                     self.object_meshes[o_id] = (vertices, faces)
 
+
     def _get_object_particles(self, resp: List[bytes]) -> None:
 
         self.object_meshes = dict()
@@ -665,14 +666,3 @@ class Dataset(Controller, ABC):
                         particle_position = p[:-1] # (x, y, z)
                         particle_mass = p[3]
                         particle_id += 1
-
-
-                meshes = Meshes(r)
-                nmeshes = meshes.get_num()
-
-                assert(len(self.object_ids) == nmeshes)
-                for index in range(nmeshes):
-                    o_id = meshes.get_object_id(index)
-                    vertices = meshes.get_vertices(index)
-                    faces = meshes.get_triangles(index)
-                    self.object_meshes[o_id] = (vertices, faces)
