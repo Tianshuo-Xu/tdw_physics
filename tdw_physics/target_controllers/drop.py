@@ -57,6 +57,10 @@ def get_drop_args(dataset_dir: str):
                         type=str,
                         default=None,
                         help="comma separated list of initial drop rotation values")
+    parser.add_argument("--zscale",
+                        type=str,
+                        default="2.0,0.001,2.0",
+                        help="scale of target zone")
     # parser.add_argument("--trot",
     #                     type=str,
     #                     default=None,
@@ -171,7 +175,7 @@ class Drop(Dominoes):
     """
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  drop_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
                  height_range=[0.5, 1.5],
@@ -189,14 +193,18 @@ class Drop(Dominoes):
                  camera_max_height=2./3,
                  room = "box",
                  target_zone=['sphere'],
+                 zone_location = None,
                  **kwargs):
 
         ## initializes static data and RNG
-        super().__init__(port=port, **kwargs)
+        super().__init__(port=port, target_color=target_color, **kwargs)
 
         self.room = room
 
         self.zone_scale_range = zone_scale_range
+
+        if zone_location is None: zone_location = TDWUtils.VECTOR3_ZERO
+        self.zone_location = zone_location
 
         self.set_zone_types(target_zone)
 
@@ -268,8 +276,12 @@ class Drop(Dominoes):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
+# randomization across trials
         if not(self.randomize):
-            random.seed(self._trial_num)
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            random.seed(self.trial_seed)
+        else:
+            self.trial_seed = -1 # not used
 
         # Choose and place a target object.
         commands.extend(self._place_intermediate_object())
@@ -404,7 +416,7 @@ class Drop(Dominoes):
                                              color=self.target_color)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.drop_type = data["name"]
-
+        self.target_color = rgb
         self.target_id = o_id # this is the target object as far as we're concerned for collision detection
 
         # Choose the drop position and pose.
@@ -463,7 +475,7 @@ class Drop(Dominoes):
         self.zone_color = rgb
         self.zone_id = o_id
         self.zone_scale = scale
-        self.zone_location = TDWUtils.VECTOR3_ZERO
+        # self.zone_location = TDWUtils.VECTOR3_ZERO
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
@@ -547,6 +559,9 @@ if __name__ == "__main__":
         monochrome=args.monochrome,
         room=args.room,
         target_material=args.tmaterial,
+        target_zone=args.zone,
+        zone_location=args.zlocation,
+        zone_scale_range = args.zscale,
         probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
