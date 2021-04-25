@@ -441,7 +441,9 @@ class Dominoes(RigidbodiesDataset):
                  **kwargs):
 
         ## get random port unless one is specified
-        if port is None: port = np.random.randint(1000,4000)
+        if port is None: 
+            port = np.random.randint(1000,4000)
+            print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
