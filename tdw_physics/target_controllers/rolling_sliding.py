@@ -175,7 +175,6 @@ class RollingSliding(MultiDominoes):
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
-        # return super().get_trial_initialization_commands()
         commands = []
 
         # randomization across trials

@@ -283,14 +283,15 @@ class Drop(Dominoes):
         else:
             self.trial_seed = -1 # not used
 
+        # Place target zone
+        commands.extend(self._place_target_zone())
+        
         # Choose and place a target object.
         commands.extend(self._place_intermediate_object())
 
         # Choose and drop an object.
         commands.extend(self._place_drop_object())
 
-        # Place target zone
-        commands.extend(self._place_target_zone())
 
         # Teleport the avatar to a reasonable position based on the drop height.
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
