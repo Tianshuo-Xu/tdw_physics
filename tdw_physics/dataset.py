@@ -3,6 +3,8 @@ from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
+from PIL import Image
+import io
 import h5py, json
 from collections import OrderedDict
 import numpy as np
@@ -20,6 +22,10 @@ from tdw_physics.util_geom import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+
+# colors for the target/zone overlay
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
 
 class Dataset(Controller, ABC):
     """
@@ -64,12 +70,20 @@ class Dataset(Controller, ABC):
         A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
         """
         def stimulus_name(f):
-            stim_name = str(np.array(f['static']['stimulus_name']).astype(str))
+            try:
+                stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            except TypeError:
+                # happens if we have an empty stimulus name
+                stim_name = "None"
             return stim_name
         def controller_name(f):
             return classname
         def git_commit(f):
-            return str(np.array(f['static']['git_commit']).astype(str))
+            try:
+                return str(np.array(f['static']['git_commit'], dtype=str))
+            except TypeError:
+                # happens when no git commit
+                return "None"
 
         return [stimulus_name, controller_name, git_commit]
 
@@ -330,6 +344,7 @@ class Dataset(Controller, ABC):
         commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
         commands.extend(self._get_send_data_commands())
+
         if self.save_meshes:
             commands.append({"$type": "send_meshes"})
             #commands.append({"$type": "send_flex_particles"})
@@ -398,6 +413,28 @@ class Dataset(Controller, ABC):
             self.meta_file.write_text(json_str, encoding='utf-8')
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
+
+        # Save out the target/zone segmentation mask
+        _id = f['frames']['0000']['images']['_id']
+        #get PIL image
+        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #get colors
+        zone_color = self.object_segmentation_colors[0]
+        target_color = self.object_segmentation_colors[1]
+        #get individual maps
+        zone_map = _id_map == zone_color
+        target_map = _id_map == target_color
+        #colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        #as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        #save image
+        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()
@@ -512,7 +549,7 @@ class Dataset(Controller, ABC):
         # stimulus name
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=self.object_ids)
-        static_group.create_dataset("model_names", data=self.model_names)
+        static_group.create_dataset("model_names", data=[s.encode('utf8') for s in self.model_names])
 
         if self.object_segmentation_colors is not None:
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)

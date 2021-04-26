@@ -300,7 +300,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records \
                         if 'ramp' in r.name}
         if record.name not in ramp_records.keys():
-            record = ramp_record[random.choice(sorted(ramp_records.keys()))]
+            record = ramp_records[random.choice(sorted(ramp_records.keys()))]
 
         cmds = []
 

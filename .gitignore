@@ -7,7 +7,7 @@ notebooks/*.py~
 *.py#
 *.pyc
 .DS_store
-tdw_physics/target_controller/D\:*
+tdw_physics/target_controller/D:*
 sourcethis.sh
 run.sh
 bin/
@@ -15,3 +15,7 @@ data/
 dist/
 log/
 log2/
+.vscode/launch.json
+.vscode/settings.json
+D:*
+

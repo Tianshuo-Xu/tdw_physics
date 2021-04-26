@@ -136,7 +136,7 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="[0,0]",
                         help="How many frames to wait before applying the force")
-    parser.add_argument("--color",
+    parser.add_argument("--tcolor",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
                         help="comma-separated R,G,B values for the target object color. None to random.")
@@ -308,10 +308,12 @@ def get_args(dataset_dir: str, parse=True):
                 "All target object names must be elements of %s" % MODEL_NAMES
             args.middle = middle_list
 
-        if args.color is not None:
-            rgb = [float(c) for c in args.color.split(',')]
+        if args.tcolor is not None:
+            rgb = [float(c) for c in args.tcolor.split(',')]
             assert len(rgb) == 3, rgb
-            args.color = rgb
+            args.tcolor = args.color = rgb
+        else:
+            args.color = None
 
         if args.zcolor is not None:
             rgb = [float(c) for c in args.zcolor.split(',')]
@@ -393,10 +395,10 @@ class Dominoes(RigidbodiesDataset):
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  room='box',
                  target_zone=['cube'],
-                 zone_color=[0.0,0.5,1.0],
+                 zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
                  zone_scale_range=[0.5,0.001,0.5],
                  zone_friction=0.1,
@@ -440,11 +442,21 @@ class Dominoes(RigidbodiesDataset):
                  ramp_base_height_range=0,
                  **kwargs):
 
+        ## get random port unless one is specified
+        if port is None:
+            port = 1071 #np.random.randint(1000,4000)
+            print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
 
         ## which room to use
         self.room = room
+
+        ## color randomization
+        self._random_target_color = (target_color is None)
+        self._random_zone_color = (zone_color is None)
+        self._random_probe_color = (probe_color is None)
 
         ## target zone
         self.set_zone_types(target_zone)
@@ -568,6 +580,14 @@ class Dominoes(RigidbodiesDataset):
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
+        ## randomize colors
+        if self._random_zone_color:
+            self.zone_color = None
+        if self._random_target_color:
+            self.target_color = None
+        if self._random_probe_color:
+            self.probe_color = None
+
         ## scenario-specific metadata: object types and drop position
         self.target_type = None
         self.target_rotation = None
@@ -588,7 +608,7 @@ class Dominoes(RigidbodiesDataset):
         funcs += get_all_label_funcs()
 
         def room(f):
-            return str(np.array(f['static']['room']).astype(str))
+            return str(np.array(f['static']['room']))
         def trial_seed(f):
             return int(np.array(f['static']['trial_seed']))
         def num_distractors(f):
@@ -701,29 +721,80 @@ class Dominoes(RigidbodiesDataset):
         super()._write_static_data(static_group)
 
         # randomization
-        static_group.create_dataset("room", data=self.room)
-        static_group.create_dataset("seed", data=self.seed)
-        static_group.create_dataset("randomize", data=self.randomize)
-        static_group.create_dataset("trial_seed", data=self.trial_seed)
-        static_group.create_dataset("trial_num", data=self._trial_num)
+        try:
+            static_group.create_dataset("room", data=self.room)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("seed", data=self.seed)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("randomize", data=self.randomize)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("trial_seed", data=self.trial_seed)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("trial_num", data=self._trial_num)
+        except (AttributeError,TypeError):
+            pass
 
         ## which objects are the zone, target, and probe
-        static_group.create_dataset("zone_id", data=self.zone_id)
-        static_group.create_dataset("target_id", data=self.target_id)
-        static_group.create_dataset("probe_id", data=self.probe_id)
+        try:
+            static_group.create_dataset("zone_id", data=self.zone_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_id", data=self.target_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("probe_id", data=self.probe_id)
+        except (AttributeError,TypeError):
+            pass
 
         ## color and scales of primitive objects
-        static_group.create_dataset("target_type", data=self.target_type)
-        static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-        static_group.create_dataset("probe_type", data=self.probe_type)
-        static_group.create_dataset("probe_mass", data=self.probe_mass)
-        static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-        static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-        static_group.create_dataset("push_time", data=int(self.force_wait))
+        try:
+            static_group.create_dataset("target_type", data=self.target_type)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("probe_type", data=self.probe_type)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("probe_mass", data=self.probe_mass)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("push_time", data=int(self.force_wait))
+        except (AttributeError,TypeError):
+            pass
 
         # distractors and occluders
-        static_group.create_dataset("distractors", data=[r.name for r in self.distractors.values()])
-        static_group.create_dataset("occluders", data=[r.name for r in self.occluders.values()])
+        try:
+            static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
+        except (AttributeError,TypeError):
+            pass
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -815,10 +886,12 @@ class Dominoes(RigidbodiesDataset):
                     "y": random.uniform(*get_range(rot_range)),
                     "z": 0.}
 
-    def get_push_force(self, scale_range, angle_range):
+    def get_push_force(self, scale_range, angle_range, yforce = [0,0]):
+        #sample y force component
+        yforce = random.uniform(*yforce)
         # rotate a unit vector initially pointing in positive-x direction
         theta = np.radians(random.uniform(*get_range(angle_range)))
-        push = np.array([np.cos(theta), 0., np.sin(theta)])
+        push = np.array([np.cos(theta), yforce, np.sin(theta)])
 
         # scale it
         push *= random.uniform(*get_range(scale_range))
@@ -1440,7 +1513,7 @@ class Dominoes(RigidbodiesDataset):
 class MultiDominoes(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  middle_objects=None,
                  num_middle_objects=1,
                  middle_color=None,
@@ -1499,7 +1572,7 @@ class MultiDominoes(Dominoes):
         super()._write_static_data(static_group)
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
-        static_group.create_dataset("middle_objects", data=[self.middle_type for _ in range(self.num_middle_objects)])
+        static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
         if self.middle_type is not None:
             static_group.create_dataset("middle_type", data=self.middle_type)
 

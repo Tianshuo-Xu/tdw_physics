@@ -121,7 +121,7 @@ class Gravity(Dominoes):
     DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  middle_scale_range=1.0,
                  middle_color=None,
                  middle_material=None,
