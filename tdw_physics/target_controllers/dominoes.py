@@ -501,13 +501,17 @@ class Dominoes(RigidbodiesDataset):
 
         ## distractors and occluders
         self.num_distractors = num_distractors
+
         self.distractor_types = self.get_types(
             distractor_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
             categories=distractor_categories)
 
+
         self.num_occluders = num_occluders
         self.occlusion_scale = occlusion_scale
+        occluder_types = ["cube"]
+        occluder_categories = None
         self.occluder_types = self.get_types(
             occluder_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
@@ -525,6 +529,8 @@ class Dominoes(RigidbodiesDataset):
             if not isinstance(categories, list):
                 categories = categories.split(',')
             tlist = [r for r in tlist if r.wcategory in categories]
+        # filter out non-flex objects
+        tlist = [r for r in tlist if r.flex]
         return tlist
 
     def set_probe_types(self, olist):
