@@ -48,11 +48,11 @@ def get_drop_args(dataset_dir: str):
                         help="max height to drop object from")
     parser.add_argument("--dscale",
                         type=str,
-                        default="[0.2,0.3]",
+                        default="[0.1,0.4]",
                         help="scale of drop objects")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[0.4,0.6]",
+                        default="[0.3,0.7]",
                         help="scale of target objects")
     parser.add_argument("--drot",
                         type=str,
@@ -148,8 +148,8 @@ class Drop(MultiDominoes):
                  drop_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
                  height_range=[0.5, 1.5],
-                 drop_scale_range=[0.2, 0.3],
-                 target_scale_range=[0.2, 0.3],
+                 drop_scale_range=[0.1, 0.4],
+                 target_scale_range=[0.3, 0.6],
                  zone_scale_range={'x':2.,'y':0.01,'z':2.},
                  drop_jitter=0.02,
                  drop_rotation_range=None,
