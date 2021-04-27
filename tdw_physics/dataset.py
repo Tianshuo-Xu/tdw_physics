@@ -1,4 +1,5 @@
 import sys, os, copy, subprocess, glob
+import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -44,13 +45,17 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=False,
+                 launch_build: bool=None,
                  randomize: int=0,
                  seed: int=0,
                  save_args=True,
                  **kwargs
     ):
-        # if launch_build:
+        # unless otherwise told, default to launch_build behavior appropiate for system
+        if launch_build is None:
+            if platform.system() == 'Linux': launch_build = False
+            else: launch_build = True 
+
         super().__init__(port=port,
                          check_version=check_version,
                          launch_build=launch_build)
