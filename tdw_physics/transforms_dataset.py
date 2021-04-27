@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import random
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
+from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Bounds
 from tdw.controller import Controller
 from tdw.librarian import ModelRecord
 from tdw_physics.dataset import Dataset
@@ -93,6 +93,8 @@ class TransformsDataset(Dataset, ABC):
                 "frequency": "always"},
                 {"$type": "send_camera_matrices",
                  "frequency": "always"},
+                {"$type": "send_bounds",
+                 "frequency": "always"},
                 {"$type": "send_segmentation_colors",
                  "ids": [int(oid) for oid in self.object_ids],
                  "frequency": "once"}]
@@ -112,10 +114,18 @@ class TransformsDataset(Dataset, ABC):
         forwards = np.empty(dtype=np.float32, shape=(num_objects, 3))
         rotations = np.empty(dtype=np.float32, shape=(num_objects, 4))
 
+        # Bounds data.
+        bounds = dict()
+        for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
+            bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
+
         camera_matrices = frame.create_group("camera_matrices")
 
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
+
+        r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        print(frame_num, r_types)
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
@@ -154,6 +164,24 @@ class TransformsDataset(Dataset, ABC):
                         else:
                             with open(path, "wb") as f:
                                 f.write(im.get_image(i))
+            elif r_id == "boun":
+                bo = Bounds(r)
+                bo_dict = dict()
+                for i in range(bo.get_num()):
+                    bo_dict.update({bo.get_id(i): {"front": bo.get_front(i),
+                                                   "back": bo.get_back(i),
+                                                   "left": bo.get_left(i),
+                                                   "right": bo.get_right(i),
+                                                   "top": bo.get_top(i),
+                                                   "bottom": bo.get_bottom(i),
+                                                   "center": bo.get_center(i)}})
+                for o_id, i in zip(self.object_ids, range(num_objects)):
+                    for bound_type in bounds.keys():
+                        try:
+                            bounds[bound_type][i] = bo_dict[o_id][bound_type]
+                        except KeyError:
+                            print("couldn't store bound data for object %d" % o_id)
+
 
             # Add the camera matrices.
             elif OutputData.get_data_type_id(r) == "cama":
@@ -161,10 +189,15 @@ class TransformsDataset(Dataset, ABC):
                 camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
                 camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
 
+
+    
+
         objs = frame.create_group("objects")
         objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+        for bound_type in bounds.keys():
+            objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
 
         return frame, objs, tr_dict, False
 

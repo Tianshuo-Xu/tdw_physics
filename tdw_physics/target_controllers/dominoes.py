@@ -1635,6 +1635,7 @@ if __name__ == "__main__":
         launch_build = True
 
     DomC = MultiDominoes(
+        port=args.port,
         launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,

@@ -107,6 +107,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
 
     import argparse
     parser = argparse.ArgumentParser(add_help=get_help)
+    parser.add_argument("--port", type=int, default=None, help="Which port to communicate with build")
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
     parser.add_argument("--num", type=int, default=3, help="The number of trials in the dataset.")
     parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
