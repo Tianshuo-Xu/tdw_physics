@@ -223,7 +223,7 @@ class Collision(Dominoes):
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
-        rot = self.get_y_rotation(self.probe_rotation_range)
+        rot = self.get_rotation(self.probe_rotation_range)
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
@@ -324,14 +324,15 @@ class Collision(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
-        # static_group.create_dataset("bridge_height", data=self.bridge_height)
-
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):
 
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
+    
+    def is_done(self, resp: List[bytes], frame: int) -> bool:
+        return frame > 150 # End after X frames even if objects are still moving.
     
 
 if __name__ == "__main__":
