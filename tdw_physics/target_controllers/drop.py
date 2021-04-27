@@ -60,7 +60,7 @@ def get_drop_args(dataset_dir: str):
                         help="comma separated list of initial drop rotation values")
     parser.add_argument("--zscale",
                         type=str,
-                        default="2.0,0.001,2.0",
+                        default="2.0,0.01,2.0",
                         help="scale of target zone")
     # parser.add_argument("--trot",
     #                     type=str,
@@ -190,6 +190,7 @@ class Drop(MultiDominoes):
         self.target_color = target_color
         self.drop_rotation_range = drop_rotation_range
         self.target_rotation_range = target_rotation_range
+        self.middle_mass_range = middle_mass_range
 
         ## camera properties
         self.camera_radius = camera_radius
