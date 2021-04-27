@@ -84,11 +84,11 @@ def get_drop_args(dataset_dir: str):
     #                     help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
-                        default=1./6,
+                        default=0.,
                          help="min height of camera as a fraction of drop height")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=1.,
+                        default=2.,
                         help="max height of camera as a fraction of drop height")
     parser.add_argument("--mmass",
                     type=str,
