@@ -173,6 +173,7 @@ class Dataset(Controller, ABC):
             save_passes: List[str] = [],
             save_movies: bool = False,
             save_labels: bool = False,
+            save_meshes: bool = False,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -205,9 +206,14 @@ class Dataset(Controller, ABC):
         self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
 
+        # whether to send and save meshes
+        self.save_meshes = save_meshes
+        
         print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
+        print("save meshes", self.save_meshes)
+        
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES

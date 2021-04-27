@@ -493,6 +493,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
+
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes", "frequency": "once"})        
+        
         return commands
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -529,10 +533,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         sleeping = True
 
-        rtypes = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-        print(frame_num, "COLLISION" if 'coll' in rtypes else "")
-        # print(frame_num, [OutputData.get_data_type_id(r) for r in resp[:-1]])
-
+        # rtypes = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        # print(frame_num, "COLLISION" if 'coll' in rtypes else "")
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)

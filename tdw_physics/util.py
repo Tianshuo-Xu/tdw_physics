@@ -107,6 +107,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
 
     import argparse
     parser = argparse.ArgumentParser(add_help=get_help)
+    parser.add_argument("--port", type=int, default=None, help="Which port to communicate with build")
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
     parser.add_argument("--num", type=int, default=3, help="The number of trials in the dataset.")
     parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
@@ -124,6 +125,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_passes", type=str, default='', help="Comma-separated list of Which passes to save to PNGs/MP4s: _img, _depth, _normals, _id, _flow")
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
+    parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
     return parser
 
 def get_args(dataset_dir: str):

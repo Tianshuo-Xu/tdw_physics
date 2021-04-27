@@ -499,7 +499,20 @@ if __name__ == "__main__":
 
     args = get_tower_args("towers")
 
+    import platform
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+
+        launch_build = False
+    else:
+        launch_build = True    
+
     TC = Tower(
+        port=args.port,
+        launch_build=launch_build,
         # tower specific
         num_blocks=args.num_blocks,
         tower_cap=args.tower_cap,
@@ -569,7 +582,8 @@ if __name__ == "__main__":
                write_passes=args.write_passes.split(','),               
                save_passes=args.save_passes.split(','),
                save_movies=args.save_movies,
-               save_labels=args.save_labels,               
+               save_labels=args.save_labels,
+               save_meshes=args.save_meshes,
                args_dict=vars(args)
         )
     else:

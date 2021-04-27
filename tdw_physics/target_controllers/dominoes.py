@@ -1635,6 +1635,7 @@ if __name__ == "__main__":
         launch_build = True
 
     DomC = MultiDominoes(
+        port=args.port,
         launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
@@ -1704,6 +1705,7 @@ if __name__ == "__main__":
                  save_passes=args.save_passes.split(','),
                  save_movies=args.save_movies,
                  save_labels=args.save_labels,
+                 save_meshes=args.save_meshes,
                  args_dict=vars(args))
     else:
         end = DomC.communicate({"$type": "terminate"})
