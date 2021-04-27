@@ -141,7 +141,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--fwait",
                         type=none_or_str,
                         default="[0,0]",
-                        help="How many frames to wait before applying the force")    
+                        help="How many frames to wait before applying the force")
     parser.add_argument("--tcolor",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
@@ -160,7 +160,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma-separated R,G,B values for the probe object color. None is random.")
     parser.add_argument("--mcolor",
                         type=none_or_str,
-                        default=None,
+Ë                        default=None,
                         help="comma-separated R,G,B values for the middle object color. None is random.")
     parser.add_argument("--collision_axis_length",
                         type=float,
@@ -458,7 +458,7 @@ class Dominoes(RigidbodiesDataset):
                  **kwargs):
 
         ## get random port unless one is specified
-        if port is None: 
+        if port is None:
             port = np.random.randint(1000,4000)
             print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
@@ -1523,7 +1523,7 @@ class MultiDominoes(Dominoes):
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
         if self.middle_type is not None:
-            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])        
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
             static_group.create_dataset("middle_type", data=self.middle_type)
 
     @staticmethod
@@ -1624,19 +1624,8 @@ if __name__ == "__main__":
 
     args = get_args("dominoes")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
-
-    #     launch_build = False
-    # else:
-    #     launch_build = True
-
     DomC = MultiDominoes(
         port=args.port,
-        # launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
