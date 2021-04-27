@@ -19,7 +19,8 @@ def handle_random_transform_args(args):
         try:
             args = json.loads(args)
         except:
-            args = str_to_xyz(args)
+            try: args = eval(args) #this allows us to read dictionaries etc.
+            except: args = str_to_xyz(args)
 
         if hasattr(args, 'keys'):
             if 'class' in args:
