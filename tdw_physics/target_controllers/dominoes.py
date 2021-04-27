@@ -1705,6 +1705,7 @@ if __name__ == "__main__":
                  save_passes=args.save_passes.split(','),
                  save_movies=args.save_movies,
                  save_labels=args.save_labels,
+                 save_meshes=args.save_meshes,
                  args_dict=vars(args))
     else:
         end = DomC.communicate({"$type": "terminate"})

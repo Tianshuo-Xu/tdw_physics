@@ -493,6 +493,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
+
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes", "frequency": "once"})        
+        
         return commands
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
