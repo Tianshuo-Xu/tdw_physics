@@ -170,6 +170,9 @@ class Dataset(Controller, ABC):
         :param save_movies: whether to save out a movie of each trial
         :param save_labels: whether to save out JSON labels for the full trial set.
         """
+        
+        # If no temp_path given, place in local folder to prevent conflicts with other builds
+        if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
         self._height, self._width = height, width
 

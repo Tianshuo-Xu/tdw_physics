@@ -109,7 +109,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser = argparse.ArgumentParser(add_help=get_help)
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
     parser.add_argument("--num", type=int, default=3, help="The number of trials in the dataset.")
-    parser.add_argument("--temp", type=str, default="D:/temp.hdf5", help="Temp path for incomplete files.")
+    parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")    
