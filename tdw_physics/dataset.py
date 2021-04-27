@@ -12,6 +12,8 @@ import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors
+from tdw.librarian import ModelRecord, MaterialLibrarian
+
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
@@ -19,6 +21,10 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+M = MaterialLibrarian()
+MATERIAL_TYPES = M.get_material_types()
+MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
+                  for mtype in MATERIAL_TYPES}
 
 # colors for the target/zone overlay
 ZONE_COLOR = [255,255,0]
@@ -38,11 +44,13 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=True,
+                 launch_build: bool=False,
                  randomize: int=0,
                  seed: int=0,
-                 save_args=True
+                 save_args=True,
+                 **kwargs
     ):
+        # if launch_build:
         super().__init__(port=port,
                          check_version=check_version,
                          launch_build=launch_build)
@@ -55,6 +63,9 @@ class Dataset(Controller, ABC):
 
         # save the command-line args
         self.save_args = save_args
+
+        # fluid actors need to be handled separately
+        self.fluid_object_ids = []
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
@@ -106,7 +117,7 @@ class Dataset(Controller, ABC):
             writelist.extend(["--"+str(k),str(v)])
 
         self._script_args = writelist
-        
+
         output_dir = Path(output_dir)
         filepath = output_dir.joinpath("args.txt")
         if not filepath.exists():
@@ -195,7 +206,7 @@ class Dataset(Controller, ABC):
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
-        
+
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
         if self.save_labels:
@@ -430,12 +441,12 @@ class Dataset(Controller, ABC):
             vector: Dict[str, float],
             theta: float,
             degrees: bool = True) -> Dict[str, float]:
-        
+
         v_x = vector['x']
         v_z = vector['z']
         if degrees:
             theta = np.radians(theta)
-            
+
         v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
         v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
 
@@ -631,6 +642,27 @@ class Dataset(Controller, ABC):
         self._increment_object_id()
         return int(self._object_id_counter)
 
+    def get_material_name(self, material):
+
+        if material is not None:
+            if material in MATERIAL_TYPES:
+                mat = random.choice(MATERIAL_NAMES[material])
+            else:
+                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
+                    (material, self.material_types)
+                mat = material
+        else:
+            mtype = random.choice(self.material_types)
+            mat = random.choice(MATERIAL_NAMES[mtype])
+
+        return mat
+
+    def get_object_material_commands(self, record, object_id, material):
+        commands = TDWUtils.set_visual_material(
+            self, record.substructure, object_id, material, quality="high")
+        return commands
+
+
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
@@ -639,12 +671,18 @@ class Dataset(Controller, ABC):
                 seg = SegmentationColors(r)
                 colors = {}
                 for i in range(seg.get_num()):
-                    colors[seg.get_object_id(i)] = seg.get_object_color(i)
+                    try:
+                        colors[seg.get_object_id(i)] = seg.get_object_color(i)
+                    except:
+                        print("No object id found for seg", i)
 
                 self.object_segmentation_colors = []
                 for o_id in self.object_ids:
                     if o_id in colors.keys():
                         self.object_segmentation_colors.append(
                             np.array(colors[o_id], dtype=np.uint8).reshape(1,3))
+                    else:
+                        self.object_segmentation_colors.append(
+                            np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
