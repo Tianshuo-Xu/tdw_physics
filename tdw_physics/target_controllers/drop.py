@@ -14,7 +14,8 @@ from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord
 from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
-                                             handle_random_transform_args)
+                                             handle_random_transform_args,
+                                             get_range)
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz
 
 
@@ -55,7 +56,7 @@ def get_drop_args(dataset_dir: str):
                         help="scale of target objects")
     parser.add_argument("--drot",
                         type=str,
-                        default=None,
+                        default="{'x':[0,360],'y':[0,360],'z':[0,360]}",
                         help="comma separated list of initial drop rotation values")
     parser.add_argument("--zscale",
                         type=str,
@@ -81,14 +82,18 @@ def get_drop_args(dataset_dir: str):
     #                     type=float,
     #                     default=0,
     #                     help="maximum angle of camera rotation around centerpoint")
-    # parser.add_argument("--camera_min_height",
-    #                     type=float,
-    #                     default=1./3,
-    #                      help="min height of camera as a fraction of drop height")
-    # parser.add_argument("--camera_max_height",
-    #                     type=float,
-    #                     default=2./3,
-    #                     help="max height of camera as a fraction of drop height")
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=1./6,
+                         help="min height of camera as a fraction of drop height")
+    parser.add_argument("--camera_max_height",
+                        type=float,
+                        default=1.,
+                        help="max height of camera as a fraction of drop height")
+    parser.add_argument("--mmass",
+                    type=str,
+                    default="10.0",
+                    help="Scale or scale range for mass of  middle object")
 
     def postprocess(args):
          # whether to set all objects same color
@@ -132,44 +137,8 @@ def get_drop_args(dataset_dir: str):
 
     return args
 
-    ### POSTPROCESSING HAPPENS HERE###
-    # whether to set all objects same color
-    args.monochrome = bool(args.monochrome)
 
-    args.dscale = handle_random_transform_args(args.dscale)
-    args.tscale = handle_random_transform_args(args.tscale)
-
-    args.drot = handle_random_transform_args(args.drot)
-    args.trot = handle_random_transform_args(args.trot)
-
-    # choose a valid room
-    assert args.room in ['box', 'tdw', 'house'], args.room
-
-    if args.drop is not None:
-        drop_list = args.drop.split(',')
-        assert all([d in MODEL_NAMES for d in drop_list]), \
-            "All drop object names must be elements of %s" % MODEL_NAMES
-        args.drop = drop_list
-    else:
-        args.drop = MODEL_NAMES
-
-    if args.target is not None:
-        targ_list = args.target.split(',')
-        assert all([t in MODEL_NAMES for t in targ_list]), \
-            "All target object names must be elements of %s" % MODEL_NAMES
-        args.target = targ_list
-    else:
-        args.target = MODEL_NAMES
-
-    if args.color is not None:
-        rgb = [float(c) for c in args.color.split(',')]
-        assert len(rgb) == 3, rgb
-        args.color = rgb
-
-    return args
-
-
-class Drop(Dominoes):
+class Drop(MultiDominoes):
     """
     Drop a random Flex primitive object on another random Flex primitive object
     """
@@ -185,6 +154,7 @@ class Drop(Dominoes):
                  drop_jitter=0.02,
                  drop_rotation_range=None,
                  target_rotation_range=None,
+                 middle_mass_range=[10.,11.],
                  target_color=None,
                  camera_radius=1.0,
                  camera_min_angle=0,
@@ -255,24 +225,6 @@ class Drop(Dominoes):
     def get_field_of_view(self) -> float:
         return 55
 
-    def get_scene_initialization_commands(self) -> List[dict]:
-        #copied from Dominoes
-        if self.room == 'box':
-            add_scene = self.get_add_scene(scene_name="box_room_2018")
-        elif self.room == 'tdw':
-            add_scene = self.get_add_scene(scene_name="tdw_room")
-        elif self.room == 'house':
-            add_scene = self.get_add_scene(scene_name='archviz_house')
-        return [add_scene,
-                {"$type": "set_aperture",
-                 "aperture": 8.0},
-                {"$type": "set_post_exposure",
-                 "post_exposure": 0.4},
-                {"$type": "set_ambient_occlusion_intensity",
-                 "intensity": 0.175},
-                {"$type": "set_ambient_occlusion_thickness_modifier",
-                 "thickness": 3.5}]
-
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
@@ -289,10 +241,8 @@ class Drop(Dominoes):
         # Choose and drop an object.
         commands.extend(self._place_drop_object())
         
-        # Choose and place a target object.
+        # Choose and place a middle object.
         commands.extend(self._place_intermediate_object())
-
-
 
         # Teleport the avatar to a reasonable position based on the drop height.
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
@@ -378,10 +328,10 @@ class Drop(Dominoes):
                 record=record,
                 position=self.target_position,
                 rotation=self.target_rotation,
-                mass=random.uniform(2,7),
-                dynamic_friction=random.uniform(0, 0.9),
-                static_friction=random.uniform(0, 0.9),
-                bounciness=random.uniform(0, 1),
+                mass= random.uniform(*get_range(self.middle_mass_range)),
+                dynamic_friction=0.01, #values taken from dominoes
+                static_friction=0.01,
+                bounciness=0,       
                 o_id=o_id))
         
         # Set the object material
@@ -436,15 +386,16 @@ class Drop(Dominoes):
 
         # Add the object with random physics values.
         commands = []
+        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         commands.extend(
             self.add_physics_object(
                 record=record,
                 position=self.drop_position,
                 rotation=self.drop_rotation,
-                mass=random.uniform(2,7),
-                dynamic_friction=random.uniform(0, 0.9),
-                static_friction=random.uniform(0, 0.9),
-                bounciness=random.uniform(0, 1),
+                mass=self.probe_mass,
+                dynamic_friction=0.01, #values taken from dominoes
+                static_friction=0.01,
+                bounciness=0,       
                 o_id=o_id))
                 
         # Set the object material

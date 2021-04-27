@@ -1507,8 +1507,8 @@ class MultiDominoes(Dominoes):
         super()._write_static_data(static_group)
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
-        static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])        
         if self.middle_type is not None:
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])        
             static_group.create_dataset("middle_type", data=self.middle_type)
 
     @staticmethod
