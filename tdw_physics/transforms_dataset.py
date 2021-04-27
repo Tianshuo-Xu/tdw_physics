@@ -126,8 +126,8 @@ class TransformsDataset(Dataset, ABC):
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
 
-        r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-        print(frame_num, r_types)
+        # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        # print(frame_num, r_types)
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)

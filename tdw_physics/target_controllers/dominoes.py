@@ -1624,19 +1624,19 @@ if __name__ == "__main__":
 
     args = get_args("dominoes")
 
-    if platform.system() == 'Linux':
-        if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
-        else:
-            os.environ["DISPLAY"] = ":0"
+    # if platform.system() == 'Linux':
+    #     if args.gpu is not None:
+    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
+    #     else:
+    #         os.environ["DISPLAY"] = ":0"
 
-        launch_build = False
-    else:
-        launch_build = True
+    #     launch_build = False
+    # else:
+    #     launch_build = True
 
     DomC = MultiDominoes(
         port=args.port,
-        launch_build=launch_build,
+        # launch_build=launch_build,
         room=args.room,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
