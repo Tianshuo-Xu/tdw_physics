@@ -398,7 +398,7 @@ class Dominoes(RigidbodiesDataset):
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
-                 zone_scale_range=[0.5,0.001,0.5],
+                 zone_scale_range=[0.5,0.01,0.5],
                  zone_friction=0.1,
                  probe_objects=MODEL_NAMES,
                  target_objects=MODEL_NAMES,
