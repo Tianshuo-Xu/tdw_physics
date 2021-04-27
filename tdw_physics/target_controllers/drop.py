@@ -276,7 +276,7 @@ class Drop(Dominoes):
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
-# randomization across trials
+        # randomization across trials
         if not(self.randomize):
             self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
             random.seed(self.trial_seed)
@@ -285,12 +285,13 @@ class Drop(Dominoes):
 
         # Place target zone
         commands.extend(self._place_target_zone())
+
+        # Choose and drop an object.
+        commands.extend(self._place_drop_object())
         
         # Choose and place a target object.
         commands.extend(self._place_intermediate_object())
 
-        # Choose and drop an object.
-        commands.extend(self._place_drop_object())
 
 
         # Teleport the avatar to a reasonable position based on the drop height.
