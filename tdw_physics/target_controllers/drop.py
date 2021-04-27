@@ -150,7 +150,7 @@ class Drop(MultiDominoes):
                  height_range=[0.5, 1.5],
                  drop_scale_range=[0.2, 0.3],
                  target_scale_range=[0.2, 0.3],
-                 zone_scale_range={'x':2.,'y':0.001,'z':2.},
+                 zone_scale_range={'x':2.,'y':0.01,'z':2.},
                  drop_jitter=0.02,
                  drop_rotation_range=None,
                  target_rotation_range=None,
