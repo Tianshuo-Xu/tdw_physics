@@ -256,6 +256,10 @@ def get_args(dataset_dir: str, parse=True):
                         help="Remove one of the middle dominoes scene.")
 
     # which models are allowed
+    parser.add_argument("--model_libraries",
+                        type=none_or_str,
+                        default=MODEL_LIBRARIES.keys(),
+                        help="Which model libraries can be drawn from")    
     parser.add_argument("--only_use_flex_objects",
                         action="store_true",
                         help="Only use models that are FLEX models (and have readable meshes)")    
@@ -268,6 +272,17 @@ def get_args(dataset_dir: str, parse=True):
     def postprocess(args):
         # choose a valid room
         assert args.room in ['box', 'tdw', 'house'], args.room
+
+        # parse the model libraries
+        if args.model_libraries is not None:
+            args.model_libraries = args.model_libraries.split(',')
+            libs = []
+            for lib in args.model_libraries:
+                if 'models_' not in lib:
+                    libs.append('models_' + lib)
+                else:
+                    libs.append(lib)
+            args.model_libraries = libs
 
         # whether to set all objects same color
         args.monochrome = bool(args.monochrome)
@@ -444,6 +459,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_has_friction=False,
                  ramp_material=None,
                  zone_material=None,
+                 model_libraries=MODEL_LIBRARIES.keys(),
                  distractor_types=PRIMITIVE_NAMES,
                  distractor_categories=None,
                  num_distractors=0,
@@ -470,6 +486,9 @@ class Dominoes(RigidbodiesDataset):
         ## which room to use
         self.room = room
 
+        ## which model libraries can be sampled from
+        self.model_libraries = model_libraries
+        
         ## whether only flex objects are allowed
         self.flex_only = flex_only
 
@@ -547,7 +566,7 @@ class Dominoes(RigidbodiesDataset):
         self.num_distractors = num_distractors
         self.distractor_types = self.get_types(
             distractor_types,
-            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            libraries=self.model_libraries,
             categories=distractor_categories,
             flex_only=self.flex_only
         )
@@ -556,7 +575,7 @@ class Dominoes(RigidbodiesDataset):
         self.occlusion_scale = occlusion_scale
         self.occluder_types = self.get_types(
             occluder_types,
-            libraries=["models_flex.json", "models_full.json", "models_special.json"],
+            libraries=self.model_libraries,
             categories=occluder_categories,
             flex_only=self.flex_only
         )
@@ -1638,6 +1657,7 @@ if __name__ == "__main__":
     DomC = MultiDominoes(
         port=args.port,
         room=args.room,
+        model_libraries=args.model_libraries,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
         seed=args.seed,
