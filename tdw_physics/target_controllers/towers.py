@@ -71,11 +71,11 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="How far to put the probe and target")
     parser.add_argument("--num_blocks",
                         type=int,
-                        default=3,
+                        default=2,
                         help="Number of rectangular blocks to build the tower base with")
     parser.add_argument("--mscale",
                         type=str,
-                        default="[0.5,0.5]",
+                        default="[0.4,0.5]",
                         help="Scale or scale range for rectangular blocks to sample from")
     parser.add_argument("--mgrad",
                         type=float,
@@ -83,7 +83,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="Size of block scale gradient going from top to bottom of tower")
     parser.add_argument("--tower_cap",
                         type=none_or_str,
-                        default="cube",
+                        default="sphere",
                         help="Object types to use as a capper on the tower")
     parser.add_argument("--spacing_jitter",
                         type=float,
@@ -115,7 +115,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="scale of probe objects")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[0.5,0.5]",
+                        default="[0.4,0.4]",
                         help="scale of target objects")
     parser.add_argument("--zone",
                         type=none_or_str,
@@ -127,7 +127,7 @@ def get_tower_args(dataset_dir: str, parse=True):
                         help="scale of target zone")    
     parser.add_argument("--fscale",
                         type=str,
-                        default="7.0",
+                        default="4.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,

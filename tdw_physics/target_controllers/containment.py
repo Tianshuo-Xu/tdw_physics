@@ -75,7 +75,7 @@ def get_containment_args(dataset_dir: str, parse=True):
                         help="Which type of object to use as the contained objects")
     parser.add_argument("--mscale",
                         type=none_or_str,
-                        default="0.3,0.3,0.3",
+                        default="0.4,0.4,0.4",
                         help="The xyz scale ranges for each contained object")
     parser.add_argument("--mmass",
                         type=none_or_str,
@@ -83,11 +83,11 @@ def get_containment_args(dataset_dir: str, parse=True):
                         help="The mass range of each contained object")    
     parser.add_argument("--num_middle_range",
                         type=str,
-                        default="[1,5]",
+                        default="[1,4]",
                         help="How many contained objects to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=1,
+                        default=0,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
     parser.add_argument("--target_contained_range",
@@ -98,11 +98,11 @@ def get_containment_args(dataset_dir: str, parse=True):
 #For "attachment" or dual containment
     parser.add_argument("--attachment",
                         type=none_or_str,
-                        default=None,
+                        default='bowl',
                         help="Which type of object to use as the attachment")
     parser.add_argument("--ascale",
                         type=none_or_str,
-                        default="0.7,0.7,0.7",
+                        default="0.6,0.6,0.6",
                         help="Scale range (xyz) for attachment object")
     parser.add_argument("--amass",
                         type=none_or_str,
@@ -130,11 +130,11 @@ def get_containment_args(dataset_dir: str, parse=True):
                         help="Which type of object to use as the base")
     parser.add_argument("--bscale",
                         type=none_or_str,
-                        default="0.6",
+                        default="[0.5,1]",
                         help="Scale range (xyz) for base object")
     parser.add_argument("--bmass",
                         type=none_or_str,
-                        default="[3.0,3.0]",
+                        default="[2.0,3.0]",
                         help="Mass range for base object")
     parser.add_argument("--bcolor",
                         type=none_or_str,
@@ -152,7 +152,7 @@ def get_containment_args(dataset_dir: str, parse=True):
                         help="Whether to place the probe object on the top of a ramp")
     parser.add_argument("--fscale",
                         type=str,
-                        default="5.0",
+                        default="[5.0,10.0]",
                         help="range of scales to apply to push force")
 
     # dominoes
