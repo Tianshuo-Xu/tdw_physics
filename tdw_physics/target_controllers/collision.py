@@ -102,9 +102,22 @@ def get_collision_args(dataset_dir: str, parse=True):
     ## collision specific arguments
     parser.add_argument("--fupforce",
                         type=str,
-                        default='[0,0.3]',
+                        default='[0,0]',
                         help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
 
+    ## camera
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=360,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_distance",
+                        type=float,
+                        default=2.3,
+                        help="radial distance from camera to centerpoint")
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
