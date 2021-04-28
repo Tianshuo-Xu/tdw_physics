@@ -255,6 +255,11 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
 
+    # which models are allowed
+    parser.add_argument("--only_use_flex_objects",
+                        action="store_true",
+                        help="Only use models that are FLEX models (and have readable meshes)")    
+    
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
                         action="store_true",
@@ -451,6 +456,7 @@ class Dominoes(RigidbodiesDataset):
                  ramp_scale=None,
                  ramp_color=[0.75,0.75,1.0],
                  ramp_base_height_range=0,
+                 flex_only=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -463,6 +469,9 @@ class Dominoes(RigidbodiesDataset):
 
         ## which room to use
         self.room = room
+
+        ## whether only flex objects are allowed
+        self.flex_only = flex_only
 
         ## color randomization
         self._random_target_color = (target_color is None)
@@ -539,17 +548,21 @@ class Dominoes(RigidbodiesDataset):
         self.distractor_types = self.get_types(
             distractor_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
-            categories=distractor_categories)
+            categories=distractor_categories,
+            flex_only=self.flex_only
+        )
 
         self.num_occluders = num_occluders
         self.occlusion_scale = occlusion_scale
         self.occluder_types = self.get_types(
             occluder_types,
             libraries=["models_flex.json", "models_full.json", "models_special.json"],
-            categories=occluder_categories)
+            categories=occluder_categories,
+            flex_only=self.flex_only
+        )
 
 
-    def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
+    def get_types(self, objlist, libraries=["models_flex.json"], categories=None, flex_only=True):
         if isinstance(objlist, str):
             objlist = [objlist]
         recs = []
@@ -560,18 +573,23 @@ class Dominoes(RigidbodiesDataset):
             if not isinstance(categories, list):
                 categories = categories.split(',')
             tlist = [r for r in tlist if r.wcategory in categories]
+
+        if flex_only:
+            tlist = [r for r in tlist if r.flex == True]
+
+        assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
 
     def set_probe_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._probe_types = tlist
 
     def set_target_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._target_types = tlist
 
     def set_zone_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._zone_types = tlist
 
 
@@ -1501,7 +1519,7 @@ class MultiDominoes(Dominoes):
         if olist is None:
             self._middle_types = self._target_types
         else:
-            tlist = self.get_types(olist)
+            tlist = self.get_types(olist, flex_only=self.flex_only)
             self._middle_types = tlist
 
     def clear_static_data(self) -> None:
@@ -1677,7 +1695,8 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        flex_only=args.only_use_flex_objects
     )
 
     if bool(args.run):
