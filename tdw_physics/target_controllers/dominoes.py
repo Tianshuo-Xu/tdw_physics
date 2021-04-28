@@ -160,7 +160,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma-separated R,G,B values for the probe object color. None is random.")
     parser.add_argument("--mcolor",
                         type=none_or_str,
-Ë                        default=None,
+                        default=None,
                         help="comma-separated R,G,B values for the middle object color. None is random.")
     parser.add_argument("--collision_axis_length",
                         type=float,
