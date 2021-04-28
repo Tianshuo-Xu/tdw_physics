@@ -442,8 +442,8 @@ if __name__ == '__main__':
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
-        ramp_material=args.rmaterial
-
+        ramp_material=args.rmaterial,
+        flex_only=args.only_use_flex_objects
     )
 
 

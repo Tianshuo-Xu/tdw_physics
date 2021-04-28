@@ -690,7 +690,8 @@ if __name__ == "__main__":
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
-        ramp_base_height_range=args.rheight                
+        ramp_base_height_range=args.rheight,
+        flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):

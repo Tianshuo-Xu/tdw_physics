@@ -405,6 +405,7 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
+        flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):
