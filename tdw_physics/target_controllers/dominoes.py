@@ -1348,26 +1348,24 @@ class Dominoes(RigidbodiesDataset):
                     o_id=o_id,
                     add_data=True))
 
-            # give it a texture if it's a primitive
+            # give it a color and texture if it's a primitive
+            # make sure it doesn't have the same color as the target object            
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
+                commands.append(
+                    {"$type": "set_color",
+                     "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                     "id": o_id})
 
-
-            # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
             scale = arr_to_xyz([1.,1.,1.])
             commands.extend([
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": o_id},
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}
             ])
-
-            # todo: give it a random texture if it's a primitive
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
@@ -1440,28 +1438,26 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
+            # make sure it doesn't have the same color as the target object            
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
-
-
-            # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+                commands.append(
+                    {"$type": "set_color",
+                     "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                     "id": o_id})
 
             # do some trigonometry to figure out the scale of the occluder
             occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
             occ_dist *= np.cos(np.radians(theta))
             occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
             occ_target_height *= self.occlusion_scale
-
             scale_y = self.scale_to(o_height, occ_target_height)
             print("scale_y", scale_y)
             scale = arr_to_xyz([scale, scale_y, scale])
             commands.extend([
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": o_id},
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}
