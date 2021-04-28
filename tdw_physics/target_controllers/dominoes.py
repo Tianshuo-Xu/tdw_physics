@@ -16,20 +16,16 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import (MODEL_LIBRARIES,
+from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
+                              MATERIAL_TYPES, MATERIAL_NAMES,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
-
-MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
-M = MaterialLibrarian()
-MATERIAL_TYPES = M.get_material_types()
-MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
-                  for mtype in MATERIAL_TYPES}
-ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -183,8 +179,8 @@ def get_args(dataset_dir: str, parse=True):
                         default=0,
                         help="Don't actually put the target zone in the scene.")
     parser.add_argument("--camera_distance",
-                        type=float,
-                        default=1.75,
+                        type=none_or_str,
+                        default="1.75",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -259,6 +255,15 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
 
+    # which models are allowed
+    parser.add_argument("--model_libraries",
+                        type=none_or_str,
+                        default=','.join(list(MODEL_LIBRARIES.keys())),
+                        help="Which model libraries can be drawn from")    
+    parser.add_argument("--only_use_flex_objects",
+                        action="store_true",
+                        help="Only use models that are FLEX models (and have readable meshes)")    
+    
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
                         action="store_true",
@@ -268,8 +273,23 @@ def get_args(dataset_dir: str, parse=True):
         # choose a valid room
         assert args.room in ['box', 'tdw', 'house'], args.room
 
+        # parse the model libraries
+        if args.model_libraries is not None:
+            if not isinstance(args.model_libraries, list):
+                args.model_libraries = args.model_libraries.split(',')
+            libs = []
+            for lib in args.model_libraries:
+                if 'models_' not in lib:
+                    libs.append('models_' + lib)
+                else:
+                    libs.append(lib)
+            args.model_libraries = libs
+
         # whether to set all objects same color
         args.monochrome = bool(args.monochrome)
+
+        # camera distance
+        args.camera_distance = handle_random_transform_args(args.camera_distance)
 
         # scaling and rotating of objects
         args.rscale = handle_random_transform_args(args.rscale)
@@ -294,27 +314,27 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
-            assert all([t in MODEL_NAMES for t in zone_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.zone = zone_list
         else:
-            args.zone = MODEL_NAMES
+            args.zone = PRIMITIVE_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')
-            assert all([t in MODEL_NAMES for t in targ_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.target = targ_list
         else:
-            args.target = MODEL_NAMES
+            args.target = PRIMITIVE_NAMES
 
         if args.probe is not None:
             probe_list = args.probe.split(',')
-            assert all([t in MODEL_NAMES for t in probe_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.probe = probe_list
         else:
-            args.probe = MODEL_NAMES
+            args.probe = PRIMITIVE_NAMES
 
         if args.middle is not None:
             middle_list = args.middle.split(',')
@@ -357,24 +377,24 @@ def get_args(dataset_dir: str, parse=True):
             args.material_types = matlist
 
         if args.distractor is None or args.distractor == 'full':
-            args.distractor = ALL_NAMES
+            args.distractor = FULL_NAMES
         elif args.distractor == 'core':
             args.distractor = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
         elif args.distractor in ['flex', 'primitives']:
-            args.distractor = MODEL_NAMES
+            args.distractor = PRIMITIVE_NAMES
         else:
             d_names = args.distractor.split(',')
-            args.distractor = [r for r in ALL_NAMES if any((nm in r for nm in d_names))]
+            args.distractor = [r for r in FULL_NAMES if any((nm in r for nm in d_names))]
 
         if args.occluder is None or args.occluder == 'full':
-            args.occluder = ALL_NAMES
+            args.occluder = FULL_NAMES
         elif args.occluder == 'core':
             args.occluder = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
         elif args.occluder in ['flex', 'primitives']:
-            args.occluder = MODEL_NAMES
+            args.occluder = PRIMITIVE_NAMES
         else:
             o_names = args.occluder.split(',')
-            args.occluder = [r for r in ALL_NAMES if any((nm in r for nm in o_names))]
+            args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
 
         return args
 
@@ -414,8 +434,8 @@ class Dominoes(RigidbodiesDataset):
                  zone_location=None,
                  zone_scale_range=[0.5,0.01,0.5],
                  zone_friction=0.1,
-                 probe_objects=MODEL_NAMES,
-                 target_objects=MODEL_NAMES,
+                 probe_objects=PRIMITIVE_NAMES,
+                 target_objects=PRIMITIVE_NAMES,
                  probe_scale_range=[0.2, 0.3],
                  probe_mass_range=[2.,7.],
                  probe_color=None,
@@ -432,7 +452,7 @@ class Dominoes(RigidbodiesDataset):
                  force_wait=None,
                  remove_target=False,
                  remove_zone=False,
-                 camera_radius=1.0,
+                 camera_radius=2.0,
                  camera_min_angle=0,
                  camera_max_angle=360,
                  camera_min_height=1./3,
@@ -443,18 +463,21 @@ class Dominoes(RigidbodiesDataset):
                  probe_has_friction=False,
                  ramp_material=None,
                  zone_material=None,
-                 distractor_types=MODEL_NAMES,
+                 model_libraries=MODEL_LIBRARIES.keys(),
+                 distractor_types=PRIMITIVE_NAMES,
                  distractor_categories=None,
                  num_distractors=0,
-                 occluder_types=MODEL_NAMES,
+                 occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
+                 occluder_angular_spacing=20.,
                  occlusion_scale=0.6,
                  use_ramp=False,
                  ramp_has_friction=False,
                  ramp_scale=None,
                  ramp_color=[0.75,0.75,1.0],
                  ramp_base_height_range=0,
+                 flex_only=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -467,6 +490,12 @@ class Dominoes(RigidbodiesDataset):
 
         ## which room to use
         self.room = room
+
+        ## which model libraries can be sampled from
+        self.model_libraries = model_libraries
+        
+        ## whether only flex objects are allowed
+        self.flex_only = flex_only
 
         ## color randomization
         self._random_target_color = (target_color is None)
@@ -531,7 +560,7 @@ class Dominoes(RigidbodiesDataset):
         self.force_wait_range = force_wait or [0,0]
 
         ## camera properties
-        self.camera_radius = camera_radius
+        self.camera_radius_range = get_range(camera_radius)
         self.camera_min_angle = camera_min_angle
         self.camera_max_angle = camera_max_angle
         self.camera_min_height = camera_min_height
@@ -542,18 +571,24 @@ class Dominoes(RigidbodiesDataset):
         self.num_distractors = num_distractors
         self.distractor_types = self.get_types(
             distractor_types,
-            libraries=["models_flex.json", "models_full.json", "models_special.json"],
-            categories=distractor_categories)
+            libraries=self.model_libraries,
+            categories=distractor_categories,
+            flex_only=self.flex_only
+        )
 
         self.num_occluders = num_occluders
+        self.occluder_angular_spacing = occluder_angular_spacing
         self.occlusion_scale = occlusion_scale
         self.occluder_types = self.get_types(
             occluder_types,
-            libraries=["models_flex.json", "models_full.json", "models_special.json"],
-            categories=occluder_categories)
+            libraries=self.model_libraries,
+            categories=occluder_categories,
+            flex_only=self.flex_only
+        )
 
 
-    def get_types(self, objlist, libraries=["models_flex.json"], categories=None):
+    def get_types(self, objlist, libraries=["models_flex.json"], categories=None, flex_only=True):
+
         if isinstance(objlist, str):
             objlist = [objlist]
         recs = []
@@ -564,18 +599,23 @@ class Dominoes(RigidbodiesDataset):
             if not isinstance(categories, list):
                 categories = categories.split(',')
             tlist = [r for r in tlist if r.wcategory in categories]
+
+        if flex_only:
+            tlist = [r for r in tlist if r.flex == True]
+
+        assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
 
     def set_probe_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._probe_types = tlist
 
     def set_target_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._target_types = tlist
 
     def set_zone_types(self, olist):
-        tlist = self.get_types(olist)
+        tlist = self.get_types(olist, flex_only=self.flex_only)
         self._zone_types = tlist
 
 
@@ -679,8 +719,8 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
-                                                radius_max=self.camera_radius,
+        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+                                                radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
@@ -700,6 +740,15 @@ class Dominoes(RigidbodiesDataset):
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
         self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        self.camera_radius = np.linalg.norm(camera_ray)
+        camera_ray /= np.linalg.norm(camera_ray)
+        self.camera_ray = arr_to_xyz(camera_ray)
+
+        print("camera distance", self.camera_radius)
+        print("camera ray", self.camera_ray)
+        print("camera angle", self.camera_rotation)
+        print("camera altitude", self.camera_altitude)
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -1282,6 +1331,14 @@ class Dominoes(RigidbodiesDataset):
 
         return target_scale / current_scale
 
+    def _get_occluder_position_and_scale(self, record, unit_position_vector):
+        """
+        Given a unit vector direction in world coordinates, adjust in a Controller-specific
+        manner to avoid interactions with the physically relevant objects.
+        """
+        o_len, o_height, o_dep = self.get_record_dimensions(record)
+        
+
     def _place_background_distractors(self) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
@@ -1334,26 +1391,24 @@ class Dominoes(RigidbodiesDataset):
                     o_id=o_id,
                     add_data=True))
 
-            # give it a texture if it's a primitive
-            if record.name in MODEL_NAMES:
+            # give it a color and texture if it's a primitive
+            # make sure it doesn't have the same color as the target object            
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
+                commands.append(
+                    {"$type": "set_color",
+                     "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                     "id": o_id})
 
-
-            # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
             scale = arr_to_xyz([1.,1.,1.])
             commands.extend([
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": o_id},
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}
             ])
-
-            # todo: give it a random texture if it's a primitive
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
@@ -1378,7 +1433,7 @@ class Dominoes(RigidbodiesDataset):
 
         camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
 
-        max_theta = 20. * (self.num_occluders - 1)
+        max_theta = self.occluder_angular_spacing * (self.num_occluders - 1)
         thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
         for i, o_id in enumerate(self.occluders.keys()):
             record = self.occluders[o_id]
@@ -1426,28 +1481,26 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
-            if record.name in MODEL_NAMES:
+            # make sure it doesn't have the same color as the target object            
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
-
-
-            # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
+                commands.append(
+                    {"$type": "set_color",
+                     "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                     "id": o_id})
 
             # do some trigonometry to figure out the scale of the occluder
             occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
             occ_dist *= np.cos(np.radians(theta))
             occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
             occ_target_height *= self.occlusion_scale
-
             scale_y = self.scale_to(o_height, occ_target_height)
             print("scale_y", scale_y)
             scale = arr_to_xyz([scale, scale_y, scale])
             commands.extend([
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": o_id},
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}
@@ -1505,7 +1558,7 @@ class MultiDominoes(Dominoes):
         if olist is None:
             self._middle_types = self._target_types
         else:
-            tlist = self.get_types(olist)
+            tlist = self.get_types(olist, flex_only=self.flex_only)
             self._middle_types = tlist
 
     def clear_static_data(self) -> None:
@@ -1627,6 +1680,7 @@ if __name__ == "__main__":
     DomC = MultiDominoes(
         port=args.port,
         room=args.room,
+        model_libraries=args.model_libraries,
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
         seed=args.seed,
@@ -1681,7 +1735,8 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        flex_only=args.only_use_flex_objects
     )
 
     if bool(args.run):

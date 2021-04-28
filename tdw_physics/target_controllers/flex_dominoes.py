@@ -443,7 +443,8 @@ if __name__ == '__main__':
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):
