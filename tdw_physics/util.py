@@ -1,13 +1,33 @@
 from typing import Dict, List
 import random
 import numpy as np
-from tdw.librarian import ModelLibrarian
+from tdw.librarian import ModelLibrarian, MaterialLibrarian
 from tdw.tdw_utils import TDWUtils
+import argparse
 
 # Every model library, sorted by name.
 MODEL_LIBRARIES: Dict[str, ModelLibrarian] = {}
 for filename in ModelLibrarian.get_library_filenames():
     MODEL_LIBRARIES.update({filename: ModelLibrarian(filename)})
+
+# All the models with flex enabled
+FLEX_MODELS: Dict[str, ModelLibrarian] = {}
+for filename in MODEL_LIBRARIES.keys():
+    FLEX_MODELS[filename] = {
+        record for record in MODEL_LIBRARIES[filename].records if record.flex == True}
+
+# All the model categories
+MODEL_CATEGORIES = []
+for record in MODEL_LIBRARIES["models_full.json"].records:
+    MODEL_CATEGORIES.append(record.wcategory)
+MODEL_CATEGORIES = list(set(MODEL_CATEGORIES))
+
+# All the material types and materials
+M = MaterialLibrarian()
+MATERIAL_TYPES = M.get_material_types()
+MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
+                  for mtype in MATERIAL_TYPES}        
+    
 
 # The names of the image passes
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]    
@@ -104,8 +124,6 @@ def get_parser(dataset_dir: str, get_help: bool=False):
 
     :return: Parsed command-line arguments common to all controllers.
     """
-
-    import argparse
     parser = argparse.ArgumentParser(add_help=get_help)
     parser.add_argument("--port", type=int, default=None, help="Which port to communicate with build")
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
@@ -132,3 +150,75 @@ def get_args(dataset_dir: str):
 
     parser = get_parser(dataset_dir, get_help=True)
     return parser.parse_args()
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument("--flex", action="store_true",
+                        help="Print all the FLEX-enabled models")
+    parser.add_argument("--material_type",
+                        type=none_or_str,
+                        default=None,
+                        help="Print all the materials with this material_type")
+    parser.add_argument("--model_category",
+                        type=none_or_str,
+                        default=None,
+                        help="Print all the models with this category id")
+    parser.add_argument("--model_name",
+                        type=none_or_str,
+                        default=None,
+                        help="Print all the models with this substring in their name")
+
+    args = parser.parse_args()
+
+    print("=====TDW LIBRARIES====")
+
+    if args.flex and not (args.model_category or args.model_name):
+        print("=====FLEX-ENABLED MODELS=====")
+        for lib, models in FLEX_MODELS.items():
+            print("Library: %s" % lib)
+            print("%d out of %d models are FLEX-enabled" % \
+                  (len(models), len(MODEL_LIBRARIES[lib].records)))
+            print([r.name for r in FLEX_MODELS[lib]])
+
+    if args.material_type is not None:
+        print("=====MATERIAL TYPES=====")
+        print(MATERIAL_TYPES)
+        assert args.material_type in MATERIAL_TYPES, "Must pass a valid material type"
+        
+        print("=====MATERIAL NAMES OF TYPE %s======" % args.material_type)
+        print(MATERIAL_NAMES[args.material_type])
+
+    if args.model_category is not None:
+        print("=====MODEL CATEGORIES=====")
+        print(MODEL_CATEGORIES)
+        assert args.model_category in MODEL_CATEGORIES, "Must pass a valid model category"
+        
+        print("=====%s MODELS OF CATEGORY %s=====" % \
+              ("FLEX" if args.flex else "ALL", args.model_category))
+        if args.flex:
+            for lib, models in FLEX_MODELS.items():
+                print("Library: %s" % lib)
+                print([r.name for r in models \
+                       if r.wcategory == args.model_category])
+        else:
+            for lib, _models in MODEL_LIBRARIES.items():
+                print("Library: %s" % lib)
+                models = _models.records
+                print([r.name for r in models \
+                       if r.wcategory == args.model_category])
+
+    if args.model_name is not None:
+        print("=====%s MODEL NAMES CONTAINING %s=====" %
+              ("FLEX" if args.flex else "ALL", args.model_name))
+        if args.flex:
+            for lib, models in FLEX_MODELS.items():
+                print("Library: %s" % lib)
+                print([r.name for r in models \
+                       if args.model_name in r.name])
+        else:
+            for lib, _models in MODEL_LIBRARIES.items():
+                print("Library: %s" % lib)
+                models = _models.records
+                print([r.name for r in models \
+                       if args.model_name in r.name])
