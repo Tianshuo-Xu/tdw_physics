@@ -179,8 +179,8 @@ def get_args(dataset_dir: str, parse=True):
                         default=0,
                         help="Don't actually put the target zone in the scene.")
     parser.add_argument("--camera_distance",
-                        type=float,
-                        default=1.75,
+                        type=none_or_str,
+                        default="1.75",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -258,7 +258,7 @@ def get_args(dataset_dir: str, parse=True):
     # which models are allowed
     parser.add_argument("--model_libraries",
                         type=none_or_str,
-                        default=MODEL_LIBRARIES.keys(),
+                        default=','.join(list(MODEL_LIBRARIES.keys())),
                         help="Which model libraries can be drawn from")    
     parser.add_argument("--only_use_flex_objects",
                         action="store_true",
@@ -275,7 +275,8 @@ def get_args(dataset_dir: str, parse=True):
 
         # parse the model libraries
         if args.model_libraries is not None:
-            args.model_libraries = args.model_libraries.split(',')
+            if not isinstance(args.model_libraries, list):
+                args.model_libraries = args.model_libraries.split(',')
             libs = []
             for lib in args.model_libraries:
                 if 'models_' not in lib:
@@ -286,6 +287,9 @@ def get_args(dataset_dir: str, parse=True):
 
         # whether to set all objects same color
         args.monochrome = bool(args.monochrome)
+
+        # camera distance
+        args.camera_distance = handle_random_transform_args(args.camera_distance)
 
         # scaling and rotating of objects
         args.rscale = handle_random_transform_args(args.rscale)
@@ -448,7 +452,7 @@ class Dominoes(RigidbodiesDataset):
                  force_wait=None,
                  remove_target=False,
                  remove_zone=False,
-                 camera_radius=1.0,
+                 camera_radius=2.0,
                  camera_min_angle=0,
                  camera_max_angle=360,
                  camera_min_height=1./3,
@@ -466,6 +470,7 @@ class Dominoes(RigidbodiesDataset):
                  occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
+                 occluder_angular_spacing=20.,
                  occlusion_scale=0.6,
                  use_ramp=False,
                  ramp_has_friction=False,
@@ -555,7 +560,7 @@ class Dominoes(RigidbodiesDataset):
         self.force_wait_range = force_wait or [0,0]
 
         ## camera properties
-        self.camera_radius = camera_radius
+        self.camera_radius_range = get_range(camera_radius)
         self.camera_min_angle = camera_min_angle
         self.camera_max_angle = camera_max_angle
         self.camera_min_height = camera_min_height
@@ -572,6 +577,7 @@ class Dominoes(RigidbodiesDataset):
         )
 
         self.num_occluders = num_occluders
+        self.occluder_angular_spacing = occluder_angular_spacing
         self.occlusion_scale = occlusion_scale
         self.occluder_types = self.get_types(
             occluder_types,
@@ -713,8 +719,8 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
-                                                radius_max=self.camera_radius,
+        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+                                                radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
@@ -734,6 +740,15 @@ class Dominoes(RigidbodiesDataset):
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
         self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        self.camera_radius = np.linalg.norm(camera_ray)
+        camera_ray /= np.linalg.norm(camera_ray)
+        self.camera_ray = arr_to_xyz(camera_ray)
+
+        print("camera distance", self.camera_radius)
+        print("camera ray", self.camera_ray)
+        print("camera angle", self.camera_rotation)
+        print("camera altitude", self.camera_altitude)
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -1316,6 +1331,14 @@ class Dominoes(RigidbodiesDataset):
 
         return target_scale / current_scale
 
+    def _get_occluder_position_and_scale(self, record, unit_position_vector):
+        """
+        Given a unit vector direction in world coordinates, adjust in a Controller-specific
+        manner to avoid interactions with the physically relevant objects.
+        """
+        o_len, o_height, o_dep = self.get_record_dimensions(record)
+        
+
     def _place_background_distractors(self) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
@@ -1410,7 +1433,7 @@ class Dominoes(RigidbodiesDataset):
 
         camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
 
-        max_theta = 20. * (self.num_occluders - 1)
+        max_theta = self.occluder_angular_spacing * (self.num_occluders - 1)
         thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
         for i, o_id in enumerate(self.occluders.keys()):
             record = self.occluders[o_id]

@@ -163,8 +163,8 @@ def get_containment_args(dataset_dir: str, parse=True):
 
     # camera
     parser.add_argument("--camera_distance",
-                        type=float,
-                        default=3.0,
+                        type=none_or_str,
+                        default="3.0",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
