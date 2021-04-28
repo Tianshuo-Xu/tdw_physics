@@ -16,20 +16,16 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import (MODEL_LIBRARIES,
+from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
+                              MATERIAL_TYPES, MATERIAL_NAMES,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
-
-MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
-M = MaterialLibrarian()
-MATERIAL_TYPES = M.get_material_types()
-MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
-                  for mtype in MATERIAL_TYPES}
-ALL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -294,27 +290,27 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
-            assert all([t in MODEL_NAMES for t in zone_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.zone = zone_list
         else:
-            args.zone = MODEL_NAMES
+            args.zone = PRIMITIVE_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')
-            assert all([t in MODEL_NAMES for t in targ_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.target = targ_list
         else:
-            args.target = MODEL_NAMES
+            args.target = PRIMITIVE_NAMES
 
         if args.probe is not None:
             probe_list = args.probe.split(',')
-            assert all([t in MODEL_NAMES for t in probe_list]), \
-                "All target object names must be elements of %s" % MODEL_NAMES
+            assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
+                "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.probe = probe_list
         else:
-            args.probe = MODEL_NAMES
+            args.probe = PRIMITIVE_NAMES
 
         if args.middle is not None:
             middle_list = args.middle.split(',')
@@ -357,24 +353,24 @@ def get_args(dataset_dir: str, parse=True):
             args.material_types = matlist
 
         if args.distractor is None or args.distractor == 'full':
-            args.distractor = ALL_NAMES
+            args.distractor = FULL_NAMES
         elif args.distractor == 'core':
             args.distractor = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
         elif args.distractor in ['flex', 'primitives']:
-            args.distractor = MODEL_NAMES
+            args.distractor = PRIMITIVE_NAMES
         else:
             d_names = args.distractor.split(',')
-            args.distractor = [r for r in ALL_NAMES if any((nm in r for nm in d_names))]
+            args.distractor = [r for r in FULL_NAMES if any((nm in r for nm in d_names))]
 
         if args.occluder is None or args.occluder == 'full':
-            args.occluder = ALL_NAMES
+            args.occluder = FULL_NAMES
         elif args.occluder == 'core':
             args.occluder = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
         elif args.occluder in ['flex', 'primitives']:
-            args.occluder = MODEL_NAMES
+            args.occluder = PRIMITIVE_NAMES
         else:
             o_names = args.occluder.split(',')
-            args.occluder = [r for r in ALL_NAMES if any((nm in r for nm in o_names))]
+            args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
 
         return args
 
@@ -414,8 +410,8 @@ class Dominoes(RigidbodiesDataset):
                  zone_location=None,
                  zone_scale_range=[0.5,0.01,0.5],
                  zone_friction=0.1,
-                 probe_objects=MODEL_NAMES,
-                 target_objects=MODEL_NAMES,
+                 probe_objects=PRIMITIVE_NAMES,
+                 target_objects=PRIMITIVE_NAMES,
                  probe_scale_range=[0.2, 0.3],
                  probe_mass_range=[2.,7.],
                  probe_color=None,
@@ -443,10 +439,10 @@ class Dominoes(RigidbodiesDataset):
                  probe_has_friction=False,
                  ramp_material=None,
                  zone_material=None,
-                 distractor_types=MODEL_NAMES,
+                 distractor_types=PRIMITIVE_NAMES,
                  distractor_categories=None,
                  num_distractors=0,
-                 occluder_types=MODEL_NAMES,
+                 occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
                  occlusion_scale=0.6,
@@ -1335,7 +1331,7 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
-            if record.name in MODEL_NAMES:
+            if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
@@ -1426,7 +1422,7 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
-            if record.name in MODEL_NAMES:
+            if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.target_material)))
