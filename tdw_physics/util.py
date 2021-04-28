@@ -144,6 +144,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
+    
     return parser
 
 def get_args(dataset_dir: str):

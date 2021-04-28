@@ -519,7 +519,8 @@ if __name__ == "__main__":
         probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
-        zone_friction=args.zfriction,
+        zone_friction=args.zfriction,,
+        flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):

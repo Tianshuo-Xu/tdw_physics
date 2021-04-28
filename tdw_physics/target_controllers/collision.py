@@ -413,6 +413,7 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         probe_lift = args.plift,
+        flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):
