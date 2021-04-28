@@ -59,6 +59,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=str,
                         default="0.35,0.35,0.35",
                         help="scale of probe objects")
+    
+    parser.add_argument("--plift",
+                        type=float,
+                        default=0.,
+                        help="Lift the probe object off the floor. Useful for rotated objects")
 
     ### force
     parser.add_argument("--fscale",
@@ -135,11 +140,13 @@ class Collision(Dominoes):
                  port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
+                 probe_lift = 0.,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
         self.zjitter = zjitter
         self.fupforce = fupforce
+        self.probe_lift = probe_lift
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -235,7 +242,7 @@ class Collision(Dominoes):
 
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": self.probe_lift, "z": 0.}
         rot = self.get_rotation(self.probe_rotation_range)
 
         if self.use_ramp:
@@ -405,6 +412,7 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
+        probe_lift = args.plift,
     )
 
     if bool(args.run):

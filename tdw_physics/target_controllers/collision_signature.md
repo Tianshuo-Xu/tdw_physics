@@ -55,3 +55,4 @@
 --- | --- | --- | --- | ---
 **`zjitter`** | Jitter applied to the zone location perpendicular to collision axis | `0.35` | This can shift the zone to the side to make the target fall beside it. | `[0,0.5]`
 **`fupforce`** | Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically. Uniformly sampled from range | `[0,0.3]` | This requires a lot of trial and error to get it into a range where it can reliably hit the target object.  | `[0,0.5]`
+**`plift`**| Lift the probe object off the floor. Useful for rotated objects | `0`
