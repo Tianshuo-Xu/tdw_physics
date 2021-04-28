@@ -19,7 +19,8 @@ def handle_random_transform_args(args):
         try:
             args = json.loads(args)
         except:
-            args = str_to_xyz(args)
+            try: args = eval(args) #this allows us to read dictionaries etc.
+            except: args = str_to_xyz(args)
 
         if hasattr(args, 'keys'):
             if 'class' in args:
@@ -130,7 +131,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     """
 
     def __init__(self, port: int = 1071, monochrome: bool = False, **kwargs):
-        super().__init__(port=port, **kwargs)
+
+        TransformsDataset.__init__(self, port=port, **kwargs)
 
         self.physics_info: Dict[int, PhysicsInfo] = {}
 
@@ -171,6 +173,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
 
+    def _add_name_scale_color(self, record, data) -> None:
+        self.model_names.append(record.name)
+        self.scales.append(data['scale'])
+        self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1,3))], axis=0)
+
     def random_primitive(self,
                          object_types: List[ModelRecord],
                          scale: List[float] = [0.2, 0.3],
@@ -191,9 +198,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         }
 
         if add_data:
-            self.model_names.append(obj_data["name"])
-            self.scales.append(obj_data["scale"])
-            self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
+            self._add_name_scale_color(obj_record, obj_data)
+            # self.model_names.append(obj_data["name"])
+            # self.scales.append(obj_data["scale"])
+            # self.colors = np.concatenate([self.colors, obj_data["color"].reshape((1,3))], axis=0)
         return obj_record, obj_data
 
     def add_physics_object(self,
@@ -258,7 +266,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  "static_friction": static_friction,
                  "bounciness": bounciness}]
 
-
     def add_physics_object_default(self,
                                    name: str,
                                    position: Dict[str, float],
@@ -282,6 +289,86 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                        mass=info.mass, dynamic_friction=info.dynamic_friction,
                                        static_friction=info.static_friction, bounciness=info.bounciness, add_data=add_data)
 
+    def add_primitive(self,
+                      record: ModelRecord,
+                      position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                      rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                      scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                      o_id: Optional[int] = None,
+                      material: Optional[str] = None,
+                      color: Optional[list] = None,
+                      exclude_color: Optional[list] = None,
+                      mass: Optional[float] = 2.0,
+                      dynamic_friction: Optional[float] = 0.1,
+                      static_friction: Optional[float] = 0.1,
+                      bounciness: Optional[float] = 0,
+                      add_data: Optional[bool] = True,
+                      scale_mass: Optional[bool] = True,
+                      make_kinematic: Optional[bool] = False,
+                      obj_list: Optional[list] = [],
+                      ) -> List[dict]:
+
+        cmds = []
+
+        if o_id is None:
+            o_id = self._get_next_object_id()
+
+        if scale_mass:
+            mass = mass * np.prod(xyz_to_arr(scale))
+
+        # add the physics stuff
+        cmds.extend(
+            self.add_physics_object(
+                record = record,
+                position = position,
+                rotation = rotation,
+                mass = mass,
+                dynamic_friction = dynamic_friction,
+                static_friction = static_friction,
+                bounciness = bounciness,
+                o_id = o_id,
+                add_data = add_data))
+
+        # scale the object
+        cmds.append(
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id})
+
+        # set the material and color
+        cmds.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(material)))
+
+        color = color if color is not None else self.random_color(exclude=exclude_color)
+        cmds.append(
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+             "id": o_id})
+
+        if make_kinematic:
+            cmds.extend([
+                {"$type": "set_object_collision_detection_mode",
+                 "mode": "continuous_speculative",
+                 "id": o_id},
+                {"$type": "set_kinematic_state",
+                 "id": o_id,
+                 "is_kinematic": True,
+                 "use_gravity": True}])
+
+        if add_data:
+            data = {'name': record.name, 'id': o_id,
+                    'scale': scale, 'color': color, 'material': material,
+                    'mass': mass,
+                    'dynamic_friction': dynamic_friction,
+                    'static_friction': static_friction,
+                    'bounciness': bounciness}
+            self._add_name_scale_color(record, data)
+            obj_list.append((record, data))
+
+        return cmds
+
+
     def add_ramp(self,
                  record: ModelRecord,
                  position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
@@ -289,6 +376,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
                  o_id: Optional[int] = None,
                  material: Optional[str] = None,
+                 color: Optional[list] = None,
+                 mass: Optional[float] = None,
+                 dynamic_friction: Optional[float] = None,
+                 static_friction: Optional[float] = None,
+                 bounciness: Optional[float] = None,
                  add_data: Optional[bool] = True
                  ) -> List[dict]:
 
@@ -301,16 +393,18 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         cmds = []
 
         # add the ramp
+        info = PHYSICS_INFO[record.name]
         cmds.extend(
-            self.add_physics_object_default(
-                name = record.name,
+            self.add_physics_object(
+                record = record,
                 position = position,
                 rotation = rotation,
+                mass = mass or info.mass,
+                dynamic_friction = dynamic_friction or info.dynamic_friction,
+                static_friction = static_friction or info.static_friction,
+                bounciness = bounciness or info.bounciness,
                 o_id = o_id,
                 add_data = add_data))
-        
-        print("add ramp command")
-        print(cmds)
 
         if o_id is None:
             o_id = cmds[-1]["id"]
@@ -319,6 +413,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         cmds.append(
             {"$type": "scale_object",
              "scale_factor": scale,
+             "id": o_id})
+
+        # texture and color it
+        cmds.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(material)))
+
+        cmds.append(
+            {"$type": "set_color",
+             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
              "id": o_id})
 
         # need to make ramp a kinetimatic object
@@ -332,8 +436,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
              "use_gravity": True}])
 
         if add_data:
-            self.model_names.append(record.name)
-            self.scales.append(scale)
+            self._add_name_scale_color(record, {'color': color, 'scale': scale})
+            # self.model_names.append(record.name)
+            # self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
+            # self.scales.append(scale)
 
         return cmds
 
@@ -387,6 +493,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
+
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes", "frequency": "once"})        
+        
         return commands
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -422,6 +532,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         env_collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
 
         sleeping = True
+
+        # rtypes = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        # print(frame_num, "COLLISION" if 'coll' in rtypes else "")
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)

@@ -36,6 +36,19 @@ def get_gravity_args(dataset_dir: str, parse=True):
     domino, domino_postproc = get_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
+    # what type of scenario to make it
+    parser.add_argument("--middle",
+                        type=str,
+                        default="ramp",
+                        help="comma-separated list of possible middle objects/scenario types")
+    parser.add_argument("--num_middle_objects",
+                        type=int,
+                        default=2,
+                        help="The number of middle objects to place")    
+    parser.add_argument("--mfriction",
+                        type=float,
+                        default=0.1,
+                        help="Static and dynamic friction on middle objects")        
     parser.add_argument("--ramp",
                         type=int,
                         default=1,
@@ -43,7 +56,15 @@ def get_gravity_args(dataset_dir: str, parse=True):
     parser.add_argument("--rheight",
                         type=none_or_str,
                         default=0.5,
-                        help="Height of the ramp base")    
+                        help="Height of the ramp base")
+    parser.add_argument("--rscale",
+                        type=none_or_str,
+                        default=None,
+                        help="The xyz scale of the ramp")
+    parser.add_argument("--rcolor",
+                        type=none_or_str,
+                        default=None,
+                        help="The rgb color of the ramp")        
     parser.add_argument("--probe",
                         type=str,
                         default="sphere",
@@ -69,7 +90,7 @@ def get_gravity_args(dataset_dir: str, parse=True):
     # camera
     parser.add_argument("--camera_distance",
                         type=float,
-                        default=3.25,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -117,35 +138,75 @@ def get_gravity_args(dataset_dir: str, parse=True):
     return args
     
 class Gravity(Dominoes):
-
-    DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     
     def __init__(self,
                  port: int = 1071,
                  middle_scale_range=1.0,
                  middle_color=None,
                  middle_material=None,
-                 remove_middle=False,
+                 middle_friction=0.1,
+                 remove_middle = False,
                  **kwargs):
 
-        super().__init__(port=port, **kwargs)
+        Dominoes.__init__(self, port=port, **kwargs)
 
         # always use a ramp for probe
         self.use_ramp = True
         
-        # middle ramp
-        self._middle_types = self.DEFAULT_RAMPS        
-        self.middle_scale_range = middle_scale_range
+        # middle
         self.middle_color = middle_color
         self.middle_material = middle_material
+        self.middle_friction = middle_friction
+        self.middle_objects = []
         self.remove_middle = remove_middle
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        Dominoes._write_static_data(self, static_group)
+        self.middle_type = type(self).__name__
+        static_group.create_dataset("middle_type", data=self.middle_type)        
+
+    @staticmethod
+    def get_controller_label_funcs(classname = 'Gravity'):
+
+        funcs = super(Gravity, Gravity).get_controller_label_funcs(classname)
+
+        return funcs
+
+    def _build_intermediate_structure(self) -> None:
+
+        # append scales and colors and names
+        for (record, data) in self.middle_objects:
+            self.model_names.append(record.name)
+            self.scales.append(copy.deepcopy(data['scale']))        
+            self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1,3))], axis=0)
+
+        # aim camera
+        camera_y_aim = max(0.5, self.ramp_base_height)
+        self.camera_aim = arr_to_xyz([0., camera_y_aim, 0.])
+
+        return []
+
+class Ramp(Gravity):
+
+    RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp' in r.name]
+
+    def __init__(self,
+                 port: int = 1071,
+                 middle_objects='ramp',
+                 middle_scale_range=1.0,
+                 spacing_jitter=0.0,
+                 **kwargs):
+        
+        super().__init__(port=port, **kwargs)
+        
+        self._middle_types = self.RAMPS
+        self.middle_scale_range = middle_scale_range
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
 
-        # ramp
-        static_group.create_dataset("ramp_base_height", data=self.ramp_base_height)
-        static_group.create_dataset("middle_type", data=self.middle_type)        
+
+        static_group.create_dataset("middle_material", data=self.middle_material)                
         static_group.create_dataset("middle_id", data=self.middle_id)
 
     def _build_intermediate_structure(self) -> List[dict]:
@@ -154,9 +215,15 @@ class Gravity(Dominoes):
         ramp_rot = TDWUtils.VECTOR3_ZERO
 
         self.middle = random.choice(self._middle_types)
-        self.middle_type = self.middle.name
         self.middle_id = self._get_next_object_id()
         self.middle_scale = get_random_xyz_transform(self.middle_scale_range)
+        rgb = self.middle_color or self.random_color(exclude=self.target_color)
+
+        ramp_data = {
+            'name': self.middle.name,
+            'id': self.middle_id,
+            'scale': self.middle_scale,
+            'color': rgb}        
         
         commands = self.add_ramp(
             record = self.middle,
@@ -164,33 +231,167 @@ class Gravity(Dominoes):
             rotation = ramp_rot,
             scale = self.middle_scale,
             o_id = self.middle_id,
-            add_data = True)
+            color=rgb,
+            material=self.middle_material,
+            mass = 500,
+            static_friction=self.middle_friction,
+            dynamic_friction=self.middle_friction,
+            bounciness = 0,            
+            add_data = False)
 
-        # give the ramp a texture and color
-        commands.extend(
-            self.get_object_material_commands(
-                self.middle, self.middle_id, self.get_material_name(self.middle_material)))        
-        rgb = self.middle_color or self.random_color(exclude=self.target_color)
-        commands.append(
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": self.middle_id})
-        self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
+        # append data        
+        self.middle_objects.append(
+            (self.middle, ramp_data))
+        commands.extend(super()._build_intermediate_structure())        
 
-        camera_y_aim = self.ramp_base_height
-        self.camera_aim = arr_to_xyz([0., camera_y_aim, 0.])
+        return commands
 
+class Pit(Gravity, MultiDominoes):
+
+    def __init__(self,
+                 port=1071,
+                 num_middle_objects=2,
+                 middle_scale_range={'x': 0.5, 'y': 1.0, 'z': 0.5},
+                 spacing_jitter = 0.25,
+                 lateral_jitter = 0.0,
+                 middle_friction = 0.1,
+                 **kwargs):
+
+        # middle config
+        Gravity.__init__(self, port=port, middle_friction=middle_friction, **kwargs)        
+        MultiDominoes.__init__(self, launch_build=False,
+                               middle_objects='cube',
+                               num_middle_objects=num_middle_objects,
+                               middle_scale_range=middle_scale_range,
+                               spacing_jitter=spacing_jitter,
+                               lateral_jitter=lateral_jitter,
+                               **kwargs)
+
+        # raise the ramp
+        if hasattr(self.middle_scale_range, 'keys'):
+            self.pit_max_height = get_range(self.middle_scale_range['y'])[1]
+        elif hasattr(self.middle_scale_range, '__len__'):
+            self.pit_max_height = self.middle_scale_range[1]
+        else:
+            self.pit_max_height = self.middle_scale_range
+
+        self.ramp_base_height_range = [r + self.pit_max_height
+                                       for r in get_range(self.ramp_base_height_range)]
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        Gravity._write_static_data(self, static_group)
+        static_group.create_dataset("num_middle_objects", data=self.num_middle_objects)
+        static_group.create_dataset("pit_widths", data=self.pit_widths)
+
+    def _build_intermediate_structure(self) -> List[dict]:
+        
+        commands = []
+
+        print("THIS IS A PIT!")
+        print(self.num_middle_objects)
+
+        # get the scale of the total pit object
+        scale = get_random_xyz_transform(self.middle_scale_range)
+        self.pit_mass = random.uniform(*get_range(self.middle_mass_range))
+
+        # get color and texture
+        self.pit_color = self.middle_color or self.random_color(exclude=self.target_color)
+        self.pit_material = self.middle_material
+
+        # how wide are the pits?
+        self.pit_widths = [
+            random.uniform(0.0, self.spacing_jitter) * scale['x']
+            for _ in range(self.num_middle_objects - 1)]
+
+        # make M cubes and scale in x accordingly
+        x_remaining = scale['x'] - self.pit_widths[0]
+        x_filled = 0.0
+        
+        print("PIT WIDTHS", self.pit_widths)
+        
+        for m in range(self.num_middle_objects):
+            print("x_filled, remaining", x_filled, x_remaining)
+
+            m_rec = random.choice(self._middle_types)
+
+            x_scale = random.uniform(0.0, x_remaining)
+                
+            x_len,_,_ = self.get_record_dimensions(m_rec)
+            x_len *= x_scale
+            x_pos = self.ramp_end_x + x_filled + (0.5 * x_len)
+            z_pos = random.uniform(-self.lateral_jitter, self.lateral_jitter)
+
+            print(m)
+            print("ramp_end", self.ramp_end_x)
+            print("x_len", x_len)
+            print("x_scale", x_scale)
+            print("x_pos", x_pos)
+            print("z_pos", z_pos)
+
+            m_scale = arr_to_xyz([x_scale, scale['y'], scale['z']])
+
+            commands.extend(
+                self.add_primitive(
+                    record = m_rec,
+                    position=arr_to_xyz([x_pos, 0., z_pos]),
+                    rotation=TDWUtils.VECTOR3_ZERO,
+                    scale = m_scale,
+                    color = self.pit_color,
+                    exclude_color = self.target_color,
+                    material = self.pit_material,
+                    mass = self.pit_mass,
+                    dynamic_friction = self.middle_friction,
+                    static_friction = self.middle_friction,
+                    scale_mass = True,
+                    make_kinematic = True,
+                    add_data = True,
+                    obj_list = self.middle_objects))
+
+            if m < len(self.pit_widths):
+                x_filled += self.pit_widths[m] + x_len
+                x_remaining -= (self.pit_widths[m] + x_len)
+
+        commands.extend(Gravity._build_intermediate_structure(self))
+
+        print("INTERMEDIATE")
+        print(commands)
+
+        return commands
+
+class Pendulum(Gravity):
+
+    def _build_intermediate_structure(self) -> List[dict]:
+        
+        commands = []
+
+        commands.extend(super()._build_intermediate_structure())
+        
         return commands
 
 if __name__ == '__main__':
 
     args = get_gravity_args("gravity")
-
-    GC = Gravity(
+    
+    classes = [Ramp, Pit, Pendulum]
+    for c in classes:
+        if args.middle[0].capitalize() == c.__name__:
+            classtype = c
+            break
+        else:
+            classtype = Gravity
+    
+    GC = classtype(
 
         # gravity specific
+        num_middle_objects=args.num_middle_objects,
         middle_scale_range=args.mscale,
-        ramp_base_height_range=args.rheight,        
+        middle_friction=args.mfriction,
+        ramp_base_height_range=args.rheight,
+        ramp_scale=args.rscale,
+        ramp_has_friction=args.rfriction,
+        probe_has_friction=args.pfriction,
+        spacing_jitter=args.spacing_jitter,
+        lateral_jitter=args.lateral_jitter,
         
         # domino specific
         target_zone=args.zone,
@@ -240,7 +441,8 @@ if __name__ == '__main__':
         occlusion_scale=args.occlusion_scale,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
-        ramp_color=args.rcolor
+        ramp_color=args.rcolor,
+        ramp_material=args.rmaterial
 
     )
 

@@ -7,7 +7,7 @@
 | `target_zone` | Target zone object | `['cube']` 
 | `zone_color` | Target zone color | `[1.0,1.0,0.0]` |  Yellow is default
 | `zone_location` | Location of target zone | `None` | Set by controllers
-| *`zone_scale_range`* | Dimensions of target zone | `[1.0,0.001,1.0]` 
+| *`zone_scale_range`* | Dimensions of target zone | `[1.0,0.01,1.0]` 
 | `zone_friction` | Friction of target zone | `0.1`
 | *`probe_objects`* | List the probe object is chosen from | `sphere`
 | *`target_objects`* | List the target object is chosen from | `['pipe','cube','pentagon']`

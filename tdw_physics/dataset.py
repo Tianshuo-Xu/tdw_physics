@@ -1,8 +1,11 @@
 import sys, os, copy, subprocess, glob
+import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
+from PIL import Image
+import io
 import h5py, json
 from collections import OrderedDict
 import numpy as np
@@ -10,6 +13,8 @@ import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors
+from tdw.librarian import ModelRecord, MaterialLibrarian
+
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
@@ -17,6 +22,14 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+M = MaterialLibrarian()
+MATERIAL_TYPES = M.get_material_types()
+MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
+                  for mtype in MATERIAL_TYPES}
+
+# colors for the target/zone overlay
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
 
 class Dataset(Controller, ABC):
     """
@@ -32,11 +45,17 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=True,
+                 launch_build: bool=None,
                  randomize: int=0,
                  seed: int=0,
-                 save_args=True
+                 save_args=True,
+                 **kwargs
     ):
+        # unless otherwise told, default to launch_build behavior appropiate for system
+        if launch_build is None:
+            if platform.system() == 'Linux': launch_build = False
+            else: launch_build = True 
+
         super().__init__(port=port,
                          check_version=check_version,
                          launch_build=launch_build)
@@ -49,6 +68,9 @@ class Dataset(Controller, ABC):
 
         # save the command-line args
         self.save_args = save_args
+
+        # fluid actors need to be handled separately
+        self.fluid_object_ids = []
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
@@ -100,7 +122,7 @@ class Dataset(Controller, ABC):
             writelist.extend(["--"+str(k),str(v)])
 
         self._script_args = writelist
-        
+
         output_dir = Path(output_dir)
         filepath = output_dir.joinpath("args.txt")
         if not filepath.exists():
@@ -151,6 +173,7 @@ class Dataset(Controller, ABC):
             save_passes: List[str] = [],
             save_movies: bool = False,
             save_labels: bool = False,
+            save_meshes: bool = False,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -164,6 +187,9 @@ class Dataset(Controller, ABC):
         :param save_movies: whether to save out a movie of each trial
         :param save_labels: whether to save out JSON labels for the full trial set.
         """
+        
+        # If no temp_path given, place in local folder to prevent conflicts with other builds
+        if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
         self._height, self._width = height, width
 
@@ -180,13 +206,18 @@ class Dataset(Controller, ABC):
         self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
 
+        # whether to send and save meshes
+        self.save_meshes = save_meshes
+        
         print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
+        print("save meshes", self.save_meshes)
+        
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
-        
+
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
         if self.save_labels:
@@ -386,6 +417,28 @@ class Dataset(Controller, ABC):
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
+        # Save out the target/zone segmentation mask
+        _id = f['frames']['0000']['images']['_id']
+        #get PIL image
+        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #get colors
+        zone_color = self.object_segmentation_colors[0]
+        target_color = self.object_segmentation_colors[1]
+        #get individual maps
+        zone_map = _id_map == zone_color
+        target_map = _id_map == target_color
+        #colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        #as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        #save image
+        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+
         # Close the file.
         f.close()
         # Move the file.
@@ -399,12 +452,12 @@ class Dataset(Controller, ABC):
             vector: Dict[str, float],
             theta: float,
             degrees: bool = True) -> Dict[str, float]:
-        
+
         v_x = vector['x']
         v_z = vector['z']
         if degrees:
             theta = np.radians(theta)
-            
+
         v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
         v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
 
@@ -600,6 +653,27 @@ class Dataset(Controller, ABC):
         self._increment_object_id()
         return int(self._object_id_counter)
 
+    def get_material_name(self, material):
+
+        if material is not None:
+            if material in MATERIAL_TYPES:
+                mat = random.choice(MATERIAL_NAMES[material])
+            else:
+                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
+                    (material, self.material_types)
+                mat = material
+        else:
+            mtype = random.choice(self.material_types)
+            mat = random.choice(MATERIAL_NAMES[mtype])
+
+        return mat
+
+    def get_object_material_commands(self, record, object_id, material):
+        commands = TDWUtils.set_visual_material(
+            self, record.substructure, object_id, material, quality="high")
+        return commands
+
+
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
@@ -608,12 +682,18 @@ class Dataset(Controller, ABC):
                 seg = SegmentationColors(r)
                 colors = {}
                 for i in range(seg.get_num()):
-                    colors[seg.get_object_id(i)] = seg.get_object_color(i)
+                    try:
+                        colors[seg.get_object_id(i)] = seg.get_object_color(i)
+                    except:
+                        print("No object id found for seg", i)
 
                 self.object_segmentation_colors = []
                 for o_id in self.object_ids:
                     if o_id in colors.keys():
                         self.object_segmentation_colors.append(
                             np.array(colors[o_id], dtype=np.uint8).reshape(1,3))
+                    else:
+                        self.object_segmentation_colors.append(
+                            np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)

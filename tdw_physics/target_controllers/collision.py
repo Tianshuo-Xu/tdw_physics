@@ -102,9 +102,22 @@ def get_collision_args(dataset_dir: str, parse=True):
     ## collision specific arguments
     parser.add_argument("--fupforce",
                         type=str,
-                        default='[0,0.3]',
+                        default='[0,0]',
                         help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
 
+    ## camera
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=360,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_distance",
+                        type=float,
+                        default=2.3,
+                        help="radial distance from camera to centerpoint")
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
@@ -119,7 +132,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 class Collision(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
                  **kwargs):
@@ -223,7 +236,7 @@ class Collision(Dominoes):
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
-        rot = self.get_y_rotation(self.probe_rotation_range)
+        rot = self.get_rotation(self.probe_rotation_range)
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
@@ -324,14 +337,15 @@ class Collision(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
-        # static_group.create_dataset("bridge_height", data=self.bridge_height)
-
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):
 
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
+    
+    def is_done(self, resp: List[bytes], frame: int) -> bool:
+        return frame > 150 # End after X frames even if objects are still moving.
     
 
 if __name__ == "__main__":

@@ -84,6 +84,19 @@ class FlexDataset(TransformsDataset, ABC):
     def __init__(self, port: int = 1071):
         super().__init__(port=port)
 
+        self._clear_flex_data()
+
+        # self._flex_container_command: dict = {}
+        # self._solid_actors: List[_SolidActor] = []
+        # self._soft_actors: List[_SoftActor] = []
+        # self._cloth_actors: List[_ClothActor] = []
+        # self._fluid_actors: List[_FluidActor] = []
+
+        # # List of IDs of non-Flex objects (required for correctly destroying them).
+        # self.non_flex_objects: List[int] = []
+
+    def _clear_flex_data(self) -> None:
+
         self._flex_container_command: dict = {}
         self._solid_actors: List[_SolidActor] = []
         self._soft_actors: List[_SoftActor] = []
@@ -169,6 +182,10 @@ class FlexDataset(TransformsDataset, ABC):
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id},
+                {"$type": "set_kinematic_state",
+                 # "is_kinematic": True,
+                 # "use_gravity": True,
+                 "id": o_id},
                 {"$type": "set_flex_solid_actor",
                  "id": o_id,
                  "mesh_expansion": mesh_expansion,
@@ -176,7 +193,8 @@ class FlexDataset(TransformsDataset, ABC):
                  "mass_scale": mass_scale},
                 {"$type": "assign_flex_container",
                  "container_id": 0,
-                 "id": o_id}]
+                 "id": o_id}
+        ]
 
     def add_soft_object(self, record: ModelRecord, position: Dict[str, float], rotation: Dict[str, float],
                         scale: Dict[str, float] = None, volume_sampling: float = 2, surface_sampling: float = 0,
@@ -220,6 +238,10 @@ class FlexDataset(TransformsDataset, ABC):
         return [add_object,
                 {"$type": "scale_object",
                  "scale_factor": scale,
+                 "id": o_id},
+                {"$type": "set_kinematic_state",
+                 # "is_kinematic": True,
+                 # "use_gravity": True,
                  "id": o_id},
                 {"$type": "set_flex_soft_actor",
                  "id": o_id,
@@ -275,6 +297,10 @@ class FlexDataset(TransformsDataset, ABC):
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id},
+                # {"$type": "set_kinematic_state",
+                #  # "is_kinematic": True,
+                #  # "use_gravity": True,
+                #  "id": o_id},
                 {"$type": "set_flex_cloth_actor",
                  "id": o_id,
                  "mesh_tesselation": mesh_tesselation,
@@ -286,7 +312,8 @@ class FlexDataset(TransformsDataset, ABC):
                  "mass_scale": mass_scale},
                 {"$type": "assign_flex_container",
                  "container_id": 0,
-                 "id": o_id}]
+                 "id": o_id}
+        ]
 
     def add_fluid_object(self, position: Dict[str, float], rotation: Dict[str, float], fluid_type: str,
                          mass_scale: float = 1, particle_spacing: float = 0.05, o_id: int = None) -> List[dict]:
@@ -314,6 +341,9 @@ class FlexDataset(TransformsDataset, ABC):
                  "id": o_id,
                  "orientation": rotation,
                  "position": position},
+                {"$type": "set_kinematic_state",
+                 "use_gravity": True,
+                 "id": o_id},
                 {"$type": "create_flex_fluid_object",
                  "id": o_id,
                  "mass_scale": mass_scale,
