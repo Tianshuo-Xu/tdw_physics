@@ -285,7 +285,9 @@ class Containment(Tower):
 
         # base
         self.use_base = use_base
-        self._base_types = self.get_types(base_object) if self.use_base else self._target_types
+        self._base_types = self.get_types(
+            base_object, libraries=MODEL_LIBRARIES.keys(), flex_only=self.flex_only) \
+            if self.use_base else self._target_types
         self.base_scale_range = base_scale_range
         self.base_mass_range = base_mass_range
         self.base_color = base_color
@@ -293,7 +295,9 @@ class Containment(Tower):
 
         # attachment
         self.use_attachment = use_attachment        
-        self._attachment_types = self.get_types(attachment_object) if self.use_attachment else self._target_types
+        self._attachment_types = self.get_types(
+            attachment_object, libraries=MODEL_LIBRARIES.keys(), flex_only=self.flex_only) \
+            if self.use_attachment else self._target_types
         self.attachment_scale_range = attachment_scale_range
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
@@ -612,6 +616,7 @@ if __name__ == "__main__":
     args = get_containment_args("containment")
 
     CC = Containment(
+        port=args.port,
         # contained
         contained_objects=args.middle,
         contained_scale_range=args.mscale,

@@ -563,6 +563,7 @@ class Dominoes(RigidbodiesDataset):
 
 
     def get_types(self, objlist, libraries=["models_flex.json"], categories=None, flex_only=True):
+
         if isinstance(objlist, str):
             objlist = [objlist]
         recs = []
