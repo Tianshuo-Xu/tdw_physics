@@ -16,6 +16,8 @@ from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 def handle_random_transform_args(args):
 
     if args is not None:
+        if type(args) in [float,int,bool]: # don't apply any parsing to simple datatypes
+            return args
         try:
             args = json.loads(args)
         except:

@@ -112,12 +112,12 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     ## camera
     parser.add_argument("--camera_min_angle",
-                        type=none_or_str,
-                        default="0",
+                        type=float,
+                        default=0,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
-                        type=none_or_str,
-                        default="360",
+                        type=float,
+                        default=360,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
@@ -177,8 +177,8 @@ class Collision(Dominoes):
         commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position 
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
-                                                radius_max=self.camera_radius,
+        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+                                                radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,

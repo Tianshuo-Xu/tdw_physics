@@ -204,8 +204,8 @@ class RollingSliding(MultiDominoes):
         # commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position 
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
-                                                radius_max=self.camera_radius,
+        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+                                                radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
