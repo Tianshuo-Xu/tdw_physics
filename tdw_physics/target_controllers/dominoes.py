@@ -149,7 +149,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--rcolor",
                         type=none_or_str,
                         default="0.75,0.75,1.0",
-                        help="comma-separated R,G,B values for the target zone color. None is random")
+                        help="comma-separated R,G,B values for the ramp color. None is random")    
     parser.add_argument("--pcolor",
                         type=none_or_str,
                         default="0.0,1.0,1.0",
@@ -343,9 +343,9 @@ def get_args(dataset_dir: str, parse=True):
         if args.tcolor is not None:
             rgb = [float(c) for c in args.tcolor.split(',')]
             assert len(rgb) == 3, rgb
-            args.tcolor = args.color = rgb
+            args.tcolor = rgb
         else:
-            args.color = None
+            args.tcolor = None
 
         if args.zcolor is not None:
             rgb = [float(c) for c in args.zcolor.split(',')]
@@ -409,11 +409,7 @@ def get_args(dataset_dir: str, parse=True):
         args.dir = os.path.join(args.dir, 'training_data')
         args.random = 0
         args.seed = args.seed + 1
-        args.color = args.pcolor = args.mcolor = args.rcolor = None
-        args.remove_zone = 1
-        args.remove_target = 1
-        args.save_passes = ""
-        args.save_movies = False
+        args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None            
 
     return args
 
@@ -1698,7 +1694,7 @@ if __name__ == "__main__":
         probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,
-        target_color=args.color,
+        target_color=args.tcolor,
         probe_color=args.pcolor,
         middle_color=args.mcolor,
         collision_axis_length=args.collision_axis_length,
