@@ -237,7 +237,7 @@ class Dataset(Controller, ABC):
         self.trial_loop(num, output_dir, temp_path)
 
         # Terminate TDW
-        with stopit.ThreadingTimeout(10) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+        with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
             assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
             end = self.communicate({"$type": "terminate"})
         if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
