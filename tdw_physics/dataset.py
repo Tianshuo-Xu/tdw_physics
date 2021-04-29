@@ -51,6 +51,9 @@ class Dataset(Controller, ABC):
                  save_args=True,
                  **kwargs
     ):
+        # save the command-line args
+        self.save_args = save_args
+
         # unless otherwise told, default to launch_build behavior appropiate for system
         if launch_build is None:
             if platform.system() == 'Linux': launch_build = False
@@ -65,9 +68,6 @@ class Dataset(Controller, ABC):
         self.seed = seed
         if not bool(self.randomize):
             random.seed(self.seed)
-
-        # save the command-line args
-        self.save_args = save_args
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
