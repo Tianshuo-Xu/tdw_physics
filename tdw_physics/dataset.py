@@ -4,6 +4,7 @@ from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
+import stopit
 from PIL import Image
 import io
 import h5py, json
@@ -236,16 +237,13 @@ class Dataset(Controller, ABC):
         self.trial_loop(num, output_dir, temp_path)
 
         # Terminate TDW
-        end = self.communicate({"$type": "terminate"})
-        end_types = [OutputData.get_data_type_id(r) for r in end]
-        end_count = 0
-        print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
-        print(end_types)
-        while ('tre\x04' in end_types) and end_count <= 10:
-            end_count += 1
-            print([OutputData.get_data_type_id(r) for r in end])
-            print("TOLD BUILD TO TERMINATE, TRY %d" % end_count)
+        with stopit.ThreadingTimeout(10) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+            assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
             end = self.communicate({"$type": "terminate"})
+        if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+            print("tdw closed successfully")
+        elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+            print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
         # Save the command line args
         if self.save_args:
