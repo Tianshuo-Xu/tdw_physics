@@ -330,8 +330,8 @@ class Drop(MultiDominoes):
                 position=self.target_position,
                 rotation=self.target_rotation,
                 mass= random.uniform(*get_range(self.middle_mass_range)),
-                dynamic_friction=0.01, #values taken from dominoes
-                static_friction=0.01,
+                dynamic_friction=0.4, #increased friction
+                static_friction=0.4,
                 bounciness=0,       
                 o_id=o_id))
         
@@ -394,8 +394,8 @@ class Drop(MultiDominoes):
                 position=self.drop_position,
                 rotation=self.drop_rotation,
                 mass=self.probe_mass,
-                dynamic_friction=0.01, #values taken from dominoes
-                static_friction=0.01,
+                dynamic_friction=0.4, #increased friction
+                static_friction=0.4,
                 bounciness=0,       
                 o_id=o_id))
                 

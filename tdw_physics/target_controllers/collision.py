@@ -257,8 +257,8 @@ class Collision(Dominoes):
                 # dynamic_friction=0.5,
                 # static_friction=0.5,
                 # bounciness=0.1,
-                dynamic_friction=0.01,
-                static_friction=0.01,
+                dynamic_friction=0.4,
+                static_friction=0.4,
                 bounciness=0,                
                 o_id=o_id))
 
