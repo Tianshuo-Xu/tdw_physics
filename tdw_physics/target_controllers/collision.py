@@ -112,16 +112,16 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     ## camera
     parser.add_argument("--camera_min_angle",
-                        type=float,
-                        default=0,
+                        type=none_or_str,
+                        default="0",
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
-                        type=float,
-                        default=360,
+                        type=none_or_str,
+                        default="360",
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_distance",
-                        type=float,
-                        default=2.3,
+                        type=none_or_str,
+                        default="2.3",
                         help="radial distance from camera to centerpoint")
 
     def postprocess(args):
