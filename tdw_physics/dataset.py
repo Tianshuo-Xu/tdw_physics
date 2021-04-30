@@ -46,7 +46,7 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=None,
+                 launch_build: bool=True,
                  randomize: int=0,
                  seed: int=0,
                  save_args=True,
@@ -54,11 +54,6 @@ class Dataset(Controller, ABC):
     ):
         # save the command-line args
         self.save_args = save_args
-
-        # unless otherwise told, default to launch_build behavior appropiate for system
-        if launch_build is None:
-            if platform.system() == 'Linux': launch_build = False
-            else: launch_build = True 
 
         super().__init__(port=port,
                          check_version=check_version,
@@ -188,7 +183,7 @@ class Dataset(Controller, ABC):
         :param save_movies: whether to save out a movie of each trial
         :param save_labels: whether to save out JSON labels for the full trial set.
         """
-        
+
         # If no temp_path given, place in local folder to prevent conflicts with other builds
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
@@ -209,12 +204,12 @@ class Dataset(Controller, ABC):
 
         # whether to send and save meshes
         self.save_meshes = save_meshes
-        
+
         print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
         print("save meshes", self.save_meshes)
-        
+
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
