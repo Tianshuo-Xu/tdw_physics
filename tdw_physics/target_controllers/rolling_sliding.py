@@ -69,13 +69,13 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.,
                         help="jitter around object centroid to apply force")
-    
+
     parser.add_argument("--fupforce",
                         type=str,
                         default='[0,0]',
                         help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically")
 
-    
+
     ###target
     parser.add_argument("--target",
                         type=str,
@@ -123,18 +123,18 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
         args.ramp_scale = handle_random_transform_args(args.ramp_scale)
-        
+
         ### ledge
         args.use_ledge = bool(args.use_ledge)
-        
+
         if args.ledge is not None:
             targ_list = args.ledge.split(',')
             assert all([t in MODEL_NAMES for t in targ_list]), \
                 "All ledge object names must be elements of %s" % MODEL_NAMES
             args.ledge = targ_list
         else:
-            args.ledge = MODEL_NAMES        
-        
+            args.ledge = MODEL_NAMES
+
         args.ledge_scale = handle_random_transform_args(args.ledge_scale)
 
         return args
@@ -203,7 +203,7 @@ class RollingSliding(MultiDominoes):
         # # Build the intermediate structure that captures some aspect of "intuitive physics."
         # commands.extend(self._build_intermediate_structure())
 
-        # Teleport the avatar to a reasonable position 
+        # Teleport the avatar to a reasonable position
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
                                                 radius_max=self.camera_radius,
                                                 angle_min=self.camera_min_angle,
@@ -259,7 +259,7 @@ class RollingSliding(MultiDominoes):
 
         # Add the object with random physics values
         commands = []
-    
+
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
@@ -267,7 +267,7 @@ class RollingSliding(MultiDominoes):
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
-        
+
         commands.extend(
             self.add_physics_object(
                 record=record,
@@ -279,7 +279,7 @@ class RollingSliding(MultiDominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.01,
                 static_friction=0.01,
-                bounciness=0,                
+                bounciness=0,
                 o_id=o_id))
 
         # Set the target material
@@ -307,7 +307,7 @@ class RollingSliding(MultiDominoes):
             {"$type": "set_object_drag",
              "id": o_id,
              "drag": 0, "angular_drag": 0}])
-            
+
 
         # Apply a force to the target object
         self.push_force = self.get_push_force(
@@ -317,7 +317,7 @@ class RollingSliding(MultiDominoes):
         self.push_force = self.rotate_vector_parallel_to_floor(
             self.push_force, -rot['y'], degrees=True)
 
-        self.push_position = self.probe_initial_position        
+        self.push_position = self.probe_initial_position
         if self.use_ramp:
             self.push_cmd = {
                 "$type": "apply_force_to_object",
@@ -425,7 +425,7 @@ class RollingSliding(MultiDominoes):
 
         # ramp params
         self.ramp = random.choice(self.DEFAULT_RAMPS)
-        rgb = self.ramp_color or np.array([0.75,0.75,1.0])        
+        rgb = self.ramp_color or np.array([0.75,0.75,1.0])
         ramp_pos = copy.deepcopy(self.probe_initial_position)
         ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
@@ -433,7 +433,7 @@ class RollingSliding(MultiDominoes):
 
         # figure out scale
         r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
-        scale_x = (0.75 * self.collision_axis_length) / r_len        
+        scale_x = (0.75 * self.collision_axis_length) / r_len
         if self.ramp_scale is None:
             self.ramp_scale = arr_to_xyz([scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
 
@@ -468,14 +468,14 @@ class RollingSliding(MultiDominoes):
                  "id": self.ramp_base_id},
                 {"$type": "set_color",
                  "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": self.ramp_base_id},                        
+                 "id": self.ramp_base_id},
                 {"$type": "set_object_collision_detection_mode",
                  "mode": "continuous_speculative",
                  "id": self.ramp_base_id},
                 {"$type": "set_kinematic_state",
                  "id": self.ramp_base_id,
                  "is_kinematic": True,
-                 "use_gravity": True}])                        
+                 "use_gravity": True}])
 
         cmds.extend(
             self.add_ramp(
@@ -489,12 +489,12 @@ class RollingSliding(MultiDominoes):
         # give the ramp a texture and color
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))        
+                self.ramp, ramp_id, self.get_material_name(self.zone_material)))
 
         cmds.append(
             {"$type": "set_color",
              "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": ramp_id})            
+             "id": ramp_id})
         print("ramp commands")
         print(cmds)
 
@@ -556,8 +556,8 @@ class RollingSliding(MultiDominoes):
             {"$type": "set_kinematic_state",
              "id": o_id,
              "is_kinematic": True,
-             "use_gravity": True}])     
-        
+             "use_gravity": True}])
+
         return commands
 
     def _get_zone_location(self, scale):
@@ -584,13 +584,13 @@ class RollingSliding(MultiDominoes):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
-    
+
 
 if __name__ == "__main__":
     import platform, os
-    
+
     args = get_rolling_sliding_args("rolling_sliding")
-    
+
     if platform.system() == 'Linux':
         if args.gpu is not None:
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
@@ -660,7 +660,8 @@ if __name__ == "__main__":
                height=args.height,
                save_passes=args.save_passes.split(','),
                save_movies=args.save_movies,
-               save_labels=args.save_labels,               
+               save_labels=args.save_labels,
+               save_meshes=args.save_meshes,
                args_dict=vars(args)
         )
     else:

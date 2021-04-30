@@ -285,7 +285,7 @@ class Drop(Dominoes):
 
         # Place target zone
         commands.extend(self._place_target_zone())
-        
+
         # Choose and place a target object.
         commands.extend(self._place_intermediate_object())
 
@@ -312,7 +312,7 @@ class Drop(Dominoes):
              "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
         ])
         return commands
-    
+
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         return []
 
@@ -382,7 +382,7 @@ class Drop(Dominoes):
                 static_friction=random.uniform(0, 0.9),
                 bounciness=random.uniform(0, 1),
                 o_id=o_id))
-        
+
         # Set the object material
         commands.extend(
             self.get_object_material_commands(
@@ -445,12 +445,12 @@ class Drop(Dominoes):
                 static_friction=random.uniform(0, 0.9),
                 bounciness=random.uniform(0, 1),
                 o_id=o_id))
-                
+
         # Set the object material
         commands.extend(
             self.get_object_material_commands(
                 record, o_id, self.get_material_name(self.target_material)))
-                
+
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
@@ -521,7 +521,7 @@ class Drop(Dominoes):
             {"$type": "set_kinematic_state",
              "id": o_id,
              "is_kinematic": True,
-             "use_gravity": True}])            
+             "use_gravity": True}])
 
         # get rid of it if not using a target object
         if self.remove_zone:
@@ -550,7 +550,7 @@ if __name__ == "__main__":
         target_objects=args.target,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
-        target_color=args.color, 
+        target_color=args.color,
         probe_color = args.pcolor,
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
@@ -570,6 +570,7 @@ if __name__ == "__main__":
     )
 
     if bool(args.run):
+
         DC.run(num=args.num,
                output_dir=args.dir,
                temp_path=args.temp,
@@ -579,6 +580,7 @@ if __name__ == "__main__":
                 save_passes=args.save_passes.split(','),
                 save_movies=args.save_movies,
                 save_labels=args.save_labels,
+                save_meshes=args.save_meshes,
                 args_dict=vars(args))
     else:
         end = DC.communicate({"$type": "terminate"})

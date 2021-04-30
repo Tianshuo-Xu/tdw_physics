@@ -1125,9 +1125,6 @@ class Dominoes(RigidbodiesDataset):
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0}
         rot = self.get_y_rotation(self.probe_rotation_range)
 
-        if self.use_ramp:
-            commands.extend(self._place_ramp_under_probe())
-
         commands.extend(
             self.add_physics_object(
                 record=record,
@@ -1166,6 +1163,8 @@ class Dominoes(RigidbodiesDataset):
              "id": o_id,
              "drag": 0, "angular_drag": 0}])
 
+        if self.use_ramp:
+            commands.extend(self._place_ramp_under_probe())
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
