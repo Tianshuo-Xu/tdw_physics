@@ -406,9 +406,6 @@ def get_args(dataset_dir: str, parse=True):
 
     # produce training data
     if args.training_data_mode:
-        args.dir = os.path.join(args.dir, 'training_data')
-        args.random = 0
-        args.seed = args.seed + 1
         args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None            
 
     return args

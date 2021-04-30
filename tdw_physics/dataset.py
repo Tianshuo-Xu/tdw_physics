@@ -205,7 +205,7 @@ class Dataset(Controller, ABC):
         if isinstance(self.save_passes, str):
             self.save_passes = self.save_passes.split(',')
         self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
-        self.save_movies = save_movies
+        self.save_movies = save_movies and (len(self.save_passes) > 0)
 
         # whether to send and save meshes
         self.save_meshes = save_meshes
