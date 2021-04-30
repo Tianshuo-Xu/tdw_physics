@@ -13,13 +13,14 @@ import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors
+from tdw.output_data import OutputData, SegmentationColors, Meshes
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
                                                get_across_trial_stats_from)
+from tdw_physics.util_geom import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
@@ -316,7 +317,11 @@ class Dataset(Controller, ABC):
                             remove_pngs=True,
                             use_parent_dir=False)
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
-
+                if self.save_meshes:
+                    for o_id in self.object_ids:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
             pbar.update(1)
         pbar.close()
 
@@ -360,8 +365,9 @@ class Dataset(Controller, ABC):
             print(r_types)
 
         self._set_segmentation_colors(resp)
-        frame = 0
 
+        self._get_object_meshes(resp)
+        frame = 0
         # Write static data to disk.
         static_group = f.create_group("static")
         self._write_static_data(static_group)
@@ -690,3 +696,18 @@ class Dataset(Controller, ABC):
                             np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+    def _get_object_meshes(self, resp: List[bytes]) -> None:
+
+        self.object_meshes = dict()
+        # {object_id: (vertices, faces)}
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'mesh':
+                meshes = Meshes(r)
+                nmeshes = meshes.get_num()
+
+                assert(len(self.object_ids) == nmeshes)
+                for index in range(nmeshes):
+                    o_id = meshes.get_object_id(index)
+                    vertices = meshes.get_vertices(index)
+                    faces = meshes.get_triangles(index)
+                    self.object_meshes[o_id] = (vertices, faces)
