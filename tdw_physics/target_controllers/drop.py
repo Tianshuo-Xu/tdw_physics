@@ -263,6 +263,20 @@ class Drop(MultiDominoes):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
         ])
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+
+        # For distractor placements
+        self.middle_scale = self.zone_scale
+
+        # Place distractor objects in the background
+        commands.extend(self._place_background_distractors(z_pos_scale=1))
+
+        # Place occluder objects in the background
+        commands.extend(self._place_occluders(z_pos_scale=1))
+
         return commands
     
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -520,6 +534,12 @@ if __name__ == "__main__":
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
         zone_friction=args.zfriction,
+        distractor_types=args.distractor,
+        distractor_categories=args.distractor_categories,
+        num_distractors=args.num_distractors,
+        occluder_types=args.occluder,
+        occluder_categories=args.occluder_categories,
+        num_occluders=args.num_occluders,        
         flex_only=args.only_use_flex_objects        
     )
 

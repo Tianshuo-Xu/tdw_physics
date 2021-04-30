@@ -1339,7 +1339,7 @@ class Dominoes(RigidbodiesDataset):
         o_len, o_height, o_dep = self.get_record_dimensions(record)
         
 
-    def _place_background_distractors(self) -> List[dict]:
+    def _place_background_distractors(self,z_pos_scale = 4.) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
         """
@@ -1374,7 +1374,7 @@ class Dominoes(RigidbodiesDataset):
             pos = arr_to_xyz(
                 [min([pos['x'] - x_offset, last_x - x_offset]),
                  0.,
-                 np.sign(opposite['z'])*max([d_dep, self.middle_scale['z'] * 4.0])])
+                 np.sign(opposite['z'])*max([d_dep, self.middle_scale['z'] * z_pos_scale])])
             d_len_last = 0.6*d_len
             last_x = pos['x']
 
@@ -1416,7 +1416,7 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_occluders(self) -> List[dict]:
+    def _place_occluders(self, z_pos_scale = 4.0) -> List[dict]:
         """
         Put one or more objects in the foreground to occlude the intermediate part of the scene
         """
@@ -1458,7 +1458,7 @@ class Dominoes(RigidbodiesDataset):
             pos = arr_to_xyz(
                 [min([pos['x'] - x_offset, last_x - x_offset]),
                  0.,
-                 np.sign(camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
+                 np.sign(camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*z_pos_scale])])
             o_len_last = 0.6*o_len
             last_x = pos['x']
 
