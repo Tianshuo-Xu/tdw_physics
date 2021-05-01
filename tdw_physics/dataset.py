@@ -237,13 +237,16 @@ class Dataset(Controller, ABC):
         self.trial_loop(num, output_dir, temp_path)
 
         # Terminate TDW
-        with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
-            assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
-            end = self.communicate({"$type": "terminate"})
-        if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
-            print("tdw closed successfully")
-        elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
-            print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
+        # Windows doesn't know signal timeout
+        if platform.system() == 'Windows': end = self.communicate({"$type": "terminate"})
+        else: #Unix systems can use signal to timeout
+            with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+                assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+                end = self.communicate({"$type": "terminate"})
+            if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+                print("tdw closed successfully")
+            elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+                print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
         # Save the command line args
         if self.save_args:
