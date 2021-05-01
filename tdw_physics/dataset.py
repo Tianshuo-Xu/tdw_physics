@@ -710,4 +710,8 @@ class Dataset(Controller, ABC):
                     o_id = meshes.get_object_id(index)
                     vertices = meshes.get_vertices(index)
                     faces = meshes.get_triangles(index)
+                    assert (vertices.shape[0] > 0), f"mesh without vertices:{self.distractors[o_id].name}"
+
                     self.object_meshes[o_id] = (vertices, faces)
+
+

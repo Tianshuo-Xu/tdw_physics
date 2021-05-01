@@ -259,11 +259,11 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--model_libraries",
                         type=none_or_str,
                         default=','.join(list(MODEL_LIBRARIES.keys())),
-                        help="Which model libraries can be drawn from")    
+                        help="Which model libraries can be drawn from")
     parser.add_argument("--only_use_flex_objects",
                         action="store_true",
-                        help="Only use models that are FLEX models (and have readable meshes)")    
-    
+                        help="Only use models that are FLEX models (and have readable meshes)")
+
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
                         action="store_true",
@@ -493,7 +493,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
-        
+
         ## whether only flex objects are allowed
         self.flex_only = flex_only
 
@@ -569,6 +569,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## distractors and occluders
         self.num_distractors = num_distractors
+
         self.distractor_types = self.get_types(
             distractor_types,
             libraries=self.model_libraries,
@@ -579,6 +580,10 @@ class Dominoes(RigidbodiesDataset):
         self.num_occluders = num_occluders
         self.occluder_angular_spacing = occluder_angular_spacing
         self.occlusion_scale = occlusion_scale
+
+        if occluder_categories == "plant":
+            occluder_types = ["cube"]
+            occluder_categories = None
         self.occluder_types = self.get_types(
             occluder_types,
             libraries=self.model_libraries,
@@ -588,6 +593,7 @@ class Dominoes(RigidbodiesDataset):
 
 
     def get_types(self, objlist, libraries=["models_flex.json"], categories=None, flex_only=True):
+        exclude_name = ["648972_chair_poliform_harmony"]
 
         if isinstance(objlist, str):
             objlist = [objlist]
@@ -602,7 +608,7 @@ class Dominoes(RigidbodiesDataset):
 
         if flex_only:
             tlist = [r for r in tlist if r.flex == True]
-
+        tlist = [r for r in tlist if r.name not in exclude_name]
         assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
 
@@ -1337,7 +1343,7 @@ class Dominoes(RigidbodiesDataset):
         manner to avoid interactions with the physically relevant objects.
         """
         o_len, o_height, o_dep = self.get_record_dimensions(record)
-        
+
 
     def _place_background_distractors(self,z_pos_scale = 4.) -> List[dict]:
         """
@@ -1392,8 +1398,8 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a color and texture if it's a primitive
-            # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
@@ -1481,8 +1487,8 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
-            # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
