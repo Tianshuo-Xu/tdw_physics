@@ -749,6 +749,7 @@ class Dominoes(RigidbodiesDataset):
         print("camera ray", self.camera_ray)
         print("camera angle", self.camera_rotation)
         print("camera altitude", self.camera_altitude)
+        print("camera position", self.camera_position)
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -1331,13 +1332,96 @@ class Dominoes(RigidbodiesDataset):
 
         return target_scale / current_scale
 
-    def _get_occluder_position_and_scale(self, record, unit_position_vector):
+    def _get_occluder_position_pose_scale(self, record, unit_position_vector):
         """
         Given a unit vector direction in world coordinates, adjust in a Controller-specific
         manner to avoid interactions with the physically relevant objects.
         """
-        o_len, o_height, o_dep = self.get_record_dimensions(record)
+        self.occlusion_distance_fraction = [0.6, 0.8]
+        self.occluder_rotation_jitter = 30.
+        self.occluder_min_z = self.middle_scale['z'] * 3.0
+        self.occluder_min_size = 0.5
+        self.occluder_max_size = 2.0
         
+        o_len, o_height, o_dep = self.get_record_dimensions(record)
+
+        ## get the occluder pose
+        ang = self.camera_rotation
+        rot = self.get_y_rotation(
+            [ang - self.occluder_rotation_jitter, ang + self.occluder_rotation_jitter])
+        bounds = {'x': o_len, 'y': o_height, 'z': o_dep}
+        print("initial bounds", bounds)        
+        bounds = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
+        bounds = {k:np.abs(v) for k,v in bounds.items()}
+        print("rotated bounds", bounds)
+
+        # make sure it's in a reasonable size range
+        size = max(list(bounds.values()))
+        size = np.minimum(np.maximum(size, self.occluder_min_size), self.occluder_max_size)
+        scale = size / max(list(bounds.values()))
+        print("initial scale", scale)
+        bounds = self.scale_vector(bounds, scale)
+        print("rescaled bounds", bounds)
+
+        ## choose the initial position of the object, before adjustment
+        occ_distance = random.uniform(*get_range(self.occlusion_distance_fraction))
+        pos = self.scale_vector(
+            unit_position_vector, occ_distance * self.camera_radius)
+
+        ## reposition and rescale it so it's not too close to the "physical dynamics" axis (z)
+        if np.abs(pos['z']) < (self.occluder_min_z + self.occluder_min_size):
+            pos.update({'z' : np.sign(pos['z']) * (self.occluder_min_z + self.occluder_min_size)})
+        
+        # reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
+        # if reach_z < self.occluder_min_z: # scale down
+        #     print("scale down")
+        #     scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
+        # else: # scale up
+        #     print("scale up")
+        #     scale_z = (0.5 * bounds['z']) / (np.abs(pos['z']) - self.occluder_min_z)
+        # print("scale_z", scale_z)
+        # bounds = self.scale_vector(bounds, scale_z)
+        # scale *= scale_z
+
+        ## reposition and rescale it so it's not too close to other occluders
+        if self.num_occluders > 1 and len(self.occluder_positions):
+            last_pos_x = self.occluder_positions[-1]['x']
+            last_bounds_x = self.occluder_dimensions[-1]['x']
+
+            if (pos['x'] + self.occluder_min_size) > (last_pos_x - 0.5 * last_bounds_x):
+                pos.update({'x': (last_pos_x - 0.5 * last_bounds_x) - self.occluder_min_size})
+            
+            # reach_x = pos['x'] + 0.5 * bounds['x']
+            # if reach_x > (last_pos_x - 0.5 * last_bounds_x): # scale down
+            #     scale_x = (last_pos_x - 0.5 * last_bounds_x - pos['x']) / (0.5 * bounds['x'])
+            # else:
+            #     scale_x = 1.0
+
+            # bounds = self.scale_vector(bounds, scale_x)
+            # scale *= scale_x
+            # print("scale_x", scale_x)
+
+        # do some trigonometry to figure out the scale of the occluder
+        self.rescale_occluder_height = True
+        if self.rescale_occluder_height:
+            occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
+            occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
+            occ_target_height *= self.occlusion_scale
+            occ_target_height = np.minimum(occ_target_height, self.occluder_max_size)
+            # occ_target_height = np.maximum(occ_target_height, self.occluder_min_size)
+            print("occ target height", occ_target_height)
+            scale_y = occ_target_height / bounds['y']
+
+            bounds = self.scale_vector(bounds, scale_y)
+            scale *= scale_y
+        scale = arr_to_xyz([scale] * 3)
+
+        print("final bounds", bounds)
+
+        self.occluder_positions.append(pos)
+        self.occluder_dimensions.append(bounds)
+
+        return (pos, rot, scale)
 
     def _place_background_distractors(self) -> List[dict]:
         """
@@ -1381,6 +1465,7 @@ class Dominoes(RigidbodiesDataset):
             # face toward camera
             ang = 0. if (self.camera_rotation > 0.) else 180.
             rot = self.get_y_rotation([ang, ang])
+
 
             # add the object
             commands.append(
@@ -1427,49 +1512,52 @@ class Dominoes(RigidbodiesDataset):
         self._set_occluder_objects()
 
         # path to camera
-        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
-        camera_ray /= np.linalg.norm(camera_ray)
-        camera_ray = arr_to_xyz(camera_ray)
+        # camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        # camera_ray /= np.linalg.norm(camera_ray)
+        # camera_ray = arr_to_xyz(camera_ray)
 
-        camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
+        # camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
 
         max_theta = self.occluder_angular_spacing * (self.num_occluders - 1)
         thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
+        self.occluder_positions = self.occluder_dimensions = []
         for i, o_id in enumerate(self.occluders.keys()):
             record = self.occluders[o_id]
 
             # set a position
             theta = thetas[i]
-            pos_unit = self.rotate_vector_parallel_to_floor(camera_ray, theta)
+            pos_unit = self.rotate_vector_parallel_to_floor(self.camera_ray, theta)
 
-            o_len, o_height, o_dep = self.get_record_dimensions(record)
-            scale = 1. / np.sqrt(o_len**2 + o_dep**2)
-            pos = self.scale_vector(pos_unit, 0.75 * camera_distance)
+            # o_len, o_height, o_dep = self.get_record_dimensions(record)
+            # scale = 1. / np.sqrt(o_len**2 + o_dep**2)
+            # pos = self.scale_vector(pos_unit, 0.75 * self.camera_radius)
 
-            if i == 0:
-                o_len_last = -o_len
-                last_x = pos['x']
+            # if i == 0:
+            #     o_len_last = -o_len
+            #     last_x = pos['x']
 
-            if self.num_occluders > 1:
-                x_offset = o_len_last + 0.6 * o_len
-            else:
-                x_offset = 0.
+            # if self.num_occluders > 1:
+            #     x_offset = o_len_last + 0.6 * o_len
+            # else:
+            #     x_offset = 0.
 
-            pos = arr_to_xyz(
-                [min([pos['x'] - x_offset, last_x - x_offset]),
-                 0.,
-                 np.sign(camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
-            o_len_last = 0.6*o_len
-            last_x = pos['x']
+            # pos = arr_to_xyz(
+            #     [min([pos['x'] - x_offset, last_x - x_offset]),
+            #      0.,
+            #      np.sign(self.camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
+            # o_len_last = 0.6*o_len
+            # last_x = pos['x']
 
-            # face the camera
-            ang = self.camera_rotation
-            rot = self.get_y_rotation([ang - 30., ang + 30.])
+            # # face the camera
+            # ang = self.camera_rotation
+            # rot = self.get_y_rotation([ang - 30., ang + 30.])
 
-            print("occluder name", record.name)
-            print("camera ray", camera_ray)
-            print("pos_unit", pos_unit)
-            print("pos", pos)
+            # print("occluder name", record.name)
+            # # print("camera ray", camera_ray)
+            # # print("pos_unit", pos_unit)
+            # print("pos", pos)
+
+            pos, rot, scale = self._get_occluder_position_pose_scale(record, pos_unit)
 
             # add the occluder
             commands.append(
@@ -1492,19 +1580,17 @@ class Dominoes(RigidbodiesDataset):
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
 
-            # do some trigonometry to figure out the scale of the occluder
-            occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
-            occ_dist *= np.cos(np.radians(theta))
-            occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
-            occ_target_height *= self.occlusion_scale
-            scale_y = self.scale_to(o_height, occ_target_height)
-            print("scale_y", scale_y)
-            scale = arr_to_xyz([scale, scale_y, scale])
+                
             commands.extend([
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}
             ])
+
+            print("occluder name", record.name)
+            print("occluder position", pos)
+            print("occluder pose", rot)
+            print("occluder scale", scale)
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
