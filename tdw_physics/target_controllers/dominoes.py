@@ -198,6 +198,9 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=225,
                         help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_left_right_reflections",
+                        action="store_true",
+                        help="Whether camera angle range includes reflections along the collision axis")    
     parser.add_argument("--material_types",
                         type=none_or_str,
                         default="Wood,Metal,Plastic",
@@ -462,6 +465,7 @@ class Dominoes(RigidbodiesDataset):
                  camera_radius=2.0,
                  camera_min_angle=0,
                  camera_max_angle=360,
+                 camera_left_right_reflections=False,
                  camera_min_height=1./3,
                  camera_max_height=2./3,
                  material_types=MATERIAL_TYPES,
@@ -570,6 +574,7 @@ class Dominoes(RigidbodiesDataset):
         self.camera_radius_range = get_range(camera_radius)
         self.camera_min_angle = camera_min_angle
         self.camera_max_angle = camera_max_angle
+        self.camera_left_right_reflections = camera_left_right_reflections
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
         self.camera_aim = {"x": 0., "y": 0.5, "z": 0.} # fixed aim
@@ -746,7 +751,8 @@ class Dominoes(RigidbodiesDataset):
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
-                                                center=TDWUtils.VECTOR3_ZERO)
+                                                center=TDWUtils.VECTOR3_ZERO,
+                                                reflections=self.camera_left_right_reflections)
 
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
@@ -1820,6 +1826,7 @@ if __name__ == "__main__":
         camera_max_angle=args.camera_max_angle,
         camera_min_height=args.camera_min_height,
         camera_max_height=args.camera_max_height,
+        camera_left_right_reflections=args.camera_left_right_reflections,
         monochrome=args.monochrome,
         material_types=args.material_types,
         target_material=args.tmaterial,

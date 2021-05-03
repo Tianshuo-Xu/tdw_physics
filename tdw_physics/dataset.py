@@ -476,7 +476,9 @@ class Dataset(Controller, ABC):
                                    y_max: float,
                                    center: Dict[str, float],
                                    angle_min: float = 0,
-                                   angle_max: float = 360) -> Dict[str, float]:
+                                   angle_max: float = 360,
+                                   reflections: bool = False,
+                                   ) -> Dict[str, float]:
         """
         :param radius_min: The minimum distance from the center.
         :param radius_max: The maximum distance from the center.
@@ -493,6 +495,9 @@ class Dataset(Controller, ABC):
         a_x = center["x"] + a_r
         a_z = center["z"] + a_r
         theta = np.radians(random.uniform(angle_min, angle_max))
+        if reflections:
+            theta2 = random.uniform(angle_min+180, angle_max+180)
+            theta = random.choice([theta, theta2])
         a_y = random.uniform(y_min, y_max)
         a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
         a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
