@@ -1549,7 +1549,7 @@ class Dominoes(RigidbodiesDataset):
 
         return (pos, rot, scale)
 
-    def _place_background_distractors(self) -> List[dict]:
+    def _place_background_distractors(self,z_pos_scale = 4.) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
         """
@@ -1618,7 +1618,7 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_occluders(self) -> List[dict]:
+    def _place_occluders(self, z_pos_scale = 4.0) -> List[dict]:
         """
         Put one or more objects in the foreground to occlude the intermediate part of the scene
         """

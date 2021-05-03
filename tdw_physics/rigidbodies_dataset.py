@@ -16,6 +16,8 @@ from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 def handle_random_transform_args(args):
 
     if args is not None:
+        if type(args) in [float,int,bool]: # don't apply any parsing to simple datatypes
+            return args
         try:
             args = json.loads(args)
         except:
@@ -497,8 +499,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                           "frequency": "always"}])
 
         if self.save_meshes:
-            commands.append({"$type": "send_meshes", "frequency": "once"})        
-        
+            commands.append({"$type": "send_meshes", "frequency": "once"})
+
         return commands
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -516,6 +518,15 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
         static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
         static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
+
+        if self.save_meshes:
+            mesh_group = static_group.create_group("mesh")
+
+            obj_points = []
+            for idx, object_id in enumerate(self.object_ids):
+                vertices, faces = self.object_meshes[object_id]
+                mesh_group.create_dataset(f"faces_{idx}", data=faces)
+                mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:

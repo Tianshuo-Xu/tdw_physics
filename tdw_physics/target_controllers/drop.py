@@ -246,8 +246,8 @@ class Drop(MultiDominoes):
         commands.extend(self._place_intermediate_object())
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius,
-                                                radius_max=self.camera_radius,
+        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+                                                radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.drop_height * self.camera_min_height,
@@ -263,6 +263,20 @@ class Drop(MultiDominoes):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
         ])
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+
+        # For distractor placements
+        self.middle_scale = self.zone_scale
+
+        # Place distractor objects in the background
+        commands.extend(self._place_background_distractors(z_pos_scale=1))
+
+        # Place occluder objects in the background
+        commands.extend(self._place_occluders(z_pos_scale=1))
+
         return commands
     
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -330,8 +344,8 @@ class Drop(MultiDominoes):
                 position=self.target_position,
                 rotation=self.target_rotation,
                 mass= random.uniform(*get_range(self.middle_mass_range)),
-                dynamic_friction=0.01, #values taken from dominoes
-                static_friction=0.01,
+                dynamic_friction=0.4, #increased friction
+                static_friction=0.4,
                 bounciness=0,       
                 o_id=o_id))
         
@@ -394,8 +408,8 @@ class Drop(MultiDominoes):
                 position=self.drop_position,
                 rotation=self.drop_rotation,
                 mass=self.probe_mass,
-                dynamic_friction=0.01, #values taken from dominoes
-                static_friction=0.01,
+                dynamic_friction=0.4, #increased friction
+                static_friction=0.4,
                 bounciness=0,       
                 o_id=o_id))
                 
@@ -519,7 +533,13 @@ if __name__ == "__main__":
         probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,
-        zone_friction=args.zfriction,,
+        zone_friction=args.zfriction,
+        distractor_types=args.distractor,
+        distractor_categories=args.distractor_categories,
+        num_distractors=args.num_distractors,
+        occluder_types=args.occluder,
+        occluder_categories=args.occluder_categories,
+        num_occluders=args.num_occluders,        
         flex_only=args.only_use_flex_objects        
     )
 
