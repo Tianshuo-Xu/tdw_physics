@@ -478,6 +478,7 @@ class Dominoes(RigidbodiesDataset):
                  distractor_types=PRIMITIVE_NAMES,
                  distractor_categories=None,
                  num_distractors=0,
+                 distractor_aspect_ratio=None,
                  occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
@@ -581,13 +582,14 @@ class Dominoes(RigidbodiesDataset):
 
         ## distractors and occluders
         self.num_distractors = num_distractors
+        self.distractor_aspect_ratio = get_range(distractor_aspect_ratio)
         self.distractor_types = self.get_types(
             distractor_types,
             libraries=self.model_libraries,
             categories=distractor_categories,
             flex_only=self.flex_only,
-            aspect_ratio_min=0.1,
-            aspect_ratio_max=10.0
+            aspect_ratio_min=self.distractor_aspect_ratio[0],
+            aspect_ratio_max=self.distractor_aspect_ratio[1]
         )
 
         self.num_occluders = num_occluders
@@ -1473,6 +1475,80 @@ class Dominoes(RigidbodiesDataset):
 
         return (pos, rot, scale)
 
+    def _set_distractor_attributes(self) -> None:
+
+        self.distractor_angular_spacing = 15
+        self.distractor_distance_fraction = [0.4,1.2]
+        self.distractor_rotation_jitter = 30
+        self.distractor_min_z = self.middle_scale['z'] + 0.25
+        self.distractor_min_size = 0.5
+        self.distractor_max_size = 2.5
+
+    def _get_distractor_position_pose_scale(self, record, unit_position_vector):
+
+        d_len, d_height, d_dep = self.get_record_dimensions(record)
+
+        ## get distractor pose and initial bounds
+        ang = 0 if (self.camera_rotation > 0) else 180
+        rot = self.get_y_rotation(
+            [ang - self.distractor_rotation_jitter, ang + self.distractor_rotation_jitter])
+        bounds = {'x': d_len, 'y': d_height, 'z': d_dep}
+        bounds_rot = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
+        bounds = {k:np.maximum(np.abs(v), bounds[k]) for k,v in bounds_rot.items()}
+        print("rotated bounds", bounds)
+
+        ## make sure it's in a reasonable size range
+        size = max(list(bounds.values()))
+        size = np.minimum(np.maximum(size, self.distractor_min_size), self.distractor_max_size)
+        scale = size / max(list(bounds.values()))
+        bounds = self.scale_vector(bounds, scale)
+        print("rescaled bounds", bounds)
+
+        ## choose the initial position of the object
+        distract_distance = random.uniform(*get_range(self.distractor_distance_fraction))
+        pos = self.scale_vector(
+            unit_position_vector, distract_distance * self.camera_radius)
+
+        ## reposition and rescale it away from the "physical dynamics axis"
+        if np.abs(pos['z']) < (self.distractor_min_z + self.distractor_min_size):
+            pos.update({'z': np.sign(pos['z']) * (self.distractor_min_z + self.distractor_min_size)})
+
+        reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
+        if reach_z < self.distractor_min_z: # scale down
+            scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
+        else:
+            scale_z = 1.0
+        print("scale_z", scale_z)
+        bounds = self.scale_vector(bounds, scale_z)
+        scale *= scale_z
+
+        ## reposition and rescale it so it's not too close to other distractors
+        if self.num_distractors > 1 and len(self.distractor_positions):
+            last_pos_x = self.distractor_positions[-1]['x']
+            last_bounds_x = self.distractor_dimensions[-1]['x']
+
+            if (pos['x'] + self.distractor_min_size) > (last_pos_x - 0.5 * last_bounds_x):
+                pos.update({'x': (last_pos_x - 0.5 * last_bounds_x) - self.distractor_min_size})
+
+            reach_x = pos['x'] + 0.5 * bounds['x']
+            if reach_x > (last_pos_x - 0.5 * last_bounds_x): # scale down
+                scale_x = (last_pos_x - 0.5 * last_bounds_x - pos['x']) / (0.5 * bounds['x'])
+            else:
+                scale_x = 1.0
+
+            bounds = self.scale_vector(bounds, scale_x)
+            scale *= scale_x
+            print("scale_x", scale_x)
+
+        scale = arr_to_xyz([scale] * 3)
+
+        print("final bounds", bounds)
+
+        self.distractor_positions.append(pos)
+        self.distractor_dimensions.append(bounds)
+
+        return (pos, rot, scale)
+
     def _place_background_distractors(self) -> List[dict]:
         """
         Put one or more objects in the background of the scene; they will not interfere with trial dynamics
@@ -1483,39 +1559,25 @@ class Dominoes(RigidbodiesDataset):
         # randomly sample distractors and give them obj_ids
         self._set_distractor_objects()
 
+        # set the distractor attributes
+        self._set_distractor_attributes()
+        self.distractor_positions = self.distractor_dimensions = []
+
         # distractors will be placed opposite camera
         opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
         opposite /= np.linalg.norm(opposite)
         opposite = arr_to_xyz(opposite)
 
-        max_theta = 20. * (self.num_distractors - 1) * np.sign(opposite['z'])
+        max_theta = self.distractor_angular_spacing * (self.num_distractors - 1) * np.sign(opposite['z'])
         thetas = np.linspace(-max_theta, max_theta, self.num_distractors)
         for i, o_id in enumerate(self.distractors.keys()):
             record = self.distractors[o_id]
-            print("distractor record")
-            print(record.name, record.wcategory)
 
-            # set a position
+
             theta = thetas[i]
             pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
-            d_len, d_height, d_dep = self.get_record_dimensions(record)
-
-            pos = self.scale_vector(pos_unit, d_len)
-            if i == 0:
-                d_len_last = -d_len
-                last_x = pos['x']
-            x_offset = d_len_last + 0.6*d_len
-            pos = arr_to_xyz(
-                [min([pos['x'] - x_offset, last_x - x_offset]),
-                 0.,
-                 np.sign(opposite['z'])*max([d_dep, self.middle_scale['z'] * 4.0])])
-            d_len_last = 0.6*d_len
-            last_x = pos['x']
-
-            # face toward camera
-            ang = 0. if (self.camera_rotation > 0.) else 180.
-            rot = self.get_y_rotation([ang, ang])
-
+            
+            pos, rot, scale = self._get_distractor_position_pose_scale(record, pos_unit)
 
             # add the object
             commands.append(
@@ -1538,7 +1600,7 @@ class Dominoes(RigidbodiesDataset):
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
 
-            scale = arr_to_xyz([1.,1.,1.])
+            # scale = arr_to_xyz([1.,1.,1.])
             commands.extend([
                 {"$type": "scale_object",
                  "scale_factor": scale,
@@ -1548,6 +1610,11 @@ class Dominoes(RigidbodiesDataset):
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
+
+            print("distractor record", record.name)
+            print("distractor category", record.wcategory)
+            print("distractor position", pos)
+            print("distractor scale", scale)
 
         return commands
 
