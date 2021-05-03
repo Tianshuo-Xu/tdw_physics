@@ -251,6 +251,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.75,
                         help="The height of the occluders as a proportion of camera height")
+    parser.add_argument("--occluder_aspect_ratio",
+                        type=none_or_str,
+                        default=None,
+                        help="The range of valid occluder aspect ratios")
     parser.add_argument("--remove_middle",
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
@@ -311,6 +315,9 @@ def get_args(dataset_dir: str, parse=True):
         args.fwait = handle_random_transform_args(args.fwait)
 
         args.horizontal = bool(args.horizontal)
+
+        # occluders and distrators
+        args.occluder_aspect_ratio = handle_random_transform_args(args.occluder_aspect_ratio)
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
@@ -472,6 +479,7 @@ class Dominoes(RigidbodiesDataset):
                  num_occluders=0,
                  occluder_angular_spacing=15,
                  occlusion_scale=0.6,
+                 occluder_aspect_ratio=None,
                  use_ramp=False,
                  ramp_has_friction=False,
                  ramp_scale=None,
@@ -581,13 +589,14 @@ class Dominoes(RigidbodiesDataset):
         self.num_occluders = num_occluders
         self.occluder_angular_spacing = occluder_angular_spacing
         self.occlusion_scale = occlusion_scale
+        self.occluder_aspect_ratio = get_range(occluder_aspect_ratio)
         self.occluder_types = self.get_types(
             occluder_types,
             libraries=self.model_libraries,
             categories=occluder_categories,
             flex_only=self.flex_only,
-            aspect_ratio_min=0.2,
-            aspect_ratio_max=5.0
+            aspect_ratio_min=self.occluder_aspect_ratio[0],
+            aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
 
     def get_types(self,
@@ -1536,12 +1545,6 @@ class Dominoes(RigidbodiesDataset):
         self._set_occluder_objects()
 
         # path to camera
-        # camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
-        # camera_ray /= np.linalg.norm(camera_ray)
-        # camera_ray = arr_to_xyz(camera_ray)
-
-        # camera_distance = np.linalg.norm(xyz_to_arr(camera_ray))
-
         max_theta = self.occluder_angular_spacing * (self.num_occluders - 1)
         thetas = np.linspace(-max_theta, max_theta, self.num_occluders)
         self.occluder_positions = self.occluder_dimensions = []
@@ -1551,35 +1554,6 @@ class Dominoes(RigidbodiesDataset):
             # set a position
             theta = thetas[i]
             pos_unit = self.rotate_vector_parallel_to_floor(self.camera_ray, theta)
-
-            # o_len, o_height, o_dep = self.get_record_dimensions(record)
-            # scale = 1. / np.sqrt(o_len**2 + o_dep**2)
-            # pos = self.scale_vector(pos_unit, 0.75 * self.camera_radius)
-
-            # if i == 0:
-            #     o_len_last = -o_len
-            #     last_x = pos['x']
-
-            # if self.num_occluders > 1:
-            #     x_offset = o_len_last + 0.6 * o_len
-            # else:
-            #     x_offset = 0.
-
-            # pos = arr_to_xyz(
-            #     [min([pos['x'] - x_offset, last_x - x_offset]),
-            #      0.,
-            #      np.sign(self.camera_ray['z']) * max([o_len, o_dep, pos['z'], self.middle_scale['z']*4.0])])
-            # o_len_last = 0.6*o_len
-            # last_x = pos['x']
-
-            # # face the camera
-            # ang = self.camera_rotation
-            # rot = self.get_y_rotation([ang - 30., ang + 30.])
-
-            # print("occluder name", record.name)
-            # # print("camera ray", camera_ray)
-            # # print("pos_unit", pos_unit)
-            # print("pos", pos)
 
             pos, rot, scale = self._get_occluder_position_pose_scale(record, pos_unit)
 
@@ -1844,6 +1818,7 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
+        occlusion_aspect_ratio=args.occluder_aspect_ratio,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,

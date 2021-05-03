@@ -94,7 +94,9 @@ PHYSICS_INFO: Dict[str, PhysicsInfo] = _get_default_physics_info()
 
 
 def get_range(scl):
-    if hasattr(scl, '__len__'):
+    if scl is None:
+        return None, None
+    elif hasattr(scl, '__len__'):
         return scl[0], scl[1]
     else:
         scl + 0.0
