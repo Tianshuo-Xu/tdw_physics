@@ -13,13 +13,14 @@ import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors
+from tdw.output_data import OutputData, SegmentationColors, Meshes
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
                                                get_across_trial_stats_from)
+from tdw_physics.util_geom import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
@@ -46,7 +47,7 @@ class Dataset(Controller, ABC):
     def __init__(self,
                  port: int = 1071,
                  check_version: bool=False,
-                 launch_build: bool=None,
+                 launch_build: bool=True,
                  randomize: int=0,
                  seed: int=0,
                  save_args=True,
@@ -54,11 +55,6 @@ class Dataset(Controller, ABC):
     ):
         # save the command-line args
         self.save_args = save_args
-
-        # unless otherwise told, default to launch_build behavior appropiate for system
-        if launch_build is None:
-            if platform.system() == 'Linux': launch_build = False
-            else: launch_build = True 
 
         super().__init__(port=port,
                          check_version=check_version,
@@ -188,7 +184,7 @@ class Dataset(Controller, ABC):
         :param save_movies: whether to save out a movie of each trial
         :param save_labels: whether to save out JSON labels for the full trial set.
         """
-        
+
         # If no temp_path given, place in local folder to prevent conflicts with other builds
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
@@ -209,12 +205,12 @@ class Dataset(Controller, ABC):
 
         # whether to send and save meshes
         self.save_meshes = save_meshes
-        
+
         print("write passes", self.write_passes)
         print("save passes", self.save_passes)
         print("save movies", self.save_movies)
         print("save meshes", self.save_meshes)
-        
+
         if self.save_movies:
             assert len(self.save_passes),\
                 "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
@@ -324,7 +320,11 @@ class Dataset(Controller, ABC):
                             remove_pngs=True,
                             use_parent_dir=False)
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
-
+                if self.save_meshes:
+                    for o_id in self.object_ids:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
             pbar.update(1)
         pbar.close()
 
@@ -368,8 +368,9 @@ class Dataset(Controller, ABC):
             print(r_types)
 
         self._set_segmentation_colors(resp)
-        frame = 0
 
+        self._get_object_meshes(resp)
+        frame = 0
         # Write static data to disk.
         static_group = f.create_group("static")
         self._write_static_data(static_group)
@@ -698,3 +699,18 @@ class Dataset(Controller, ABC):
                             np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+    def _get_object_meshes(self, resp: List[bytes]) -> None:
+
+        self.object_meshes = dict()
+        # {object_id: (vertices, faces)}
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'mesh':
+                meshes = Meshes(r)
+                nmeshes = meshes.get_num()
+
+                assert(len(self.object_ids) == nmeshes)
+                for index in range(nmeshes):
+                    o_id = meshes.get_object_id(index)
+                    vertices = meshes.get_vertices(index)
+                    faces = meshes.get_triangles(index)
+                    self.object_meshes[o_id] = (vertices, faces)
