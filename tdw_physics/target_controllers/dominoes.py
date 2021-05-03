@@ -470,7 +470,7 @@ class Dominoes(RigidbodiesDataset):
                  occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
-                 occluder_angular_spacing=20.,
+                 occluder_angular_spacing=15,
                  occlusion_scale=0.6,
                  use_ramp=False,
                  ramp_has_friction=False,
@@ -573,7 +573,9 @@ class Dominoes(RigidbodiesDataset):
             distractor_types,
             libraries=self.model_libraries,
             categories=distractor_categories,
-            flex_only=self.flex_only
+            flex_only=self.flex_only,
+            aspect_ratio_min=0.1,
+            aspect_ratio_max=10.0
         )
 
         self.num_occluders = num_occluders
@@ -583,11 +585,18 @@ class Dominoes(RigidbodiesDataset):
             occluder_types,
             libraries=self.model_libraries,
             categories=occluder_categories,
-            flex_only=self.flex_only
+            flex_only=self.flex_only,
+            aspect_ratio_min=0.2,
+            aspect_ratio_max=5.0
         )
 
-
-    def get_types(self, objlist, libraries=["models_flex.json"], categories=None, flex_only=True):
+    def get_types(self,
+                  objlist,
+                  libraries=["models_flex.json"],
+                  categories=None,
+                  flex_only=True,
+                  aspect_ratio_min=None,
+                  aspect_ratio_max=None):
 
         if isinstance(objlist, str):
             objlist = [objlist]
@@ -602,6 +611,11 @@ class Dominoes(RigidbodiesDataset):
 
         if flex_only:
             tlist = [r for r in tlist if r.flex == True]
+
+        if aspect_ratio_min:
+            tlist = [r for r in tlist if self.aspect_ratios(r)[0] > aspect_ratio_min]
+        if aspect_ratio_max:
+            tlist = [r for r in tlist if self.aspect_ratios(r)[1] < aspect_ratio_max]
 
         assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
@@ -1328,6 +1342,15 @@ class Dominoes(RigidbodiesDataset):
         return (length, height, depth)
 
     @staticmethod
+    def aspect_ratios(record: ModelRecord) -> List[float]:
+        l,h,d = Dominoes.get_record_dimensions(record)
+        a1 = float(h) / l
+        a2 = float(h) / d
+        min_ar = min(a1, a2)
+        max_ar = max(a1, a2)
+        return (min_ar, max_ar)
+
+    @staticmethod
     def scale_to(current_scale : float, target_scale : float) -> float:
 
         return target_scale / current_scale
@@ -1411,6 +1434,7 @@ class Dominoes(RigidbodiesDataset):
             # occ_target_height = np.maximum(occ_target_height, self.occluder_min_size)
             print("occ target height", occ_target_height)
             scale_y = occ_target_height / bounds['y']
+            print("scale_y", scale_y)
 
             bounds = self.scale_vector(bounds, scale_y)
             scale *= scale_y
@@ -1588,6 +1612,7 @@ class Dominoes(RigidbodiesDataset):
             ])
 
             print("occluder name", record.name)
+            print("occluder category", record.wcategory)
             print("occluder position", pos)
             print("occluder pose", rot)
             print("occluder scale", scale)
