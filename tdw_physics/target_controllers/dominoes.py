@@ -477,7 +477,6 @@ class Dominoes(RigidbodiesDataset):
                  occluder_types=PRIMITIVE_NAMES,
                  occluder_categories=None,
                  num_occluders=0,
-                 occluder_angular_spacing=15,
                  occlusion_scale=0.6,
                  occluder_aspect_ratio=None,
                  use_ramp=False,
@@ -587,7 +586,6 @@ class Dominoes(RigidbodiesDataset):
         )
 
         self.num_occluders = num_occluders
-        self.occluder_angular_spacing = occluder_angular_spacing
         self.occlusion_scale = occlusion_scale
         self.occluder_aspect_ratio = get_range(occluder_aspect_ratio)
         self.occluder_types = self.get_types(
@@ -750,29 +748,18 @@ class Dominoes(RigidbodiesDataset):
                                                 y_max=self.camera_max_height,
                                                 center=TDWUtils.VECTOR3_ZERO)
 
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
+
         commands.extend([
             {"$type": "teleport_avatar_to",
-             "position": a_pos},
+             "position": self.camera_position},
             {"$type": "look_at_position",
              "position": self.camera_aim},
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
-
-        self.camera_position = a_pos
-        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
-        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
-        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
-        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
-        self.camera_radius = np.linalg.norm(camera_ray)
-        camera_ray /= np.linalg.norm(camera_ray)
-        self.camera_ray = arr_to_xyz(camera_ray)
-
-        print("camera distance", self.camera_radius)
-        print("camera ray", self.camera_ray)
-        print("camera angle", self.camera_rotation)
-        print("camera altitude", self.camera_altitude)
-        print("camera position", self.camera_position)
+        
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -1364,16 +1351,41 @@ class Dominoes(RigidbodiesDataset):
 
         return target_scale / current_scale
 
+    def _set_avatar_attributes(self, avatar_position) -> None:
+
+        a_pos = avatar_position
+
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+        camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
+        self.camera_radius = np.linalg.norm(camera_ray)
+        camera_ray /= np.linalg.norm(camera_ray)
+        self.camera_ray = arr_to_xyz(camera_ray)
+
+        print("camera distance", self.camera_radius)
+        print("camera ray", self.camera_ray)
+        print("camera angle", self.camera_rotation)
+        print("camera altitude", self.camera_altitude)
+        print("camera position", self.camera_position)
+        
+
+    def _set_occlusion_attributes(self) -> None:
+
+        self.occluder_angular_spacing = 10
+        self.occlusion_distance_fraction = [0.6, 0.8]
+        self.occluder_rotation_jitter = 30.
+        self.occluder_min_z = self.middle_scale['z'] + 0.25
+        self.occluder_min_size = 0.25
+        self.occluder_max_size = 1.5
+        self.rescale_occluder_height = True
+
     def _get_occluder_position_pose_scale(self, record, unit_position_vector):
         """
         Given a unit vector direction in world coordinates, adjust in a Controller-specific
         manner to avoid interactions with the physically relevant objects.
         """
-        self.occlusion_distance_fraction = [0.6, 0.8]
-        self.occluder_rotation_jitter = 30.
-        self.occluder_min_z = self.middle_scale['z'] * 3.0
-        self.occluder_min_size = 0.5
-        self.occluder_max_size = 2.0
         
         o_len, o_height, o_dep = self.get_record_dimensions(record)
 
@@ -1383,8 +1395,8 @@ class Dominoes(RigidbodiesDataset):
             [ang - self.occluder_rotation_jitter, ang + self.occluder_rotation_jitter])
         bounds = {'x': o_len, 'y': o_height, 'z': o_dep}
         print("initial bounds", bounds)        
-        bounds = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
-        bounds = {k:np.abs(v) for k,v in bounds.items()}
+        bounds_rot = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
+        bounds = {k:np.maximum(np.abs(v), bounds[k]) for k,v in bounds_rot.items()}
         print("rotated bounds", bounds)
 
         # make sure it's in a reasonable size range
@@ -1404,16 +1416,15 @@ class Dominoes(RigidbodiesDataset):
         if np.abs(pos['z']) < (self.occluder_min_z + self.occluder_min_size):
             pos.update({'z' : np.sign(pos['z']) * (self.occluder_min_z + self.occluder_min_size)})
         
-        # reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
-        # if reach_z < self.occluder_min_z: # scale down
-        #     print("scale down")
-        #     scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
-        # else: # scale up
-        #     print("scale up")
-        #     scale_z = (0.5 * bounds['z']) / (np.abs(pos['z']) - self.occluder_min_z)
-        # print("scale_z", scale_z)
-        # bounds = self.scale_vector(bounds, scale_z)
-        # scale *= scale_z
+        reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
+        if reach_z < self.occluder_min_z: # scale down
+            print("scale down")
+            scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
+        else:
+            scale_z = 1.0
+        print("scale_z", scale_z)
+        bounds = self.scale_vector(bounds, scale_z)
+        scale *= scale_z
 
         ## reposition and rescale it so it's not too close to other occluders
         if self.num_occluders > 1 and len(self.occluder_positions):
@@ -1423,26 +1434,26 @@ class Dominoes(RigidbodiesDataset):
             if (pos['x'] + self.occluder_min_size) > (last_pos_x - 0.5 * last_bounds_x):
                 pos.update({'x': (last_pos_x - 0.5 * last_bounds_x) - self.occluder_min_size})
             
-            # reach_x = pos['x'] + 0.5 * bounds['x']
-            # if reach_x > (last_pos_x - 0.5 * last_bounds_x): # scale down
-            #     scale_x = (last_pos_x - 0.5 * last_bounds_x - pos['x']) / (0.5 * bounds['x'])
-            # else:
-            #     scale_x = 1.0
+            reach_x = pos['x'] + 0.5 * bounds['x']
+            if reach_x > (last_pos_x - 0.5 * last_bounds_x): # scale down
+                scale_x = (last_pos_x - 0.5 * last_bounds_x - pos['x']) / (0.5 * bounds['x'])
+            else:
+                scale_x = 1.0
 
-            # bounds = self.scale_vector(bounds, scale_x)
-            # scale *= scale_x
-            # print("scale_x", scale_x)
+            bounds = self.scale_vector(bounds, scale_x)
+            scale *= scale_x
+            print("scale_x", scale_x)
 
         # do some trigonometry to figure out the scale of the occluder
-        self.rescale_occluder_height = True
         if self.rescale_occluder_height:
             occ_dist = np.sqrt(pos['x']**2 + pos['z']**2)
             occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
             occ_target_height *= self.occlusion_scale
             occ_target_height = np.minimum(occ_target_height, self.occluder_max_size)
-            # occ_target_height = np.maximum(occ_target_height, self.occluder_min_size)
             print("occ target height", occ_target_height)
             scale_y = occ_target_height / bounds['y']
+            scale_y = np.minimum(
+                scale_y, (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z']))
             print("scale_y", scale_y)
 
             bounds = self.scale_vector(bounds, scale_y)
@@ -1543,6 +1554,9 @@ class Dominoes(RigidbodiesDataset):
 
         # randomly sample occluders and give them obj_ids
         self._set_occluder_objects()
+
+        # set the attributes that determine position, pose, scale for this controller
+        self._set_occlusion_attributes()
 
         # path to camera
         max_theta = self.occluder_angular_spacing * (self.num_occluders - 1)
@@ -1818,7 +1832,7 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
-        occlusion_aspect_ratio=args.occluder_aspect_ratio,
+        occluder_aspect_ratio=args.occluder_aspect_ratio,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
