@@ -239,6 +239,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=int,
                         default=0,
                         help="The number of background distractor objects to place")
+    parser.add_argument("--distractor_aspect_ratio",
+                        type=none_or_str,
+                        default=None,
+                        help="The range of valid distractor aspect ratios")    
     parser.add_argument("--occluder",
                         type=none_or_str,
                         default="core",
@@ -321,6 +325,7 @@ def get_args(dataset_dir: str, parse=True):
 
         # occluders and distrators
         args.occluder_aspect_ratio = handle_random_transform_args(args.occluder_aspect_ratio)
+        args.distractor_aspect_ratio = handle_random_transform_args(args.distractor_aspect_ratio)        
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
@@ -1478,7 +1483,7 @@ class Dominoes(RigidbodiesDataset):
     def _set_distractor_attributes(self) -> None:
 
         self.distractor_angular_spacing = 15
-        self.distractor_distance_fraction = [0.4,1.2]
+        self.distractor_distance_fraction = [0.4,1.0]
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = self.middle_scale['z'] + 0.25
         self.distractor_min_size = 0.5
@@ -1907,6 +1912,7 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         occluder_aspect_ratio=args.occluder_aspect_ratio,
+        distractor_aspect_ratio=args.distractor_aspect_ratio,        
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
