@@ -185,6 +185,9 @@ class Collision(Dominoes):
                                                 y_max=self.camera_max_height,
                                                 center=TDWUtils.VECTOR3_ZERO)
 
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
+
         commands.extend([
             {"$type": "teleport_avatar_to",
              "position": a_pos},
