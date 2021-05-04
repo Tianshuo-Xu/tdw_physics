@@ -365,6 +365,7 @@ class Collision(Dominoes):
         return funcs
     
     def is_done(self, resp: List[bytes], frame: int) -> bool:
+        frame *= (float(30) / self._framerate)
         return frame > 150 # End after X frames even if objects are still moving.
 
     def _set_distractor_attributes(self) -> None:
@@ -374,7 +375,7 @@ class Collision(Dominoes):
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = self.middle_scale['z'] * 2.0
         self.distractor_min_size = 0.5
-        self.distractor_max_size = 1.5
+        self.distractor_max_size = 1.0
 
     def _set_occlusion_attributes(self) -> None:
 
@@ -453,14 +454,17 @@ if __name__ == "__main__":
 
     if bool(args.run):
         ColC.run(num=args.num,
-               output_dir=args.dir,
-               temp_path=args.temp,
-               width=args.width,
-               height=args.height,
-               save_passes=args.save_passes.split(','),
-               save_movies=args.save_movies,
-               save_labels=args.save_labels,               
-               args_dict=vars(args)
+                 output_dir=args.dir,
+                 temp_path=args.temp,
+                 width=args.width,
+                 height=args.height,
+                 framerate=args.framerate,
+                 save_passes=args.save_passes.split(','),
+                 save_movies=args.save_movies,
+                 save_labels=args.save_labels,
+                 save_meshes=args.save_meshes,
+                 write_passes=args.write_passes,
+                 args_dict=vars(args)
         )
     else:
         ColC.communicate({"$type": "terminate"})

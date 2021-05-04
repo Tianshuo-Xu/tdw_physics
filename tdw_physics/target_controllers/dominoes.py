@@ -947,6 +947,7 @@ class Dominoes(RigidbodiesDataset):
         return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
+        frame *= (float(30) / self._framerate)        
         return frame > 300
 
     def get_rotation(self, rot_range):
@@ -1487,7 +1488,7 @@ class Dominoes(RigidbodiesDataset):
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = self.middle_scale['z'] + 0.25
         self.distractor_min_size = 0.5
-        self.distractor_max_size = 2.5
+        self.distractor_max_size = 1.5
 
     def _get_distractor_position_pose_scale(self, record, unit_position_vector):
 
@@ -1506,6 +1507,7 @@ class Dominoes(RigidbodiesDataset):
         size = max(list(bounds.values()))
         size = np.minimum(np.maximum(size, self.distractor_min_size), self.distractor_max_size)
         scale = size / max(list(bounds.values()))
+        print("initial scale", scale)
         bounds = self.scale_vector(bounds, scale)
         print("rescaled bounds", bounds)
 
@@ -1548,6 +1550,7 @@ class Dominoes(RigidbodiesDataset):
         scale = arr_to_xyz([scale] * 3)
 
         print("final bounds", bounds)
+        print("final scale", scale)
 
         self.distractor_positions.append(pos)
         self.distractor_dimensions.append(bounds)
@@ -1595,7 +1598,7 @@ class Dominoes(RigidbodiesDataset):
 
             # give it a color and texture if it's a primitive
             # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)            
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
@@ -1660,7 +1663,7 @@ class Dominoes(RigidbodiesDataset):
 
             # give it a texture if it's a primitive
             # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=self.target_color, exclude_range=0.5)            
+            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)            
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
@@ -1925,6 +1928,7 @@ if __name__ == "__main__":
                  temp_path=args.temp,
                  width=args.width,
                  height=args.height,
+                 framerate=args.framerate,
                  write_passes=args.write_passes.split(','),
                  save_passes=args.save_passes.split(','),
                  save_movies=args.save_movies,

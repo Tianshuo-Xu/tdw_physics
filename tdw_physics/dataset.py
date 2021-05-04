@@ -151,7 +151,7 @@ class Dataset(Controller, ABC):
                           "type": "A_Img_Caps_Kinematic",
                           "id": "a"},
                          {"$type": "set_target_framerate",
-                          "framerate": 30},
+                          "framerate": self._framerate},
                          {"$type": "set_pass_masks",
                           "pass_masks": self.write_passes},
                          {"$type": "set_field_of_view",
@@ -166,6 +166,7 @@ class Dataset(Controller, ABC):
             temp_path: str,
             width: int,
             height: int,
+            framerate: int = 30,
             write_passes: List[str] = PASSES,
             save_passes: List[str] = [],
             save_movies: bool = False,
@@ -188,7 +189,8 @@ class Dataset(Controller, ABC):
         # If no temp_path given, place in local folder to prevent conflicts with other builds
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
-        self._height, self._width = height, width
+        self._height, self._width, self._framerate = height, width, framerate
+        print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
 
         # which passes to write to the HDF5
         self.write_passes = write_passes
