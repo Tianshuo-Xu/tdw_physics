@@ -36,7 +36,7 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
     ### zone
     parser.add_argument("--zscale",
                         type=str,
-                        default="2.0,0.0001,2.0",
+                        default="2.0,0.01,2.0",
                         help="scale of target zone")
 
     parser.add_argument("--zone",
@@ -220,6 +220,9 @@ class RollingSliding(MultiDominoes):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
+
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
 
         self.camera_position = a_pos
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
