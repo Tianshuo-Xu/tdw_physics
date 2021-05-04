@@ -263,6 +263,10 @@ class Drop(MultiDominoes):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
         ])
+
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
+
         self.camera_position = a_pos
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
