@@ -426,8 +426,10 @@ class Dataset(Controller, ABC):
         #get PIL image
         _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
         #get colors
-        zone_color = self.object_segmentation_colors[0]
-        target_color = self.object_segmentation_colors[1]
+        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
         #get individual maps
         zone_map = _id_map == zone_color
         target_map = _id_map == target_color
