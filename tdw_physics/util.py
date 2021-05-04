@@ -131,6 +131,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
+    parser.add_argument("--framerate", type=int, default=30, help="Framerate for rendered movies")
     parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")    
     parser.add_argument("--seed", type=int, default=0, help="Random seed with which to initialize scenario")
     parser.add_argument("--random", type=int, default=1, help="Whether to set trials randomly")

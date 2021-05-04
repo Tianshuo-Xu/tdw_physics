@@ -124,6 +124,16 @@ def get_collision_args(dataset_dir: str, parse=True):
                         default="2.3",
                         help="radial distance from camera to centerpoint")
 
+    ## occluders and distractors
+    parser.add_argument("--occluder_aspect_ratio",
+                        type=none_or_str,
+                        default="[0.5,2.5]",
+                        help="The range of valid occluder aspect ratios")
+    parser.add_argument("--distractor_aspect_ratio",
+                        type=none_or_str,
+                        default="[0.25,5.0]",
+                        help="The range of valid distractor aspect ratios")        
+
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
         return args
@@ -184,6 +194,9 @@ class Collision(Dominoes):
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
                                                 center=TDWUtils.VECTOR3_ZERO)
+
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
 
         commands.extend([
             {"$type": "teleport_avatar_to",
@@ -352,7 +365,27 @@ class Collision(Dominoes):
         return funcs
     
     def is_done(self, resp: List[bytes], frame: int) -> bool:
+        frame *= (float(30) / self._framerate)
         return frame > 150 # End after X frames even if objects are still moving.
+
+    def _set_distractor_attributes(self) -> None:
+
+        self.distractor_angular_spacing = 20
+        self.distractor_distance_fraction = [0.4,1.0]
+        self.distractor_rotation_jitter = 30
+        self.distractor_min_z = self.middle_scale['z'] * 2.0
+        self.distractor_min_size = 0.5
+        self.distractor_max_size = 1.0
+
+    def _set_occlusion_attributes(self) -> None:
+
+        self.occluder_angular_spacing = 15
+        self.occlusion_distance_fraction = [0.6, 0.8]
+        self.occluder_rotation_jitter = 30.
+        self.occluder_min_z = self.middle_scale['z'] * 2.0
+        self.occluder_min_size = 0.25
+        self.occluder_max_size = 1.0
+        self.rescale_occluder_height = True    
     
 
 if __name__ == "__main__":
@@ -367,6 +400,7 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0"
 
     ColC = Collision(
+        port=args.port,
         room=args.room,
         randomize=args.random,
         seed=args.seed,
@@ -412,20 +446,25 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
+        occluder_aspect_ratio=args.occluder_aspect_ratio,
+        distractor_aspect_ratio=args.distractor_aspect_ratio,                
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects        
     )
 
     if bool(args.run):
         ColC.run(num=args.num,
-               output_dir=args.dir,
-               temp_path=args.temp,
-               width=args.width,
-               height=args.height,
-               save_passes=args.save_passes.split(','),
-               save_movies=args.save_movies,
-               save_labels=args.save_labels,               
-               args_dict=vars(args)
+                 output_dir=args.dir,
+                 temp_path=args.temp,
+                 width=args.width,
+                 height=args.height,
+                 framerate=args.framerate,
+                 save_passes=args.save_passes.split(','),
+                 save_movies=args.save_movies,
+                 save_labels=args.save_labels,
+                 save_meshes=args.save_meshes,
+                 write_passes=args.write_passes,
+                 args_dict=vars(args)
         )
     else:
         ColC.communicate({"$type": "terminate"})

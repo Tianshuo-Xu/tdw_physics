@@ -151,7 +151,7 @@ class Dataset(Controller, ABC):
                           "type": "A_Img_Caps_Kinematic",
                           "id": "a"},
                          {"$type": "set_target_framerate",
-                          "framerate": 30},
+                          "framerate": self._framerate},
                          {"$type": "set_pass_masks",
                           "pass_masks": self.write_passes},
                          {"$type": "set_field_of_view",
@@ -166,6 +166,7 @@ class Dataset(Controller, ABC):
             temp_path: str,
             width: int,
             height: int,
+            framerate: int = 30,
             write_passes: List[str] = PASSES,
             save_passes: List[str] = [],
             save_movies: bool = False,
@@ -188,7 +189,8 @@ class Dataset(Controller, ABC):
         # If no temp_path given, place in local folder to prevent conflicts with other builds
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
-        self._height, self._width = height, width
+        self._height, self._width, self._framerate = height, width, framerate
+        print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
 
         # which passes to write to the HDF5
         self.write_passes = write_passes
@@ -478,7 +480,9 @@ class Dataset(Controller, ABC):
                                    y_max: float,
                                    center: Dict[str, float],
                                    angle_min: float = 0,
-                                   angle_max: float = 360) -> Dict[str, float]:
+                                   angle_max: float = 360,
+                                   reflections: bool = False,
+                                   ) -> Dict[str, float]:
         """
         :param radius_min: The minimum distance from the center.
         :param radius_max: The maximum distance from the center.
@@ -495,6 +499,9 @@ class Dataset(Controller, ABC):
         a_x = center["x"] + a_r
         a_z = center["z"] + a_r
         theta = np.radians(random.uniform(angle_min, angle_max))
+        if reflections:
+            theta2 = random.uniform(angle_min+180, angle_max+180)
+            theta = random.choice([theta, theta2])
         a_y = random.uniform(y_min, y_max)
         a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
         a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
