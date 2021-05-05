@@ -363,12 +363,21 @@ class Dataset(Controller, ABC):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
-        while 'imag' not in r_types:
-            resp = self.communicate(commands)
-            r_types = [OutputData.get_data_type_id(r) for r in resp]
-            count += 1
-            print("INITIAL RESPONSE FROM BUILD ON TRY %d" % count)
-            print(r_types)
+        # while 'imag' not in r_types:
+        resp = self.communicate(commands)
+        r_types = print("initial response from build", [OutputData.get_data_type_id(r) for r in resp])
+            # count += 1
+            # print("INITIAL RESPONSE FROM BUILD ON TRY %d" % count)
+        print(r_types)
+            # with open("tdw_commands.json", "at") as g:
+            #     g.write(("try %d initial response types from build on trial %d: " % (count, self._trial_num)) + json.dumps(r_types) + "\n")
+
+            # if ('imag' not in r_types):
+            #     destroy = []
+            #     for o_id in self.object_ids:
+            #         destroy.append({"$type": self._get_destroy_object_command_name(o_id),
+            #                          "id": int(o_id)})
+            #         self.communicate(destroy)
 
         self._set_segmentation_colors(resp)
 
