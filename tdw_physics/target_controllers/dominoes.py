@@ -1851,10 +1851,7 @@ class MultiDominoes(Dominoes):
 
         return commands
 
-    def communicate(self, commands) -> list:
-        with open("tdw_commands.json", "at") as f:
-            f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
-        return super().communicate(commands)
+
 
 if __name__ == "__main__":
     import platform, os
