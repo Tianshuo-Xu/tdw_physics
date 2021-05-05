@@ -70,6 +70,14 @@ class Dataset(Controller, ABC):
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
 
+    def communicate(self, commands) -> list:
+        '''
+        Save a log of the commands so that they can be rerun
+        '''
+        with open(str(self.command_log), "at") as f:
+            f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+        return super().communicate(commands)        
+
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
         self.model_names = []
@@ -193,6 +201,13 @@ class Dataset(Controller, ABC):
         self._height, self._width, self._framerate = height, width, framerate
         print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
 
+        # the dir where files and metadata will go
+        if not Path(output_dir).exists():
+            Path(output_dir).mkdir(parents=True)
+        
+        # save a log of the commands send to TDW build
+        self.command_log = Path(output_dir).joinpath('tdw_commands.json')        
+
         # which passes to write to the HDF5
         self.write_passes = write_passes
         if isinstance(self.write_passes, str):
@@ -270,6 +285,7 @@ class Dataset(Controller, ABC):
                    num: int,
                    output_dir: str,
                    temp_path: str) -> None:
+
 
         output_dir = Path(output_dir)
         if not output_dir.exists():
@@ -363,21 +379,7 @@ class Dataset(Controller, ABC):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
-        # while 'imag' not in r_types:
         resp = self.communicate(commands)
-        r_types = print("initial response from build", [OutputData.get_data_type_id(r) for r in resp])
-            # count += 1
-            # print("INITIAL RESPONSE FROM BUILD ON TRY %d" % count)
-        print(r_types)
-            # with open("tdw_commands.json", "at") as g:
-            #     g.write(("try %d initial response types from build on trial %d: " % (count, self._trial_num)) + json.dumps(r_types) + "\n")
-
-            # if ('imag' not in r_types):
-            #     destroy = []
-            #     for o_id in self.object_ids:
-            #         destroy.append({"$type": self._get_destroy_object_command_name(o_id),
-            #                          "id": int(o_id)})
-            #         self.communicate(destroy)
 
         self._set_segmentation_colors(resp)
 
