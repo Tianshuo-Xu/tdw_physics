@@ -55,6 +55,7 @@ class Dataset(Controller, ABC):
     ):
         # save the command-line args
         self.save_args = save_args
+        self._trial_num = None
 
         super().__init__(port=port,
                          check_version=check_version,
