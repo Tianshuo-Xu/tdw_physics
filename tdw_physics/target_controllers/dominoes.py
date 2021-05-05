@@ -213,7 +213,7 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="wood_european_ash",
                         help="Material name for target. If None, samples from material_type")
-    parser.add_argument("--rmaterial",
+    parser.add_argument("--rm˘aterial",
                         type=none_or_str,
                         default=None,
                         help="Material name for ramp. If None, same as zone material")
@@ -947,7 +947,6 @@ class Dominoes(RigidbodiesDataset):
         return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        frame *= (float(30) / self._framerate)        
         return frame > 300
 
     def get_rotation(self, rot_range):

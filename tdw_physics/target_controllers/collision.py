@@ -365,7 +365,6 @@ class Collision(Dominoes):
         return funcs
     
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        frame *= (float(30) / self._framerate)
         return frame > 150 # End after X frames even if objects are still moving.
 
     def _set_distractor_attributes(self) -> None:
