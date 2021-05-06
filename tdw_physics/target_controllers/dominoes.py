@@ -284,6 +284,9 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--training_data_mode",
                         action="store_true",
                         help="Overwrite some parameters to generate training data without target objects, zones, etc.")
+    parser.add_argument("--match_probe_and_target_color",
+                        action="store_true",
+                        help="Probe and target will have the same color.")    
 
     def postprocess(args):
         # choose a valid room
@@ -429,6 +432,7 @@ def get_args(dataset_dir: str, parse=True):
             args.seed = (args.seed * 1000) % 997
 
             # randomize colors and wood textures
+            args.match_probe_and_target_color = False
             args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None
             # args.tmaterial = args.zmaterial = args.pmaterial = args.mmaterial = args.rmaterial = "Wood"
 
@@ -516,6 +520,7 @@ class Dominoes(RigidbodiesDataset):
                  ramp_base_height_range=0,
                  flex_only=False,
                  no_moving_distractors=False,
+                 match_probe_and_target_color=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -588,7 +593,7 @@ class Dominoes(RigidbodiesDataset):
         self.probe_rotation_range = probe_rotation_range
         self.probe_mass_range = get_range(probe_mass_range)
         self.probe_material = probe_material
-        self.match_probe_and_target_color = True
+        self.match_probe_and_target_color = match_probe_and_target_color
 
         self.middle_scale_range = target_scale_range
 
@@ -1954,7 +1959,8 @@ if __name__ == "__main__":
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        match_probe_and_target_color=args.match_probe_and_target_color
     )
 
     if bool(args.run):

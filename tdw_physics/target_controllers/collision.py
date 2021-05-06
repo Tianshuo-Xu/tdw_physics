@@ -463,7 +463,8 @@ if __name__ == "__main__":
         distractor_aspect_ratio=args.distractor_aspect_ratio,                
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors        
+        no_moving_distractors=args.no_moving_distractors,
+        match_probe_and_target_color=args.match_probe_and_target_color        
     )
 
     if bool(args.run):
