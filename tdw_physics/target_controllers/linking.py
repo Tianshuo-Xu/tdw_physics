@@ -224,17 +224,6 @@ def get_linking_args(dataset_dir: str, parse=True):
     args = parser.parse_args()
     args = postprocess(args)
     
-    # produce training data
-    if args.training_data_mode:
-        args.dir = os.path.join(args.dir, 'training_data')
-        args.random = 0
-        args.seed = args.seed + 1
-        args.color = args.pcolor = args.mcolor = args.rcolor = None            
-        args.remove_zone = 1
-        args.remove_target = 1
-        args.save_passes = ""
-        args.save_movies = False
-
     return args
 
 class Linking(Tower):
