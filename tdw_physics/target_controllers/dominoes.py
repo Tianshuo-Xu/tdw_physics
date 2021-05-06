@@ -289,6 +289,10 @@ def get_args(dataset_dir: str, parse=True):
         # choose a valid room
         assert args.room in ['box', 'tdw', 'house'], args.room
 
+        # multiply the number of trials by a factor
+        if int(args.num_multiplier) > 1:
+            args.num = args.num * int(args.num_multiplier)
+
         # parse the model libraries
         if args.model_libraries is not None:
             if not isinstance(args.model_libraries, list):
