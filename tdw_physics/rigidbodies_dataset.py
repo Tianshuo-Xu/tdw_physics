@@ -236,9 +236,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         """
 
         if o_id is None:
-            print("random o_id")
             o_id: int = self.get_unique_id()
-        print("Adding object with o_id", o_id)
 
         # Get the add_object command.
         add_object = self.add_transforms_object(o_id=o_id,

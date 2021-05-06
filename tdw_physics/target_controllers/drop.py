@@ -544,7 +544,8 @@ if __name__ == "__main__":
         occluder_types=args.occluder,
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,        
-        flex_only=args.only_use_flex_objects        
+        flex_only=args.only_use_flex_objects,
+        no_moving_distractors=args.no_moving_distractors        
     )
 
     if bool(args.run):

@@ -333,7 +333,9 @@ class Collision(Dominoes):
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
-        print("force wait", self.force_wait)
+
+        if self.PRINT:
+            print("force wait", self.force_wait)
 
         if self.force_wait == 0:
             commands.append(self.push_cmd)
@@ -448,7 +450,8 @@ if __name__ == "__main__":
         occluder_aspect_ratio=args.occluder_aspect_ratio,
         distractor_aspect_ratio=args.distractor_aspect_ratio,                
         probe_lift = args.plift,
-        flex_only=args.only_use_flex_objects        
+        flex_only=args.only_use_flex_objects,
+        no_moving_distractors=args.no_moving_distractors        
     )
 
     if bool(args.run):

@@ -444,7 +444,8 @@ if __name__ == '__main__':
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
-        flex_only=args.only_use_flex_objects        
+        flex_only=args.only_use_flex_objects,
+        no_moving_distractors=args.no_moving_distractors        
     )
 
     if bool(args.run):
