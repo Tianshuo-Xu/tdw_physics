@@ -262,6 +262,11 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default=None,
                         help="The range of valid occluder aspect ratios")
+    parser.add_argument("--no_moving_distractors",
+                        action="store_true",
+                        help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")    
+    
+    
     parser.add_argument("--remove_middle",
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
@@ -440,6 +445,7 @@ class Dominoes(RigidbodiesDataset):
     MAX_TRIALS = 1000
     DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
+    PRINT = False
 
     def __init__(self,
                  port: int = None,
@@ -495,6 +501,7 @@ class Dominoes(RigidbodiesDataset):
                  ramp_color=[0.75,0.75,1.0],
                  ramp_base_height_range=0,
                  flex_only=False,
+                 no_moving_distractors=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -513,6 +520,9 @@ class Dominoes(RigidbodiesDataset):
         
         ## whether only flex objects are allowed
         self.flex_only = flex_only
+
+        ## whether the occluders and distractors can move
+        self.no_moving_distractors = no_moving_distractors
 
         ## color randomization
         self._random_target_color = (target_color is None)
@@ -785,7 +795,8 @@ class Dominoes(RigidbodiesDataset):
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
         if (self.force_wait != 0) and frame == self.force_wait:
-            print("applied %s at time step %d" % (self.push_cmd, frame))
+            if self.PRINT:
+                print("applied %s at time step %d" % (self.push_cmd, frame))
             return [self.push_cmd]
         else:
             return []
@@ -1176,8 +1187,9 @@ class Dominoes(RigidbodiesDataset):
 
         self.push_position = self.probe_initial_position
 
-        print("PROBE MASS", self.probe_mass)
-        print("PUSH FORCE", self.push_force)
+        if self.PRINT:
+            print("PROBE MASS", self.probe_mass)
+            print("PUSH FORCE", self.push_force)
         if self.use_ramp:
             self.push_cmd = self._get_push_cmd(o_id, None)
         else:
@@ -1193,7 +1205,8 @@ class Dominoes(RigidbodiesDataset):
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
-        print("force wait", self.force_wait)
+        if self.PRINT:
+            print("force wait", self.force_wait)
 
         if self.force_wait == 0:
             commands.append(self.push_cmd)
@@ -1377,11 +1390,12 @@ class Dominoes(RigidbodiesDataset):
         camera_ray /= np.linalg.norm(camera_ray)
         self.camera_ray = arr_to_xyz(camera_ray)
 
-        print("camera distance", self.camera_radius)
-        print("camera ray", self.camera_ray)
-        print("camera angle", self.camera_rotation)
-        print("camera altitude", self.camera_altitude)
-        print("camera position", self.camera_position)
+        if self.PRINT:
+            print("camera distance", self.camera_radius)
+            print("camera ray", self.camera_ray)
+            print("camera angle", self.camera_rotation)
+            print("camera altitude", self.camera_altitude)
+            print("camera position", self.camera_position)
         
 
     def _set_occlusion_attributes(self) -> None:
@@ -1407,18 +1421,14 @@ class Dominoes(RigidbodiesDataset):
         rot = self.get_y_rotation(
             [ang - self.occluder_rotation_jitter, ang + self.occluder_rotation_jitter])
         bounds = {'x': o_len, 'y': o_height, 'z': o_dep}
-        print("initial bounds", bounds)        
         bounds_rot = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
         bounds = {k:np.maximum(np.abs(v), bounds[k]) for k,v in bounds_rot.items()}
-        print("rotated bounds", bounds)
 
         # make sure it's in a reasonable size range
         size = max(list(bounds.values()))
         size = np.minimum(np.maximum(size, self.occluder_min_size), self.occluder_max_size)
         scale = size / max(list(bounds.values()))
-        print("initial scale", scale)
         bounds = self.scale_vector(bounds, scale)
-        print("rescaled bounds", bounds)
 
         ## choose the initial position of the object, before adjustment
         occ_distance = random.uniform(*get_range(self.occlusion_distance_fraction))
@@ -1431,11 +1441,9 @@ class Dominoes(RigidbodiesDataset):
         
         reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
         if reach_z < self.occluder_min_z: # scale down
-            print("scale down")
             scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
         else:
             scale_z = 1.0
-        print("scale_z", scale_z)
         bounds = self.scale_vector(bounds, scale_z)
         scale *= scale_z
 
@@ -1455,7 +1463,6 @@ class Dominoes(RigidbodiesDataset):
 
             bounds = self.scale_vector(bounds, scale_x)
             scale *= scale_x
-            print("scale_x", scale_x)
 
         # do some trigonometry to figure out the scale of the occluder
         if self.rescale_occluder_height:
@@ -1463,17 +1470,13 @@ class Dominoes(RigidbodiesDataset):
             occ_target_height = self.camera_aim['y'] + occ_dist * np.tan(np.radians(self.camera_altitude))
             occ_target_height *= self.occlusion_scale
             occ_target_height = np.minimum(occ_target_height, self.occluder_max_size)
-            print("occ target height", occ_target_height)
             scale_y = occ_target_height / bounds['y']
             scale_y = np.minimum(
                 scale_y, (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z']))
-            print("scale_y", scale_y)
 
             bounds = self.scale_vector(bounds, scale_y)
             scale *= scale_y
         scale = arr_to_xyz([scale] * 3)
-
-        print("final bounds", bounds)
 
         self.occluder_positions.append(pos)
         self.occluder_dimensions.append(bounds)
@@ -1500,15 +1503,12 @@ class Dominoes(RigidbodiesDataset):
         bounds = {'x': d_len, 'y': d_height, 'z': d_dep}
         bounds_rot = self.rotate_vector_parallel_to_floor(bounds, rot['y'])
         bounds = {k:np.maximum(np.abs(v), bounds[k]) for k,v in bounds_rot.items()}
-        print("rotated bounds", bounds)
 
         ## make sure it's in a reasonable size range
         size = max(list(bounds.values()))
         size = np.minimum(np.maximum(size, self.distractor_min_size), self.distractor_max_size)
         scale = size / max(list(bounds.values()))
-        print("initial scale", scale)
         bounds = self.scale_vector(bounds, scale)
-        print("rescaled bounds", bounds)
 
         ## choose the initial position of the object
         distract_distance = random.uniform(*get_range(self.distractor_distance_fraction))
@@ -1524,7 +1524,6 @@ class Dominoes(RigidbodiesDataset):
             scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
         else:
             scale_z = 1.0
-        print("scale_z", scale_z)
         bounds = self.scale_vector(bounds, scale_z)
         scale *= scale_z
 
@@ -1544,12 +1543,9 @@ class Dominoes(RigidbodiesDataset):
 
             bounds = self.scale_vector(bounds, scale_x)
             scale *= scale_x
-            print("scale_x", scale_x)
 
         scale = arr_to_xyz([scale] * 3)
 
-        print("final bounds", bounds)
-        print("final scale", scale)
 
         self.distractor_positions.append(pos)
         self.distractor_dimensions.append(bounds)
@@ -1614,14 +1610,25 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
+            if self.no_moving_distractors:
+                commands.extend([
+                    {"$type": "set_object_collision_detection_mode",
+                     "mode": "discrete",
+                     "id": o_id},
+                    {"$type": "set_kinematic_state",
+                     "id": o_id,
+                     "is_kinematic": True,
+                     "use_gravity": True}])            
+
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
-            print("distractor record", record.name)
-            print("distractor category", record.wcategory)
-            print("distractor position", pos)
-            print("distractor scale", scale)
+            if self.PRINT:
+                print("distractor record", record.name)
+                print("distractor category", record.wcategory)
+                print("distractor position", pos)
+                print("distractor scale", scale)
 
         return commands
 
@@ -1679,11 +1686,23 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
-            print("occluder name", record.name)
-            print("occluder category", record.wcategory)
-            print("occluder position", pos)
-            print("occluder pose", rot)
-            print("occluder scale", scale)
+            if self.no_moving_distractors:
+                commands.extend([
+                    {"$type": "set_object_collision_detection_mode",
+                     "mode": "discrete",
+                     "id": o_id},
+                    {"$type": "set_kinematic_state",
+                     "id": o_id,
+                     "is_kinematic": True,
+                     "use_gravity": True}])
+
+
+            if self.PRINT:
+                print("occluder name", record.name)
+                print("occluder category", record.wcategory)
+                print("occluder position", pos)
+                print("occluder pose", rot)
+                print("occluder scale", scale)
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
@@ -1920,7 +1939,8 @@ if __name__ == "__main__":
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
-        flex_only=args.only_use_flex_objects
+        flex_only=args.only_use_flex_objects,
+        no_moving_distractors=args.no_moving_distractors
     )
 
     if bool(args.run):

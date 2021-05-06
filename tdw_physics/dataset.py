@@ -416,7 +416,6 @@ class Dataset(Controller, ABC):
 
         # Cleanup.
         commands = []
-        print("OBJECT IDS", self.object_ids)
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})

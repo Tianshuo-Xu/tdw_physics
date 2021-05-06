@@ -653,7 +653,8 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         ramp_scale=args.ramp_scale,
         rolling_sliding_axis_length = args.rolling_sliding_axis_length,
-        flex_only=args.only_use_flex_objects        
+        flex_only=args.only_use_flex_objects,
+        no_moving_distractors=args.no_moving_distractors        
     )
 
     if bool(args.run):
