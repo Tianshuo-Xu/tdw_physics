@@ -26,6 +26,9 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
+OCCLUDER_CATS = "coffee table,houseplant,vase,chair,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant"
+DISTRACTOR_CATS = "coffee table,houseplant,vase,chair,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant"
+
 def get_collision_args(dataset_dir: str, parse=True):
 
     common = get_parser(dataset_dir, get_help=False)
@@ -132,7 +135,16 @@ def get_collision_args(dataset_dir: str, parse=True):
     parser.add_argument("--distractor_aspect_ratio",
                         type=none_or_str,
                         default="[0.25,5.0]",
-                        help="The range of valid distractor aspect ratios")        
+                        help="The range of valid distractor aspect ratios")       
+    parser.add_argument("--occluder_categories",
+                                      type=none_or_str,
+                                      default=OCCLUDER_CATS,
+                                      help="the category ids to sample occluders from")
+    parser.add_argument("--distractor_categories",
+                                      type=none_or_str,
+                                      default=DISTRACTOR_CATS,
+                                      help="the category ids to sample distractors from")
+ 
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)

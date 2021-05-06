@@ -20,6 +20,8 @@ from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz
 
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+OCCLUDER_CATS = "coffee table,houseplant,vase,chair,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant"
+DISTRACTOR_CATS = "coffee table,houseplant,vase,chair,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant"
 
 
 def get_drop_args(dataset_dir: str):
@@ -94,6 +96,16 @@ def get_drop_args(dataset_dir: str):
                     type=str,
                     default="10.0",
                     help="Scale or scale range for mass of  middle object")
+    ### occluder/distractors
+    parser.add_argument("--occluder_categories",
+                                      type=none_or_str,
+                                      default=OCCLUDER_CATS,
+                                      help="the category ids to sample occluders from")
+    parser.add_argument("--distractor_categories",
+                                      type=none_or_str,
+                                      default=DISTRACTOR_CATS,
+                                      help="the category ids to sample distractors from")
+
 
     def postprocess(args):
          # whether to set all objects same color
