@@ -439,7 +439,7 @@ def get_args(dataset_dir: str, parse=True):
             args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
-            
+            args.save_meshes = True            
 
         return args
 
@@ -448,7 +448,6 @@ def get_args(dataset_dir: str, parse=True):
 
     args = parser.parse_args()
     args = postprocess(args)
-
 
     return args
 
