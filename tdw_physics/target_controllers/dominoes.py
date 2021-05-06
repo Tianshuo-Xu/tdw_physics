@@ -213,7 +213,7 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="wood_european_ash",
                         help="Material name for target. If None, samples from material_type")
-    parser.add_argument("--rm˘aterial",
+    parser.add_argument("--rmaterial",
                         type=none_or_str,
                         default=None,
                         help="Material name for ramp. If None, same as zone material")
@@ -288,6 +288,7 @@ def get_args(dataset_dir: str, parse=True):
     def postprocess(args):
         # choose a valid room
         assert args.room in ['box', 'tdw', 'house'], args.room
+
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -416,6 +417,30 @@ def get_args(dataset_dir: str, parse=True):
             o_names = args.occluder.split(',')
             args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
 
+        # produce training data
+        if args.training_data_mode:
+
+            # multiply the number of trials by a factor
+            if int(args.num_multiplier) > 1:
+                args.num = args.num * int(args.num_multiplier)
+
+            # change the random seed in a deterministic way
+            args.random = 0
+            args.seed = (args.seed * 1000) % 997
+
+            # randomize colors and wood textures
+            args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None
+            # args.tmaterial = args.zmaterial = args.pmaterial = args.mmaterial = args.rmaterial = "Wood"
+
+            # only use the flex objects and make sure the distractors don't move
+            args.only_use_flex_objects = args.no_moving_distractors = True
+
+            # only save out the RGB images and the segmentation masks
+            args.write_passes = "_img,_id"
+            args.save_passes = ""
+            args.save_movies = False
+            args.save_meshes = True            
+
         return args
 
     if not parse:
@@ -423,17 +448,6 @@ def get_args(dataset_dir: str, parse=True):
 
     args = parser.parse_args()
     args = postprocess(args)
-
-    # produce training data
-    if args.training_data_mode:
-        args.dir = os.path.join(args.dir, 'training_data')
-        args.random = 0
-        args.seed = args.seed + 1
-        args.color = args.pcolor = args.mcolor = args.rcolor = None
-        args.remove_zone = 1
-        args.remove_target = 1
-        args.save_passes = ""
-        args.save_movies = False
 
     return args
 
