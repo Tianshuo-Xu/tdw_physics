@@ -443,8 +443,8 @@ class Dataset(Controller, ABC):
         target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
         target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
         #get individual maps
-        zone_map = _id_map == zone_color
-        target_map = _id_map == target_color
+        zone_map = (_id_map == zone_color).max(axis=-1, keepdims=True)
+        target_map = (_id_map == target_color).max(axis=-1, keepdims=True)
         #colorize
         zone_map = zone_map * ZONE_COLOR
         target_map = target_map * TARGET_COLOR
