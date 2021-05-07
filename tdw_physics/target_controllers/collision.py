@@ -318,7 +318,7 @@ class Collision(Dominoes):
             angle_range=self.force_angle_range,
             yforce=self.fupforce)
         self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, -rot['y'], degrees=True)
+            self.push_force, 0, degrees=True)
 
         self.push_position = self.probe_initial_position        
         if self.use_ramp:

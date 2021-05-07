@@ -90,6 +90,11 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
                         default="0.25,0.25,0.25",
                         help="scale of target objects")
 
+    parser.add_argument("--tlift",
+                        type=float,
+                        default=0.,
+                        help="Lift the target object off the floor/ramp. Useful for rotated objects")
+
     ### layout
     parser.add_argument("--rolling_sliding_axis_length",
                         type=float,
@@ -172,6 +177,7 @@ class RollingSliding(MultiDominoes):
                  ledge_position = 0.5,
                  ledge_scale = [100,0.1,0.1],
                 #  ledge_color = None,
+                target_lift = 0,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
@@ -185,6 +191,7 @@ class RollingSliding(MultiDominoes):
         self.ledge_position = ledge_position
         self.ledge_scale = ledge_scale
         # self.ledge_color = ledge_color
+        self.target_lift = target_lift
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -278,11 +285,13 @@ class RollingSliding(MultiDominoes):
     
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
-        rot = self.get_y_rotation(self.target_rotation_range)
+        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": self.target_lift, "z": 0.}
+        rot = self.get_rotation(self.target_rotation_range)
+        print(rot)
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
+            self.probe_initial_position['x'] += self.target_lift #HACK rotation might've led to the object falling of the back of the ramp, so we're moving it forward
         
         commands.extend(
             self.add_physics_object(
@@ -666,6 +675,7 @@ if __name__ == "__main__":
         occlusion_scale=args.occlusion_scale,
         ramp_scale=args.ramp_scale,
         rolling_sliding_axis_length = args.rolling_sliding_axis_length,
+        target_lift = args.tlift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors        
     )

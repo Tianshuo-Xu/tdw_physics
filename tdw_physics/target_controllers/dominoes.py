@@ -1240,7 +1240,7 @@ class Dominoes(RigidbodiesDataset):
         self.ramp = random.choice(self.DEFAULT_RAMPS)
         rgb = self.ramp_color or self.random_color(exclude=self.target_color)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
-        ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
+        ramp_pos['y'] = self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
         ramp_rot = self.get_y_rotation([180,180])
         ramp_id = self._get_next_object_id()
 
@@ -1274,7 +1274,7 @@ class Dominoes(RigidbodiesDataset):
 
         # need to adjust probe height as a result of ramp placement
         self.probe_initial_position['x'] -= 0.5 * self.ramp_scale['x'] * r_len - 0.15
-        self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height
+        self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height + self.probe_initial_position['y']
 
         return cmds
 
