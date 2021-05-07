@@ -1540,7 +1540,12 @@ class Dominoes(RigidbodiesDataset):
 
         reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
         if reach_z < self.distractor_min_z: # scale down
-            scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
+            try:
+                scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
+            except AttributeError as e:
+                scale_z = (np.abs(pos['z']) - 0.5 / (0.5 * bounds['z']))
+                print(e)
+                print("Fixed value set instead")
         else:
             scale_z = 1.0
         bounds = self.scale_vector(bounds, scale_z)
