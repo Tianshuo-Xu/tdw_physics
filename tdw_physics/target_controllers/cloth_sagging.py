@@ -4,11 +4,13 @@ from pathlib import Path
 
 import random
 import numpy as np
+import h5py
 
 from tdw.librarian import ModelRecord, MaterialLibrarian, ModelLibrarian
 from tdw.tdw_utils import TDWUtils
 from tdw_physics.target_controllers.dominoes import Dominoes, get_args, ArgumentParser
-from tdw_physics.flex_dataset import FlexDataset
+from tdw_physics.flex_dataset import FlexDataset, FlexParticles
+from tdw_physics.rigidbodies_dataset import RigidbodiesDataset
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
 
 # fluid
@@ -44,6 +46,10 @@ def get_flex_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="30",
                         help="How many frames to wait before applying the force")
+    parser.add_argument("--collision_label_threshold",
+                        type=float,
+                        default=0.1,
+                        help="Euclidean distance at which target and zone are said to be touching")
 #    parser.add_argument("--drapeobject",
 #                        type=str,
 #                        default="alma_floor_lamp",
@@ -87,6 +93,7 @@ class ClothSagging(Dominoes, FlexDataset):
                  anchor_locations = [-0.4, 0.4],
                  anchor_jitter = 0.2,#0.2,
                  height_jitter = 0.3,#0.3,
+                 collision_label_threshold=0.1,
                  **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
@@ -111,6 +118,9 @@ class ClothSagging(Dominoes, FlexDataset):
         self.anchor_locations = anchor_locations
         self.anchor_jitter = anchor_jitter
         self.height_jitter = height_jitter
+
+        # for detecting collisions
+        self.collision_label_thresh = collision_label_threshold
 
     def _set_add_physics_object(self):
         if self.all_flex_objects:
@@ -255,10 +265,10 @@ class ClothSagging(Dominoes, FlexDataset):
         self.cloth = self.CLOTH_RECORD
         self.cloth_id = self._get_next_object_id()
         self.cloth_position = {"x": 0.0, "y": 1.5, "z":-0.6}
-        self.cloth_color = [0.8,0.0,0.0]
+        self.cloth_color = self.target_color if self.target_color is not None else self.random_color()
         self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
         self.cloth_mass = 0.5
-        self.cloth_data = {"name": "cloth_square", "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
+        self.cloth_data = {"name": self.cloth.name, "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
 
         commands = self.add_cloth_object(
             record = self.cloth,
@@ -271,6 +281,9 @@ class ClothSagging(Dominoes, FlexDataset):
             bend_stiffness = random.uniform(self.bend_stiffness_range[0], self.bend_stiffness_range[1]), #changing this will lead to visible changes in cloth deformability
             stretch_stiffness = random.uniform(self.stretch_stiffness_range[0], self.stretch_stiffness_range[1]), # doesn't do much visually!
             o_id = self.cloth_id)
+
+        # replace the target w the cloth
+        self._replace_target_with_object(self.cloth, self.cloth_data)
 
         # set mass
         commands.append({"$type": "set_flex_object_mass",
@@ -380,7 +393,7 @@ class ClothSagging(Dominoes, FlexDataset):
         }
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame >= 150
+        return frame >= 300
 
     def _build_intermediate_structure(self) -> List[dict]:
 
@@ -442,6 +455,61 @@ class ClothSagging(Dominoes, FlexDataset):
 
         return commands
 
+    @staticmethod
+    def get_flex_object_collision(flex, obj1, obj2, collision_thresh=0.15):
+        '''
+        flex: FlexParticles Data
+        '''
+        collision = False
+        p1 = p2 = None
+        for n in range(flex.get_num_objects()):
+            if flex.get_id(n) == obj1:
+                p1 = flex.get_particles(n)
+            elif flex.get_id(n) == obj2:
+                p2 = flex.get_particles(n)
+
+        if (p1 is not None) and (p2 is not None):
+
+            p1 = np.array(p1)[:,0:3]
+            p2 = np.array(p2)[:,0:3]
+
+            dists = np.sqrt(np.square(p1[:,None] - p2[None,:]).sum(-1))
+            collision = (dists < collision_thresh).max()
+            print(obj1, p1.shape, obj2, p2.shape, "colliding?", collision)
+
+        return collision
+
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
+
+        labels, resp, grame_num, done = RigidbodiesDataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
+
+        has_target = (not self.remove_target) or self.replace_target
+        has_zone = not self.remove_zone
+        labels.create_dataset("has_target", data=has_target)
+        labels.create_dataset("has_zone", data=has_zone)
+        if not (has_target or has_zone):
+            return labels, resp, frame_num, done
+
+        print("frame num", frame_num)
+        flex = None
+        for r in resp[:-1]:
+            if FlexParticles.get_data_type_id(r) == "flex":
+                flex = FlexParticles(r)
+
+        if has_target and has_zone and (flex is not None):
+            are_touching = self.get_flex_object_collision(flex,
+                                                          obj1=self.target_id,
+                                                          obj2=self.zone_id,
+                                                          collision_thresh=self.collision_label_thresh)
+            labels.create_dataset("target_contacting_zone", data=are_touching)
+
+        return labels, resp, frame_num, done
+
+
 if __name__ == '__main__':
     import platform, os
 
@@ -463,6 +531,7 @@ if __name__ == '__main__':
         print("WARNING: Flex fluids are only supported in Windows")
 
     C = ClothSagging(
+        port=args.port,
         launch_build=launch_build,
         all_flex_objects=args.all_flex_objects,
         use_cloth=args.cloth,
@@ -526,7 +595,8 @@ if __name__ == '__main__':
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors        
+        no_moving_distractors=args.no_moving_distractors,
+        collision_label_threshold=args.collision_label_threshold
     )
 
     if bool(args.run):
