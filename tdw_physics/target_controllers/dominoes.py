@@ -338,24 +338,24 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.zone = zone_list
         else:
             args.zone = PRIMITIVE_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.target = targ_list
         else:
             args.target = PRIMITIVE_NAMES
 
         if args.probe is not None:
             probe_list = args.probe.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.probe = probe_list
         else:
             args.probe = PRIMITIVE_NAMES
@@ -637,6 +637,9 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
+
+        ## target can move
+        self._fixed_target = False
 
     def get_types(self,
                   objlist,
@@ -1080,7 +1083,23 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_target_object(self) -> List[dict]:
+    @staticmethod
+    def rescale_record_to_size(record, size_range=1.0):
+
+        dims = Dominoes.get_record_dimensions(record)
+        dmin, dmax = [min(dims), max(dims)]
+
+        scale = 1.0
+        smin, smax = get_range(size_range)
+
+        if dmax < smin:
+            scale = smin / dmax
+        elif dmin > smax:
+            scale = smax / dmax
+
+        return arr_to_xyz(np.array([scale] * 3))
+
+    def _place_target_object(self, size_range=None) -> List[dict]:
         """
         Place a primitive object at one end of the collision axis.
         """
@@ -1092,6 +1111,11 @@ class Dominoes(RigidbodiesDataset):
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+        if size_range is not None:
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled target", scale)
+            
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
@@ -1129,7 +1153,8 @@ class Dominoes(RigidbodiesDataset):
                 bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
-                make_kinematic=False
+                make_kinematic=True if self._fixed_target else False,
+                apply_texture=True if self.target.name in PRIMITIVE_NAMES else False
             ))
 
         # If this scene won't have a target
@@ -1141,7 +1166,7 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self) -> List[dict]:
+    def _place_and_push_probe_object(self, size_range=None) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
@@ -1153,6 +1178,11 @@ class Dominoes(RigidbodiesDataset):
                                              exclude_range=0.25,
                                              add_data=False)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+        if size_range is not None:
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled probe", scale)
+            
         self.probe = record
         self.probe_type = data["name"]
         self.probe_scale = scale
@@ -1187,6 +1217,7 @@ class Dominoes(RigidbodiesDataset):
                 o_id=o_id,
                 add_data=True,
                 make_kinematic=False,
+                apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,                
                 **probe_physics_info
             ))
 
@@ -1643,9 +1674,9 @@ class Dominoes(RigidbodiesDataset):
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
+            print("distractor record", record.name)
+            print("distractor category", record.wcategory)            
             if self.PRINT:
-                print("distractor record", record.name)
-                print("distractor category", record.wcategory)
                 print("distractor position", pos)
                 print("distractor scale", scale)
 
@@ -1716,9 +1747,9 @@ class Dominoes(RigidbodiesDataset):
                      "use_gravity": True}])
 
 
+            print("occluder name", record.name)
+            print("occluder category", record.wcategory)            
             if self.PRINT:
-                print("occluder name", record.name)
-                print("occluder category", record.wcategory)
                 print("occluder position", pos)
                 print("occluder pose", rot)
                 print("occluder scale", scale)
