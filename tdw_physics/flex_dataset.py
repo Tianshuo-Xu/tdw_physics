@@ -295,7 +295,7 @@ class FlexDataset(TransformsDataset, ABC):
                                               tether_give=tether_give, pressure=pressure))
         return [add_object,
                 {"$type": "scale_object",
-                 "scale_factor": scale,
+                 "mesh_scale": scale,
                  "id": o_id},
                 # {"$type": "set_kinematic_state",
                 #  # "is_kinematic": True,

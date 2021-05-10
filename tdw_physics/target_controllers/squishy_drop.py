@@ -360,7 +360,7 @@ class FlexDominoes(Dominoes, FlexDataset):
         SQUISHY_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
         self.squishy = SQUISHY_RECORD
         self.squishy_id = self._get_next_object_id()
-        self.squishy_position = {'x': 0., 'y': 0., 'z': 0.}
+        self.squishy_position = {'x': 0., 'y': 0.05, 'z': 0.}
         rotation = {k:0 for k in ['x','y','z']}
         self.squishy_color = [0.0,0.8,1.0]
         self.squishy_scale = {'x': 0.5, 'y': 0.2, 'z': 0.3}
@@ -382,6 +382,7 @@ class FlexDominoes(Dominoes, FlexDataset):
         self._add_name_scale_color(
             self.squishy, {'color': self.squishy_color, 'scale': self.squishy_scale, 'id': self.squishy_id})
         self.masses = np.append(self.masses, self.squishy_mass)
+        ## setp_physics after adding fflex objects
 
         return commands
 

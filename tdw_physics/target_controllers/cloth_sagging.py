@@ -79,7 +79,6 @@ class ClothSagging(Dominoes, FlexDataset):
                  use_squishy=False,
                  use_fluid=False,
                  step_physics=False,
-                 drape_object="alma_floor_lamp", #alma_floor_lamp, metal_sculpture, white_lamp, vase_01, linbrazil_diz_armchair, desk_lamp, buddah, hiker_backpack
                  tether_stiffness_range = [0.1, 1.0],
                  bend_stiffness_range = [0.1, 1.0],#[0.0, 1.0],
                  stretch_stiffness_range = [0.1, 1.0],
@@ -103,7 +102,6 @@ class ClothSagging(Dominoes, FlexDataset):
         if self.use_fluid:
             self.ft_selection = random.choice(self.FLUID_TYPES.fluid_type_names)
 
-        self.drape_object = drape_object
         self.tether_stiffness_range = tether_stiffness_range
         self.bend_stiffness_range = bend_stiffness_range
         self.stretch_stiffness_range = stretch_stiffness_range
@@ -376,7 +374,7 @@ class ClothSagging(Dominoes, FlexDataset):
         return {
             "x": max(self.anchor_locations)-zonedist,
             "y": 0.0 if not self.remove_zone else 10.0,
-            "z": 0.0 if not self.remove_zone else 10.0
+            "z": random.uniform(-0.1,0.2) if not self.remove_zone else 10.0
         }
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
@@ -385,13 +383,16 @@ class ClothSagging(Dominoes, FlexDataset):
     def _build_intermediate_structure(self) -> List[dict]:
 
         commands = []
-
+        
+        # anchor object list
+        anchor_list = ["cone","cube","cylinder","pyramid","triangular_prism"]
+        
         # add two objects on each side of a target object
-        self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
+        self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
         self.objrec1_id = self._get_next_object_id()
         self.objrec1_position = {'x': min(self.anchor_locations)-random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
-        self.objrec1_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec1_scale = {'x': 0.2, 'y': 1.2+random.uniform(-self.height_jitter,self.height_jitter), 'z': 0.5}
+        self.objrec1_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+        self.objrec1_scale = {'x': random.uniform(0.1,0.3), 'y': 0.5+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
         self.objrec1_mass = 25.0
         commands.extend(self.add_flex_solid_object(
                               record = self.objrec1,
@@ -404,11 +405,11 @@ class ClothSagging(Dominoes, FlexDataset):
                               o_id = self.objrec1_id,
                               ))
 
-        self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
+        self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
         self.objrec2_id = self._get_next_object_id()
         self.objrec2_position = {'x': max(self.anchor_locations)+random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
-        self.objrec2_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec2_scale = {'x': 0.2, 'y': 0.7+random.uniform(-self.height_jitter,self.height_jitter), 'z': 0.5}
+        self.objrec2_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+        self.objrec2_scale = {'x': random.uniform(0.1,0.3), 'y': 0.3+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
         self.objrec2_mass = 25.0
         commands.extend(self.add_flex_solid_object(
                                record = self.objrec2,
@@ -420,10 +421,13 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec2_scale,
                                o_id = self.objrec2_id,
                                ))
-
+        
+        # drape object        
+        drape_list = ["alma_floor_lamp","linbrazil_diz_armchair","buddah","desk_lamp"]
+        self.drape_object = random.choice(drape_list)
         self.objrec3 = MODEL_LIBRARIES["models_core.json"].get_record(self.drape_object)
         self.objrec3_id = self._get_next_object_id()
-        self.objrec3_rotation = {k:0 for k in ['x','y','z']}
+        self.objrec3_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': random.uniform(0,45), 'z': 0},#
         self.objrec3_mass = 100.0
         
         print("drape object",self.drape_object)
@@ -454,6 +458,26 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec3_scale,
                                o_id = self.objrec3_id,
                                ))
+                               
+        # additional anchor
+        if random.uniform(0.0,1.0)>0.5:
+            self.objrec4 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
+            self.objrec4_id = self._get_next_object_id()
+            takeloc = random.choice([min(self.anchor_locations)-0.4,max(self.anchor_locations)+0.5])
+            self.objrec4_position = {'x': takeloc-random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
+            self.objrec4_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+            self.objrec4_scale = {'x': random.uniform(0.1,0.3), 'y': 0.4+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
+            self.objrec4_mass = 25.0
+            commands.extend(self.add_flex_solid_object(
+                                   record = self.objrec4,
+                                   position = self.objrec4_position,
+                                   rotation = self.objrec4_rotation,
+                                   mesh_expansion = 0.0,
+                                   particle_spacing = 0.035,
+                                   mass = self.objrec4_mass,
+                                   scale = self.objrec4_scale,
+                                   o_id = self.objrec4_id,
+                                   ))
 
         commands.extend(self.drop_cloth() if self.use_cloth else [])
 
