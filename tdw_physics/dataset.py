@@ -2,6 +2,41 @@ import sys, os, copy, subprocess, glob
 import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
+# if platform.system() == "Windows":
+#     class Path:
+#         def __init__(self, p):
+#             self.p = p
+#             parent_path = "/".join(self.p.split("/")[:-1])
+#             if parent_path not in ["", "/"]:
+#                 self.parent=Path("/".join(self.p.split("/")[:-1]))
+#             else:
+#                 self.parent=None
+#         def joinpath(self, append_p):
+#             self.p =  os.path.join(self.p, append_p)
+#             return self
+#         def exists(self):
+#             return os.path.exists(self.p)
+#         def mkdir(self, parents=False):
+#             if parents:
+#                 chunk_list = self.p.split("/")
+#                 chunk_list = [s for s in chunk_list if s != ""]
+#                 start_with_slash = self.p[0] == "/"
+#                 nodes = []
+#                 for chunk_id in range(1, len(chunk_list)):
+#                     current_path = "/".join(chunk_list[:chunk_id])
+#                     if start_with_slash:
+#                         current_path = "/" + current_path
+#                     if not os.path.exists(current_path):
+#                         os.mkdir(current_path)
+#                     nodes.append(Path(current_path))
+#                 print("create path", current_path)
+#                 nodes.append(self.p)
+#                 for node_id in reversed(range(1,len(nodes))):
+#                     nodes[node_id].parent = nodes[node-1]
+
+#             import ipdb; ipdb.set_trace()
+#             os.mkdir(self.p)
+# else:
 from pathlib import Path
 from tqdm import tqdm
 import stopit
@@ -233,13 +268,13 @@ class Dataset(Controller, ABC):
         self.trial_loop(num, output_dir, temp_path)
 
         # Terminate TDW
-        with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
-            assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
-            end = self.communicate({"$type": "terminate"})
-        if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
-            print("tdw closed successfully")
-        elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
-            print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
+        #with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+        #    assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+        end = self.communicate({"$type": "terminate"})
+        #if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+        #    print("tdw closed successfully")
+        #elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+        #    print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
         # Save the command line args
         if self.save_args:
@@ -264,7 +299,6 @@ class Dataset(Controller, ABC):
                    num: int,
                    output_dir: str,
                    temp_path: str) -> None:
-
         output_dir = Path(output_dir)
         if not output_dir.exists():
             output_dir.mkdir(parents=True)
@@ -305,9 +339,27 @@ class Dataset(Controller, ABC):
                            trial_num=i)
 
                 # Save an MP4 of the stimulus
-                if self.save_movies:
+                if False and self.save_movies:
                     for pass_mask in self.save_passes:
                         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        #import cv2
+                        #fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                        # import skvideo
+                        # skvideo.setFFmpegPath("C:\cygwin64\home\hsiaoyut\anaconda\envs\tdw\Lib\site-packages\skvideo\io")
+                        # from skvideo.io import FFmpegWriter
+                        # writer = FFmpegWriter(Path(mp4_filename+".mp4"), frameSize=(self._height, self._width) )
+                        # writer.open()
+
+                        #out = cv2.VideoWriter(
+                        #    filename=Path(mp4_filename + ".mp4"),
+                        #    apiPreference=-1,
+                        #    fourcc=fourcc, fps=20, frameSize=(self._height, self._width))
+
+                        for f in self.png_dir.glob("*.png"):
+                            frame = cv2.imread(f)
+                            out.writeFrame(frame)
+                        out.close()
+                        import ipdb; ipdb.set_trace()
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
                             image_stem=pass_mask[1:]+'_',
@@ -316,12 +368,15 @@ class Dataset(Controller, ABC):
                             overwrite=True,
                             remove_pngs=True,
                             use_parent_dir=False)
+                    #for f in self.png_dir.glob("*.png"):
+                    #    os.remove(f)
+
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                 if self.save_meshes:
                     for o_id in self.object_ids:
                         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
                         vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
+                        save_obj(vertices, faces, Path(obj_filename))
             pbar.update(1)
         pbar.close()
 
@@ -403,7 +458,6 @@ class Dataset(Controller, ABC):
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         self.communicate(commands)
-
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
             meta = OrderedDict()
@@ -543,8 +597,8 @@ class Dataset(Controller, ABC):
         :param static_group: The static data group.
         """
         # git commit and args
-        res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
-        self.commit = res.stdout.strip()
+        #res = subprocess.run('git rev-parse HEAD', shell=True, text=True) #capture_output=True, text=True)
+        self.commit = ""#res.stdout.strip()
         static_group.create_dataset("git_commit", data=self.commit)
 
         # stimulus name

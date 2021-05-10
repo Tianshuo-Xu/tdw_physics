@@ -5,11 +5,11 @@ then
     STIMULI_ROOT=/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation
     OUTPUT_ROOT=data3
 else
-    STIMULI_ROOT=/home/hsiaoyut/2021/human-physics-benchmarking/stimuli/generation
-    OUTPUT_ROOT=/mnt/fs0/hsiaoyut/tdw_physics/data
+    STIMULI_ROOT=../human-physics-benchmarking/stimuli/generation
+    OUTPUT_ROOT="D:\hsiaoyut\tdw_physics"
 
-    # STIMULI_ROOT=/home/hsiaoyut/2021/human-physics-benchmarking/stimuli/generation
-    # OUTPUT_ROOT=/mnt/fs0/hsiaoyut/tdw_physics/data
+    #STIMULI_ROOT=/home/hsiaoyut/2021/human-physics-benchmarking/stimuli/generation
+    #OUTPUT_ROOT=/mnt/fs0/hsiaoyut/tdw_physics/data
 fi
 ######################################### dominoes ###############################################
 #python tdw_physics/target_controllers/dominoes.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-dominoes/pilot_dominoes_2mid_J025R30_tdwroom/commandline_args.txt --dir log2/ --num 2 --height 128 --width 128
@@ -21,18 +21,27 @@ fi
 
 #
 DOMINOES_C=tdw_physics/target_controllers/dominoes.py
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_0mid_d3chairs_o1plants_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_0mid_d3chairs_o1plants_tdwroom --num 3 --only_use_flex_objects  --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_1mid_J025R45_boxroom --num 3  --only_use_flex_objects  --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_1mid_J025R45_o1flex_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_1mid_J025R45_o1flex_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_2mid_J020R15_d3chairs_o1plants_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_2mid_J020R15_d3chairs_o1plants_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_2mid_J025R30_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_2mid_J025R30_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4mid_boxroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_4mid_boxroom  --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4midRM1_boxroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_4midRM1_boxroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4midRM1_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_4midRM1_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4mid_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_4mid_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_default_boxroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_default_boxroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
-python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom/commandline_args.txt --dir $OUTPUT_ROOT/dominoes/pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom --num 3 --only_use_flex_objects --height 128 --width 128 --save_meshes
+NUM=1000
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_0mid_d3chairs_o1plants_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_0mid_d3chairs_o1plants_tdwroom" --num $NUM --only_use_flex_objects  --height 128 --width 128 --save_meshes --port 1701
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_1mid_J025R45_boxroom" --num $NUM  --only_use_flex_objects  --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_1mid_J025R45_o1flex_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_1mid_J025R45_o1flex_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_2mid_J020R15_d3chairs_o1plants_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_2mid_J020R15_d3chairs_o1plants_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_2mid_J025R30_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_2mid_J025R30_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4mid_boxroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_4mid_boxroom"  --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4midRM1_boxroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_4midRM1_boxroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes 
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4midRM1_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_4midRM1_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_4mid_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_4mid_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_default_boxroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_default_boxroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
+#python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes\pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom" --num $NUM --only_use_flex_objects --height 128 --width 128 --save_meshes
 
+
+python $DOMINOES_C @$STIMULI_ROOT/pilot-dominoes/pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom/commandline_args.txt --dir "D:\hsiaoyut\tdw_physics\data\dominoes_test\pilot_dominoes_SJ020_d3chairs_o1plants_tdwroom" --num $NUM --only_use_flex_objects  --save_meshes --write_passes "_img,_id" --random 0 --seed 888 --tcolor None --zcolor None --pcolor None --height 256 --width 256
+
+#export ARGNAME="pilot_dominoes_0mid_d3chairs_o1plants_tdwroom"
+
+
+#scp *.hdf5 hsiaoyut@node17-ccncluster.stanford.edu:/mnt/fs0/hsiaoyut/tdw_physics/data/pilot_dominoes_4mid_tdwroom
+#scp *obj[7-8].obj hsiaoyut@node17-ccncluster.stanford.edu:/mnt/fs0/hsiaoyut/tdw_physics/data/pilot_dominoes_4mid_tdwroom
 
 ##################################### linking ####################################################
 
