@@ -29,6 +29,11 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 ALL_CATEGORIES = list(set([r.wcategory for r in MODEL_LIBRARIES['models_full.json'].records]))
+# OCCLUDER_CATEGORIES = "coffee table,houseplant,vase,chair,cat,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant,sculpture,plant,rodent"
+# DISTRACTOR_CATEGORIES = "coffee table,houseplant,vase,chair,cat,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant,sculpture,plant,rodent"
+
+OCCLUDER_CATEGORIES = "sculpture,globe,chair,houseplant,plant,garden plant,bookshelf,coffee maker,flowerpot,stool,lamp,desktop computer,laptop computer,dog,cat,giraffe,rodent,turtle,dolphin"
+DISTRACTOR_CATEGORIES = OCCLUDER_CATEGORIES
 
 def get_playroom_args(dataset_dir: str, parse=True):
 
@@ -45,7 +50,11 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--zmaterial",
                         type=none_or_str,
                         default=None,
-                        help="material of zone")    
+                        help="material of zone")
+    parser.add_argument("--material_types",
+                        type=none_or_str,
+                        default="Wood,Ceramic",
+                        help="Which class of materials to sample material names from")    
 
     parser.add_argument("--zone",
                         type=str,
@@ -70,7 +79,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="range of scales to apply to push force")
     parser.add_argument("--fwait",
                         type=none_or_str,
-                        default="10",
+                        default="5",
                         help="range of time steps to apply to wait to apply force")    
 
     parser.add_argument("--frot",
@@ -129,7 +138,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ## collision specific arguments
     parser.add_argument("--fupforce",
                         type=none_or_str,
-                        default="[0.1,0.75]",
+                        default="[0.1,0.9]",
                         help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
 
     ## camera
@@ -157,11 +166,11 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="The range of valid distractor aspect ratios")       
     parser.add_argument("--occluder_categories",
                         type=none_or_str,
-                        default=ALL_CATEGORIES,
+                        default=OCCLUDER_CATEGORIES,
                         help="the category ids to sample occluders from")
     parser.add_argument("--distractor_categories",
                         type=none_or_str,
-                        default=ALL_CATEGORIES,
+                        default=DISTRACTOR_CATEGORIES,
                         help="the category ids to sample distractors from")
     parser.add_argument("--num_occluders",
                         type=none_or_int,
@@ -187,6 +196,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
     return args
 
 class Playroom(Collision):
+
+    self.PRINT = True
 
     def __init__(self, port=1071,
                  probe_categories=None,
@@ -237,7 +248,7 @@ class Playroom(Collision):
     def _set_distractor_attributes(self) -> None:
 
         self.distractor_angular_spacing = 20
-        self.distractor_distance_fraction = [0.2,0.8]
+        self.distractor_distance_fraction = [0.3,0.6]
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = self.middle_scale['z'] * 2.0
         self.distractor_min_size = 1.0
@@ -245,8 +256,8 @@ class Playroom(Collision):
 
     def _set_occlusion_attributes(self) -> None:
 
-        self.occluder_angular_spacing = 15
-        self.occlusion_distance_fraction = [0.3,0.8]
+        self.occluder_angular_spacing = 20
+        self.occlusion_distance_fraction = [0.3,0.6]
         self.occluder_rotation_jitter = 30.
         self.occluder_min_z = self.middle_scale['z'] * 2.0
         self.occluder_min_size = 0.5
