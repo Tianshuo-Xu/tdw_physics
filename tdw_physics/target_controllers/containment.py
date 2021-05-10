@@ -33,7 +33,7 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
 
 
 '''
-The containment controller generats stims in which the target object is 
+The containment controller generats stims in which the target object is
     potentially contained inside a base object. A probe object is launched at the base
     and *may* displace the target from the base
 This controller pulls heavily from linking and tower controllers
@@ -80,7 +80,7 @@ def get_containment_args(dataset_dir: str, parse=True):
     parser.add_argument("--mmass",
                         type=none_or_str,
                         default="2.0",
-                        help="The mass range of each contained object")    
+                        help="The mass range of each contained object")
     parser.add_argument("--num_middle_range",
                         type=str,
                         default="[1,4]",
@@ -88,7 +88,7 @@ def get_containment_args(dataset_dir: str, parse=True):
     parser.add_argument("--spacing_jitter",
                         type=float,
                         default=0,
-                        help="jitter in how to space middle objects, as a fraction of uniform spacing")    
+                        help="jitter in how to space middle objects, as a fraction of uniform spacing")
 
     parser.add_argument("--target_contained_range",
                         type=none_or_str,
@@ -121,7 +121,7 @@ def get_containment_args(dataset_dir: str, parse=True):
                         help="Whether the attachment object will be fixed to the base or floor")
     parser.add_argument("--attachment_capped",
                         action="store_true",
-                        help="Whether the attachment object will have a fixed cap like the base")    
+                        help="Whether the attachment object will have a fixed cap like the base")
 
 # base (container)
     parser.add_argument("--base",
@@ -159,7 +159,7 @@ def get_containment_args(dataset_dir: str, parse=True):
     parser.add_argument("--collision_axis_length",
                         type=float,
                         default=2.0,
-                        help="How far to put the probe and target")    
+                        help="How far to put the probe and target")
 
     # camera
     parser.add_argument("--camera_distance",
@@ -182,7 +182,7 @@ def get_containment_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.5,
                         help="max height of camera")
-    
+
 
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
@@ -196,10 +196,10 @@ def get_containment_args(dataset_dir: str, parse=True):
 
         # num links
         args.num_middle_range = handle_random_transform_args(args.num_middle_range)
-        
+
         # target
         args.target_contained_range = handle_random_transform_args(args.target_contained_range)
-        
+
         # attachment
         args.ascale = handle_random_transform_args(args.ascale)
         args.amass = handle_random_transform_args(args.amass)
@@ -223,17 +223,17 @@ def get_containment_args(dataset_dir: str, parse=True):
 
     args = parser.parse_args()
     args = postprocess(args)
-    
+
     return args
 
 class Containment(Tower):
 
     STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
-    STANDARD_MASS_FACTOR = 0.25 
-    
+    STANDARD_MASS_FACTOR = 0.25
+
     def __init__(self,
                  port: int = None,
-                 
+
                  # base container
                  use_base=False,
                  base_object='bowl',
@@ -241,7 +241,7 @@ class Containment(Tower):
                  base_mass_range=3.0,
                  base_color=[0.8,0.8,0.8],
                  base_material=None,
-                 
+
                  # A Contained container (e.g. bowl stacked on base bowl)
                  use_attachment=False,
                  attachment_object='bowl',
@@ -251,7 +251,7 @@ class Containment(Tower):
                  attachment_color=[0.8,0.8,0.8],
                  attachment_material=None,
                  use_cap=False,
-                 
+
                  # what the contained objects are
                  contained_objects='sphere',
                  contained_scale_range=0.5,
@@ -283,7 +283,7 @@ class Containment(Tower):
         self.base_material = base_material
 
         # attachment
-        self.use_attachment = use_attachment        
+        self.use_attachment = use_attachment
         self._attachment_types = self.get_types(
             attachment_object, libraries=MODEL_LIBRARIES.keys(), flex_only=self.flex_only) \
             if self.use_attachment else self._target_types
@@ -291,15 +291,15 @@ class Containment(Tower):
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
         self.attachment_material = attachment_material
-        self.use_cap = use_cap        
+        self.use_cap = use_cap
 
         # whether it'll be fixed to the base
-        self.attachment_fixed_to_base = attachment_fixed_to_base        
+        self.attachment_fixed_to_base = attachment_fixed_to_base
 
         # links are the middle objects
-        self.set_middle_types(contained_objects)        
+        self.set_middle_types(contained_objects)
         self.num_contained_range = num_contained_range
-        self.middle_scale_range = contained_scale_range        
+        self.middle_scale_range = contained_scale_range
         self.middle_mass_range = link_mass_range
         self.middle_rotation_range = contained_rotation_range
         self.middle_scale_gradient = contained_scale_gradient
@@ -317,16 +317,16 @@ class Containment(Tower):
         Dominoes._write_static_data(self, static_group)
 
         static_group.create_dataset("base_id", data=self.base_id)
-        static_group.create_dataset("use_base", data=self.use_base)        
+        static_group.create_dataset("use_base", data=self.use_base)
         static_group.create_dataset("base_type", data=self.base_type)
         static_group.create_dataset("attachment_id", data=self.attachment_id)
         static_group.create_dataset("attachent_type", data=self.attachment_type)
-        static_group.create_dataset("use_attachment", data=self.use_attachment)                
+        static_group.create_dataset("use_attachment", data=self.use_attachment)
         static_group.create_dataset("link_type", data=self.middle_type)
-        static_group.create_dataset("num_links", data=self.num_links)        
+        static_group.create_dataset("num_links", data=self.num_links)
         static_group.create_dataset("target_link_idx", data=self.target_link_idx)
         static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
-        static_group.create_dataset("use_cap", data=self.use_cap)                        
+        static_group.create_dataset("use_cap", data=self.use_cap)
 
     @staticmethod
     def get_controller_label_funcs(classname = "Containment"):
@@ -351,7 +351,7 @@ class Containment(Tower):
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
         cmds = Dominoes.get_per_frame_commands(self, resp=resp, frame=frame)
-        
+
         return cmds
 
     def _build_intermediate_structure(self) -> List[dict]:
@@ -368,7 +368,7 @@ class Containment(Tower):
 
         # Add the links
         commands.extend(self._add_links())
-        
+
         # # set camera params
         camera_y_aim = 0.5 * self.tower_height
         self.camera_aim = arr_to_xyz([0.,camera_y_aim,0.])
@@ -376,7 +376,7 @@ class Containment(Tower):
         return commands
 
     def _build_base(self, height, as_cap=False) -> List[dict]:
-        
+
         commands = []
 
         record, data = self.random_primitive(
@@ -396,7 +396,7 @@ class Containment(Tower):
         mass = random.uniform(*get_range(self.base_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
 
-        print("base mass", mass)        
+        print("base mass", mass)
 
         commands.extend(
             self.add_physics_object(
@@ -496,7 +496,7 @@ class Containment(Tower):
              "id": o_id}])
 
         # for an attachment that is wider at base, better to place links a little higher
-        a_len, a_height, a_dep = self.get_record_dimensions(record)        
+        a_len, a_height, a_dep = self.get_record_dimensions(record)
         if self.attachment_type == 'cone' and self.use_attachment:
             self.tower_height += 0.25 * a_height * (np.sqrt(scale['x']**2 + scale['z']**2) / scale['y'])
 
@@ -505,7 +505,7 @@ class Containment(Tower):
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
-            
+
 
         # fix it to ground or block
         if self.attachment_fixed_to_base and self.use_attachment:
@@ -534,10 +534,10 @@ class Containment(Tower):
                 commands.append({
                     "$type": "add_fixed_joint",
                     "parent_id": o_id,
-                    "id": self.cap_id})                
-            
+                    "id": self.cap_id})
 
-        return commands        
+
+        return commands
 
     def _add_links(self) -> List[dict]:
         commands = []
@@ -568,7 +568,7 @@ class Containment(Tower):
             return []
 
         print("target is link idx %d" % self.target_link_idx)
-            
+
         if int(self.target_link_idx) not in range(self.num_links):
             print("no target link")
             return [] # no link is the target
@@ -623,7 +623,7 @@ if __name__ == "__main__":
         base_mass_range=args.bmass,
         base_color=args.bcolor,
         base_material=args.bmaterial,
-        
+
         # attachment
         use_attachment=(args.attachment is not None),
         attachment_object=args.attachment,
@@ -639,7 +639,7 @@ if __name__ == "__main__":
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
-        zone_friction=args.zfriction,        
+        zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
         target_scale_range=args.tscale,
@@ -657,7 +657,7 @@ if __name__ == "__main__":
         force_wait=args.fwait,
         remove_target=bool(args.remove_target),
         remove_zone=bool(args.remove_zone),
-        
+
         ## not scenario-specific
         room=args.room,
         randomize=args.random,
@@ -684,7 +684,7 @@ if __name__ == "__main__":
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors        
+        no_moving_distractors=args.no_moving_distractors
     )
 
     if bool(args.run):
@@ -693,10 +693,11 @@ if __name__ == "__main__":
                temp_path=args.temp,
                width=args.width,
                height=args.height,
-               write_passes=args.write_passes.split(','),               
+               write_passes=args.write_passes.split(','),
                save_passes=args.save_passes.split(','),
                save_movies=args.save_movies,
-               save_labels=args.save_labels,               
+               save_labels=args.save_labels,
+               save_meshes=args.save_meshes,
                args_dict=vars(args)
         )
     else:

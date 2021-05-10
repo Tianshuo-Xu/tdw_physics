@@ -253,7 +253,7 @@ class Drop(MultiDominoes):
 
         # Choose and drop an object.
         commands.extend(self._place_drop_object())
-        
+
         # Choose and place a middle object.
         commands.extend(self._place_intermediate_object())
 
@@ -294,7 +294,7 @@ class Drop(MultiDominoes):
         commands.extend(self._place_occluders(z_pos_scale=1))
 
         return commands
-    
+
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         return []
 
@@ -362,9 +362,9 @@ class Drop(MultiDominoes):
                 mass= random.uniform(*get_range(self.middle_mass_range)),
                 dynamic_friction=0.4, #increased friction
                 static_friction=0.4,
-                bounciness=0,       
+                bounciness=0,
                 o_id=o_id))
-        
+
         # Set the object material
         commands.extend(
             self.get_object_material_commands(
@@ -426,14 +426,14 @@ class Drop(MultiDominoes):
                 mass=self.probe_mass,
                 dynamic_friction=0.4, #increased friction
                 static_friction=0.4,
-                bounciness=0,       
+                bounciness=0,
                 o_id=o_id))
-                
+
         # Set the object material
         commands.extend(
             self.get_object_material_commands(
                 record, o_id, self.get_material_name(self.target_material)))
-                
+
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
@@ -504,7 +504,7 @@ class Drop(MultiDominoes):
             {"$type": "set_kinematic_state",
              "id": o_id,
              "is_kinematic": True,
-             "use_gravity": True}])            
+             "use_gravity": True}])
 
         # get rid of it if not using a target object
         if self.remove_zone:
@@ -533,7 +533,7 @@ if __name__ == "__main__":
         target_objects=args.target,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
-        target_color=args.color, 
+        target_color=args.color,
         probe_color = args.pcolor,
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,
@@ -555,9 +555,9 @@ if __name__ == "__main__":
         num_distractors=args.num_distractors,
         occluder_types=args.occluder,
         occluder_categories=args.occluder_categories,
-        num_occluders=args.num_occluders,        
+        num_occluders=args.num_occluders,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors        
+        no_moving_distractors=args.no_moving_distractors
     )
 
     if bool(args.run):
@@ -570,6 +570,7 @@ if __name__ == "__main__":
                 save_passes=args.save_passes.split(','),
                 save_movies=args.save_movies,
                 save_labels=args.save_labels,
+                save_meshes=args.save_meshes,
                 args_dict=vars(args))
     else:
         end = DC.communicate({"$type": "terminate"})
