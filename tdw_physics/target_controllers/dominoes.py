@@ -141,8 +141,8 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--fwait",
                         type=none_or_str,
                         default="[0,0]",
-                        help="How many frames to wait before applying the force")
-    parser.add_argument("--color",
+                        help="How many frames to wait before applying the force")    
+    parser.add_argument("--tcolor",
                         type=none_or_str,
                         default="1.0,0.0,0.0",
                         help="comma-separated R,G,B values for the target object color. None to random.")
@@ -320,10 +320,12 @@ def get_args(dataset_dir: str, parse=True):
             middle_list = args.middle.split(',')
             args.middle = middle_list
 
-        if args.color is not None:
-            rgb = [float(c) for c in args.color.split(',')]
+        if args.tcolor is not None:
+            rgb = [float(c) for c in args.tcolor.split(',')]
             assert len(rgb) == 3, rgb
-            args.color = rgb
+            args.tcolor = args.color = rgb
+        else:
+            args.color = None
 
         if args.zcolor is not None:
             rgb = [float(c) for c in args.zcolor.split(',')]
@@ -405,7 +407,7 @@ class Dominoes(RigidbodiesDataset):
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  room='box',
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
@@ -455,11 +457,21 @@ class Dominoes(RigidbodiesDataset):
                  ramp_base_height_range=0,
                  **kwargs):
 
+        ## get random port unless one is specified
+        if port is None: 
+            port = np.random.randint(1000,4000)
+            print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
 
         ## which room to use
         self.room = room
+
+        ## color randomization
+        self._random_target_color = (target_color is None)
+        self._random_zone_color = (zone_color is None)
+        self._random_probe_color = (probe_color is None)
 
         ## target zone
         self.set_zone_types(target_zone)
@@ -569,6 +581,14 @@ class Dominoes(RigidbodiesDataset):
 
     def clear_static_data(self) -> None:
         super().clear_static_data()
+
+        ## randomize colors
+        if self._random_zone_color:
+            self.zone_color = None
+        if self._random_target_color:
+            self.target_color = None
+        if self._random_probe_color:
+            self.probe_color = None
 
         ## scenario-specific metadata: object types and drop position
         self.target_type = None
@@ -1443,7 +1463,7 @@ class Dominoes(RigidbodiesDataset):
 class MultiDominoes(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  middle_objects=None,
                  num_middle_objects=1,
                  middle_color=None,
@@ -1502,10 +1522,8 @@ class MultiDominoes(Dominoes):
         super()._write_static_data(static_group)
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
-        static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
-        static_group.create_dataset("num_middle_objects", data=self.num_middle_objects)
-
         if self.middle_type is not None:
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])        
             static_group.create_dataset("middle_type", data=self.middle_type)
 
     @staticmethod

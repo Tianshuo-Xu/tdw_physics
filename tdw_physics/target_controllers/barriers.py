@@ -60,7 +60,7 @@ def get_barrier_args(dataset_dir: str, parse=True):
 class Barrier(MultiDominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  bridge_height=1.0,
                  **kwargs):
         # initialize everything in common w / Multidominoes

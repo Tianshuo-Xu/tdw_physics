@@ -119,7 +119,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 class Collision(Dominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
                  **kwargs):

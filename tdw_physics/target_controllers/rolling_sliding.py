@@ -99,10 +99,44 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
                         default="[0.2,0.25,0.5]",
                         help="Scaling factor of the ramp in xyz.")
 
+    ### ledge
+    parser.add_argument("--use_ledge",
+                        type=int,
+                        default=0,
+                        help="Whether to place ledge between the target and the zone")
+
+    parser.add_argument("--ledge",
+                        type=str,
+                        default="sphere",
+                        help="comma-separated list of possible ledge objects")
+
+    parser.add_argument("--ledge_position",
+                        type=float,
+                        default=0.5,
+                        help="Fraction between 0 and 1 where to place the ledge on the axis")
+
+    parser.add_argument("--ledge_scale",
+                        type=str,
+                        default="[0.05,0.05,100.0]",
+                        help="Scaling factor of the ledge in xyz.")
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
         args.ramp_scale = handle_random_transform_args(args.ramp_scale)
+        
+        ### ledge
+        args.use_ledge = bool(args.use_ledge)
+        
+        if args.ledge is not None:
+            targ_list = args.ledge.split(',')
+            assert all([t in MODEL_NAMES for t in targ_list]), \
+                "All ledge object names must be elements of %s" % MODEL_NAMES
+            args.ledge = targ_list
+        else:
+            args.ledge = MODEL_NAMES        
+        
+        args.ledge_scale = handle_random_transform_args(args.ledge_scale)
+
         return args
 
     args = parser.parse_args()
@@ -111,26 +145,36 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
 
     return args
 
-class RollingSliding(Dominoes):
+class RollingSliding(MultiDominoes):
 
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
-                 ramp_scale = [1.,1.,1.],
-                 rolling_sliding_axis_length = 1.,
+                 ramp_scale = [0.2,0.25,0.5],
+                 rolling_sliding_axis_length = 1.15,
+                 use_ramp = True,
+                 use_ledge = False,
+                 ledge = ['cube'],
+                 ledge_position = 0.5,
+                 ledge_scale = [100,0.1,0.1],
+                #  ledge_color = None,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
         self.zjitter = zjitter
         self.fupforce = fupforce
-        self.use_ramp = True
+        self.use_ramp = use_ramp
         self.ramp_scale = ramp_scale
         self.rolling_sliding_axis_length = self.collision_axis_length = rolling_sliding_axis_length
+        self.use_ledge = use_ledge
+        self.ledge = ledge
+        self.ledge_position = ledge_position
+        self.ledge_scale = ledge_scale
+        # self.ledge_color = ledge_color
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
-        # return super().get_trial_initialization_commands()
         commands = []
 
         # randomization across trials
@@ -145,6 +189,9 @@ class RollingSliding(Dominoes):
 
         # Choose and place a target object.
         commands.extend(self._place_and_push_target_object())
+
+        # Place ledge between target and zone
+        if self.use_ledge: commands.extend(self._place_ledge())
 
         # # Set the probe color
         # if self.probe_color is None:
@@ -457,6 +504,62 @@ class RollingSliding(Dominoes):
 
         return cmds
 
+    def _place_ledge(self) -> List[dict]:
+        """Places the ledge on a location on the axis and fixes it in place"""
+        assert self.use_ledge, "need to use ledge"
+        commands = []
+        self.random_color(exclude=self.target_color)
+        record, data = self.random_primitive(
+                                                object_types= self.get_types(self.ledge),
+                                                 scale=self.ledge_scale,
+                                                 color=self.random_color(exclude=self.target_color),
+            )
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+        pos = {
+            "x": -1 * self.ledge_position/2 * self.rolling_sliding_axis_length,
+            "y": -0.5 * scale['y'],
+            "z": 0
+        }
+
+        commands.extend(self.add_physics_object(
+                    record=record,
+                    position=pos,
+                    rotation=TDWUtils.VECTOR3_ZERO,
+                    mass=1000,
+                    dynamic_friction=0.5,
+                    static_friction=0.5,
+                    bounciness=0.,
+                    o_id=o_id,
+                    add_data = True)
+        )
+
+        # Set the middle object material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.middle_material)))
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+                "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                "id": o_id},
+            {"$type": "scale_object",
+                "scale_factor": scale,
+                "id": o_id}])
+
+        # make it a "kinematic" object that won't move
+        commands.extend([
+            {"$type": "set_object_collision_detection_mode",
+             "mode": "continuous_speculative",
+             "id": o_id},
+            {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": True}])     
+        
+        return commands
+
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
@@ -523,6 +626,11 @@ if __name__ == "__main__":
         remove_zone=bool(args.remove_zone),
         zjitter = args.zjitter,
         fupforce = args.fupforce,
+        use_ramp = args.ramp,
+        use_ledge = args.use_ledge,
+        ledge = args.ledge,
+        ledge_position = args.ledge_position,
+        ledge_scale = args.ledge_scale,
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,

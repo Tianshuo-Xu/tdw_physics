@@ -141,6 +141,7 @@ class Gravity(Dominoes):
     
     def __init__(self,
                  port: int = 1071,
+                 middle_scale_range=1.0,
                  middle_color=None,
                  middle_material=None,
                  middle_friction=0.1,

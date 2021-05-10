@@ -3,6 +3,8 @@ from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
+from PIL import Image
+import io
 import h5py, json
 from collections import OrderedDict
 import numpy as np
@@ -23,6 +25,10 @@ M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
+
+# colors for the target/zone overlay
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
 
 class Dataset(Controller, ABC):
     """
@@ -175,6 +181,9 @@ class Dataset(Controller, ABC):
         :param save_movies: whether to save out a movie of each trial
         :param save_labels: whether to save out JSON labels for the full trial set.
         """
+        
+        # If no temp_path given, place in local folder to prevent conflicts with other builds
+        if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
         self._height, self._width = height, width
 
@@ -396,6 +405,28 @@ class Dataset(Controller, ABC):
             self.meta_file.write_text(json_str, encoding='utf-8')
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
+
+        # Save out the target/zone segmentation mask
+        _id = f['frames']['0000']['images']['_id']
+        #get PIL image
+        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #get colors
+        zone_color = self.object_segmentation_colors[0]
+        target_color = self.object_segmentation_colors[1]
+        #get individual maps
+        zone_map = _id_map == zone_color
+        target_map = _id_map == target_color
+        #colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        #as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        #save image
+        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()

@@ -61,7 +61,7 @@ Arguments:
     --fscale: "5.0", "7.0", "9.0"
 '''
 
-def get_linking_args(dataset_dir: str, parse=True):
+def get_containment_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
     """
@@ -90,7 +90,7 @@ def get_linking_args(dataset_dir: str, parse=True):
                         default=1,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")    
 
-    parser.add_argument("--target_link_range",
+    parser.add_argument("--target_contained_range",
                         type=none_or_str,
                         default=None,
                         help="Which contained object to use as the target object. None is random, -1 is no target")
@@ -198,7 +198,7 @@ def get_linking_args(dataset_dir: str, parse=True):
         args.num_middle_range = handle_random_transform_args(args.num_middle_range)
         
         # target
-        args.target_link_range = handle_random_transform_args(args.target_link_range)
+        args.target_contained_range = handle_random_transform_args(args.target_contained_range)
         
         # attachment
         args.ascale = handle_random_transform_args(args.ascale)
@@ -237,25 +237,25 @@ def get_linking_args(dataset_dir: str, parse=True):
 
     return args
 
-class Linking(Tower):
+class Containment(Tower):
 
     STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
     STANDARD_MASS_FACTOR = 0.25 
     
     def __init__(self,
-                 port: int = 1071,
+                 port: int = None,
                  
-                 # stand base
+                 # base container
                  use_base=False,
-                 base_object='cube',
+                 base_object='bowl',
                  base_scale_range=0.5,
                  base_mass_range=3.0,
                  base_color=[0.8,0.8,0.8],
                  base_material=None,
                  
-                 # what object the links attach to
+                 # A Contained container (e.g. bowl stacked on base bowl)
                  use_attachment=False,
-                 attachment_object='cylinder',
+                 attachment_object='bowl',
                  attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
                  attachment_mass_range=3.0,
                  attachment_fixed_to_base=False,
@@ -263,17 +263,17 @@ class Linking(Tower):
                  attachment_material=None,
                  use_cap=False,
                  
-                 # what the links are, how many, and which is the target
-                 link_objects='torus',
-                 link_scale_range=0.5,
-                 link_scale_gradient=0.0,
-                 link_rotation_range=[0,0],
+                 # what the contained objects are
+                 contained_objects='sphere',
+                 contained_scale_range=0.5,
+                 contained_scale_gradient=0.0,
+                 contained_rotation_range=[0,0],
                  link_mass_range=2.0,
-                 num_link_range=[1,6],
-                 target_link_range=None,
+                 num_contained_range=[1,6],
+                 target_contained_range=None,
 
                  # generic
-                 use_ramp=True,
+                 use_ramp=False,
                  **kwargs):
 
         super().__init__(port=port, tower_cap=[], **kwargs)
@@ -304,13 +304,13 @@ class Linking(Tower):
         self.attachment_fixed_to_base = attachment_fixed_to_base        
 
         # links are the middle objects
-        self.set_middle_types(link_objects)        
-        self.num_link_range = num_link_range
-        self.middle_scale_range = link_scale_range        
+        self.set_middle_types(contained_objects)        
+        self.num_contained_range = num_contained_range
+        self.middle_scale_range = contained_scale_range        
         self.middle_mass_range = link_mass_range
-        self.middle_rotation_range = link_rotation_range
-        self.middle_scale_gradient = link_scale_gradient
-        self.target_link_range = target_link_range
+        self.middle_rotation_range = contained_rotation_range
+        self.middle_scale_gradient = contained_scale_gradient
+        self.target_contained_range = target_contained_range
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
@@ -336,7 +336,7 @@ class Linking(Tower):
         static_group.create_dataset("use_cap", data=self.use_cap)                        
 
     @staticmethod
-    def get_controller_label_funcs(classname = "Linking"):
+    def get_controller_label_funcs(classname = "Containment"):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
@@ -550,7 +550,7 @@ class Linking(Tower):
         commands = []
 
         # select how many links
-        self.num_links = self.num_blocks = random.choice(range(*self.num_link_range))
+        self.num_links = self.num_blocks = random.choice(range(*self.num_contained_range))
 
         # build a "tower" out of the links
         commands.extend(self._build_stack())
@@ -564,13 +564,13 @@ class Linking(Tower):
 
         commands = []
 
-        if self.target_link_range is None:
+        if self.target_contained_range is None:
             self.target_link_idx = random.choice(range(self.num_links))
-        elif hasattr(self.target_link_range, '__len__'):
-            self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
+        elif hasattr(self.target_contained_range, '__len__'):
+            self.target_link_idx = int(random.choice(range(*get_range(self.target_contained_range))))
             self.target_link_idx = min(self.target_link_idx, self.num_links - 1)
-        elif isinstance(self.target_link_range, (int, float)):
-            self.target_link_idx = int(self.target_link_range)
+        elif isinstance(self.target_contained_range, (int, float)):
+            self.target_link_idx = int(self.target_contained_range)
         else:
             return []
 
@@ -609,17 +609,17 @@ class Linking(Tower):
 
 if __name__ == "__main__":
 
-    args = get_linking_args("linking")
+    args = get_containment_args("containment")
 
-    LC = Linking(
-        # links
-        link_objects=args.middle,
-        link_scale_range=args.mscale,
-        link_scale_gradient=args.mgrad,
-        link_rotation_range=args.mrot,
+    CC = Containment(
+        # contained
+        contained_objects=args.middle,
+        contained_scale_range=args.mscale,
+        contained_scale_gradient=args.mgrad,
+        contained_rotation_range=args.mrot,
         link_mass_range=args.mmass,
-        num_link_range=args.num_middle_range,
-        target_link_range=args.target_link_range,
+        num_contained_range=args.num_middle_range,
+        target_contained_range=args.target_contained_range,
         spacing_jitter=args.spacing_jitter,
 
         # base
@@ -692,7 +692,7 @@ if __name__ == "__main__":
     )
 
     if bool(args.run):
-        LC.run(num=args.num,
+        CC.run(num=args.num,
                output_dir=args.dir,
                temp_path=args.temp,
                width=args.width,
@@ -704,4 +704,4 @@ if __name__ == "__main__":
                args_dict=vars(args)
         )
     else:
-        LC.communicate({"$type": "terminate"})
+        CC.communicate({"$type": "terminate"})
