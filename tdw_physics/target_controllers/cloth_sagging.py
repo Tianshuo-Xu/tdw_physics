@@ -13,6 +13,8 @@ from tdw_physics.flex_dataset import FlexDataset, FlexParticles
 from tdw_physics.rigidbodies_dataset import RigidbodiesDataset
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
 
+from tdw_physics.postprocessing.labels import get_all_label_funcs
+
 # fluid
 from tdw.flex.fluid_types import FluidTypes
 
@@ -475,9 +477,10 @@ class ClothSagging(Dominoes, FlexDataset):
 
             dists = np.sqrt(np.square(p1[:,None] - p2[None,:]).sum(-1))
             collision = (dists < collision_thresh).max()
-            print(obj1, p1.shape, obj2, p2.shape, "colliding?", collision)
+            min_dist = dists.min()
+            print(obj1, p1.shape, obj2, p2.shape, "min_dist", min_dist, "colliding?", collision)
 
-        return collision
+        return (min_dist, collision)
 
     def _write_frame_labels(self,
                             frame_grp: h5py.Group,
@@ -501,13 +504,31 @@ class ClothSagging(Dominoes, FlexDataset):
                 flex = FlexParticles(r)
 
         if has_target and has_zone and (flex is not None):
-            are_touching = self.get_flex_object_collision(flex,
+            min_dist, are_touching = self.get_flex_object_collision(flex,
                                                           obj1=self.target_id,
                                                           obj2=self.zone_id,
                                                           collision_thresh=self.collision_label_thresh)
+            labels.create_dataset("minimum_distance_target_to_zone", data=min_dist)
             labels.create_dataset("target_contacting_zone", data=are_touching)
 
         return labels, resp, frame_num, done
+
+    @staticmethod
+    def get_controller_label_funcs(classname = 'ClothSagging'):
+
+        funcs = super(ClothSagging, ClothSagging).get_controller_label_funcs(classname)
+        funcs += get_all_label_funcs()
+
+        def minimum_distance_target_to_zone(f):
+            frames = list(f['frames'].keys())
+            min_dists = np.stack([
+                np.array(f['frames'][fr]['labels']['minimum_distance_target_to_zone'])
+                for fr in frames], axis=0)
+            return float(min_dists.min())
+
+        funcs += [minimum_distance_target_to_zone]
+
+        return funcs
 
 
 if __name__ == '__main__':
