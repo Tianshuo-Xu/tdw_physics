@@ -200,7 +200,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_left_right_reflections",
                         action="store_true",
-                        help="Whether camera angle range includes reflections along the collision axis")    
+                        help="Whether camera angle range includes reflections along the collision axis")
     parser.add_argument("--material_types",
                         type=none_or_str,
                         default="Wood,Metal,Plastic",
@@ -242,7 +242,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--distractor_aspect_ratio",
                         type=none_or_str,
                         default=None,
-                        help="The range of valid distractor aspect ratios")    
+                        help="The range of valid distractor aspect ratios")
     parser.add_argument("--occluder",
                         type=none_or_str,
                         default="core",
@@ -264,9 +264,9 @@ def get_args(dataset_dir: str, parse=True):
                         help="The range of valid occluder aspect ratios")
     parser.add_argument("--no_moving_distractors",
                         action="store_true",
-                        help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")    
-    
-    
+                        help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")
+
+
     parser.add_argument("--remove_middle",
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
@@ -275,18 +275,18 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--model_libraries",
                         type=none_or_str,
                         default=','.join(list(MODEL_LIBRARIES.keys())),
-                        help="Which model libraries can be drawn from")    
+                        help="Which model libraries can be drawn from")
     parser.add_argument("--only_use_flex_objects",
                         action="store_true",
-                        help="Only use models that are FLEX models (and have readable meshes)")    
-    
+                        help="Only use models that are FLEX models (and have readable meshes)")
+
     # for generating training data without zones, targets, caps, and at lower resolution
     parser.add_argument("--training_data_mode",
                         action="store_true",
                         help="Overwrite some parameters to generate training data without target objects, zones, etc.")
     parser.add_argument("--match_probe_and_target_color",
                         action="store_true",
-                        help="Probe and target will have the same color.")    
+                        help="Probe and target will have the same color.")
 
     def postprocess(args):
         # choose a valid room
@@ -334,7 +334,7 @@ def get_args(dataset_dir: str, parse=True):
 
         # occluders and distrators
         args.occluder_aspect_ratio = handle_random_transform_args(args.occluder_aspect_ratio)
-        args.distractor_aspect_ratio = handle_random_transform_args(args.distractor_aspect_ratio)        
+        args.distractor_aspect_ratio = handle_random_transform_args(args.distractor_aspect_ratio)
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
@@ -443,7 +443,7 @@ def get_args(dataset_dir: str, parse=True):
             args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
-            args.save_meshes = True            
+            args.save_meshes = True
 
         return args
 
@@ -536,7 +536,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
-        
+
         ## whether only flex objects are allowed
         self.flex_only = flex_only
 
@@ -804,7 +804,7 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "set_focus_distance",
              "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
-        
+
 
         # Place distractor objects in the background
         commands.extend(self._place_background_distractors())
@@ -821,6 +821,7 @@ class Dominoes(RigidbodiesDataset):
                 print("applied %s at time step %d" % (self.push_cmd, frame))
             return [self.push_cmd]
         else:
+            print(frame)
             return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -1115,7 +1116,7 @@ class Dominoes(RigidbodiesDataset):
         if size_range is not None:
             scale = self.rescale_record_to_size(record, size_range)
             print("rescaled target", scale)
-            
+
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
@@ -1182,7 +1183,7 @@ class Dominoes(RigidbodiesDataset):
         if size_range is not None:
             scale = self.rescale_record_to_size(record, size_range)
             print("rescaled probe", scale)
-            
+
         self.probe = record
         self.probe_type = data["name"]
         self.probe_scale = scale
@@ -1217,7 +1218,7 @@ class Dominoes(RigidbodiesDataset):
                 o_id=o_id,
                 add_data=True,
                 make_kinematic=False,
-                apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,                
+                apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,
                 **probe_physics_info
             ))
 
@@ -1446,7 +1447,7 @@ class Dominoes(RigidbodiesDataset):
             print("camera angle", self.camera_rotation)
             print("camera altitude", self.camera_altitude)
             print("camera position", self.camera_position)
-        
+
 
     def _set_occlusion_attributes(self) -> None:
 
@@ -1463,7 +1464,7 @@ class Dominoes(RigidbodiesDataset):
         Given a unit vector direction in world coordinates, adjust in a Controller-specific
         manner to avoid interactions with the physically relevant objects.
         """
-        
+
         o_len, o_height, o_dep = self.get_record_dimensions(record)
 
         ## get the occluder pose
@@ -1488,7 +1489,7 @@ class Dominoes(RigidbodiesDataset):
         ## reposition and rescale it so it's not too close to the "physical dynamics" axis (z)
         if np.abs(pos['z']) < (self.occluder_min_z + self.occluder_min_size):
             pos.update({'z' : np.sign(pos['z']) * (self.occluder_min_z + self.occluder_min_size)})
-        
+
         reach_z = np.abs(pos['z']) - 0.5 * bounds['z']
         if reach_z < self.occluder_min_z: # scale down
             scale_z = (np.abs(pos['z']) - self.occluder_min_z) / (0.5 * bounds['z'])
@@ -1504,7 +1505,7 @@ class Dominoes(RigidbodiesDataset):
 
             if (pos['x'] + self.occluder_min_size) > (last_pos_x - 0.5 * last_bounds_x):
                 pos.update({'x': (last_pos_x - 0.5 * last_bounds_x) - self.occluder_min_size})
-            
+
             reach_x = pos['x'] + 0.5 * bounds['x']
             if reach_x > (last_pos_x - 0.5 * last_bounds_x): # scale down
                 scale_x = (last_pos_x - 0.5 * last_bounds_x - pos['x']) / (0.5 * bounds['x'])
@@ -1629,7 +1630,7 @@ class Dominoes(RigidbodiesDataset):
 
             theta = thetas[i]
             pos_unit = self.rotate_vector_parallel_to_floor(opposite, theta)
-            
+
             pos, rot, scale = self._get_distractor_position_pose_scale(record, pos_unit)
 
             # add the object
@@ -1642,8 +1643,8 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a color and texture if it's a primitive
-            # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)            
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
@@ -1668,14 +1669,14 @@ class Dominoes(RigidbodiesDataset):
                     {"$type": "set_kinematic_state",
                      "id": o_id,
                      "is_kinematic": True,
-                     "use_gravity": True}])            
+                     "use_gravity": True}])
 
             # add the metadata
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
             print("distractor record", record.name)
-            print("distractor category", record.wcategory)            
+            print("distractor category", record.wcategory)
             if self.PRINT:
                 print("distractor position", pos)
                 print("distractor scale", scale)
@@ -1718,8 +1719,8 @@ class Dominoes(RigidbodiesDataset):
                     add_data=True))
 
             # give it a texture if it's a primitive
-            # make sure it doesn't have the same color as the target object            
-            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)            
+            # make sure it doesn't have the same color as the target object
+            rgb = self.random_color(exclude=(self.target_color if not self._random_target_color else None), exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
@@ -1729,7 +1730,7 @@ class Dominoes(RigidbodiesDataset):
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
 
-                
+
             commands.extend([
                 {"$type": "scale_object",
                  "scale_factor": scale,
@@ -1748,7 +1749,7 @@ class Dominoes(RigidbodiesDataset):
 
 
             print("occluder name", record.name)
-            print("occluder category", record.wcategory)            
+            print("occluder category", record.wcategory)
             if self.PRINT:
                 print("occluder position", pos)
                 print("occluder pose", rot)
@@ -1985,7 +1986,7 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         occluder_aspect_ratio=args.occluder_aspect_ratio,
-        distractor_aspect_ratio=args.distractor_aspect_ratio,        
+        distractor_aspect_ratio=args.distractor_aspect_ratio,
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,

@@ -54,7 +54,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--material_types",
                         type=none_or_str,
                         default="Wood,Ceramic",
-                        help="Which class of materials to sample material names from")    
+                        help="Which class of materials to sample material names from")
 
     parser.add_argument("--zone",
                         type=str,
@@ -80,7 +80,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--fwait",
                         type=none_or_str,
                         default="5",
-                        help="range of time steps to apply to wait to apply force")    
+                        help="range of time steps to apply to wait to apply force")
 
     parser.add_argument("--frot",
                         type=str,
@@ -97,7 +97,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         default=0.5,
                         help="jitter around object centroid to apply force")
 
-    
+
     ###target
     parser.add_argument("--target",
                         type=none_or_str,
@@ -106,7 +106,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--target_categories",
                         type=none_or_str,
                         default=None,
-                        help="Allowable target categories")    
+                        help="Allowable target categories")
 
     parser.add_argument("--tscale",
                         type=str,
@@ -126,15 +126,15 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--pscale",
                         type=str,
                         default="[0.5,1.0]",
-                        help="scale of probe objects")    
-    
+                        help="scale of probe objects")
+
 
     ### layout
     parser.add_argument("--collision_axis_length",
                         type=float,
                         default=2.0,
                         help="Length of spacing between probe and target objects at initialization.")
-    
+
     ## collision specific arguments
     parser.add_argument("--fupforce",
                         type=none_or_str,
@@ -163,7 +163,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--distractor_aspect_ratio",
                         type=none_or_str,
                         default="[0.25,5.0]",
-                        help="The range of valid distractor aspect ratios")       
+                        help="The range of valid distractor aspect ratios")
     parser.add_argument("--occluder_categories",
                         type=none_or_str,
                         default=OCCLUDER_CATEGORIES,
@@ -179,8 +179,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--num_distractors",
                         type=none_or_int,
                         default=3,
-                        help="number of distractors")    
- 
+                        help="number of distractors")
+
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
 
@@ -197,7 +197,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
 class Playroom(Collision):
 
-    self.PRINT = True
+    PRINT = True
 
     def __init__(self, port=1071,
                  probe_categories=None,
@@ -205,16 +205,18 @@ class Playroom(Collision):
                  **kwargs):
 
         self.probe_categories = probe_categories
-        self.target_categories = target_categories        
+        self.target_categories = target_categories
         super().__init__(port=port, **kwargs)
 
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=MODEL_LIBRARIES.keys(), categories=self.probe_categories, flex_only=False)
         self._probe_types = tlist
+        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types])
 
     def set_target_types(self, olist):
         tlist = self.get_types(olist, libraries=MODEL_LIBRARIES.keys(), categories=self.target_categories, flex_only=False)
         self._target_types = tlist
+        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types])
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
@@ -241,7 +243,7 @@ class Playroom(Collision):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
-    
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame > 150 # End after X frames even if objects are still moving.
 
@@ -250,7 +252,7 @@ class Playroom(Collision):
         self.distractor_angular_spacing = 20
         self.distractor_distance_fraction = [0.3,0.6]
         self.distractor_rotation_jitter = 30
-        self.distractor_min_z = self.middle_scale['z'] * 2.0
+        self.distractor_min_z = 0.75
         self.distractor_min_size = 1.0
         self.distractor_max_size = 2.0
 
@@ -259,24 +261,30 @@ class Playroom(Collision):
         self.occluder_angular_spacing = 20
         self.occlusion_distance_fraction = [0.3,0.6]
         self.occluder_rotation_jitter = 30.
-        self.occluder_min_z = self.middle_scale['z'] * 2.0
+        self.occluder_min_z = 0.75
         self.occluder_min_size = 0.5
         self.occluder_max_size = 1.5
-        self.rescale_occluder_height = True    
-    
+        self.rescale_occluder_height = True
+
 
 if __name__ == "__main__":
     import platform, os
-    
+
     args = get_playroom_args("playroom")
-    
+
     if platform.system() == 'Linux':
         if args.gpu is not None:
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
 
+        launch_build = False
+    else:
+        launch_build = True
+
+
     PC = Playroom(
+        launch_build=launch_build,
         port=args.port,
         room=args.room,
         randomize=args.random,
@@ -326,11 +334,11 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         occluder_aspect_ratio=args.occluder_aspect_ratio,
-        distractor_aspect_ratio=args.distractor_aspect_ratio,                
+        distractor_aspect_ratio=args.distractor_aspect_ratio,
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        match_probe_and_target_color=args.match_probe_and_target_color        
+        match_probe_and_target_color=args.match_probe_and_target_color
     )
 
     if bool(args.run):
