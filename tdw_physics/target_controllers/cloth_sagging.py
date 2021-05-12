@@ -4,12 +4,16 @@ from pathlib import Path
 
 import random
 import numpy as np
+import h5py
 
 from tdw.librarian import ModelRecord, MaterialLibrarian, ModelLibrarian
 from tdw.tdw_utils import TDWUtils
 from tdw_physics.target_controllers.dominoes import Dominoes, get_args, ArgumentParser
-from tdw_physics.flex_dataset import FlexDataset
+from tdw_physics.flex_dataset import FlexDataset, FlexParticles
+from tdw_physics.rigidbodies_dataset import RigidbodiesDataset
 from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
+
+from tdw_physics.postprocessing.labels import get_all_label_funcs
 
 # fluid
 from tdw.flex.fluid_types import FluidTypes
@@ -44,16 +48,44 @@ def get_flex_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="30",
                         help="How many frames to wait before applying the force")
-#    parser.add_argument("--drapeobject",
-#                        type=str,
-#                        default="alma_floor_lamp",
-#                        help="object to use for revealing cloth properties (from models_core.json)")
+    parser.add_argument("--collision_label_threshold",
+                        type=float,
+                        default=0.1,
+                        help="Euclidean distance at which target and zone are said to be touching")
+    parser.add_argument("--min_distance_ratio",
+                        type=float,
+                        default=0.5,
+                        help="minimum ratio of distance between the anchor and target zone")
+    parser.add_argument("--max_distance_ratio",
+                        type=float,
+                        default=0.5,
+                        help="maximum ratio of distance between the anchor and target zone")
+    parser.add_argument("--min_anchorloc",
+                        type=float,
+                        default=-0.4,
+                        help="minimum of the two anchor x-locations")
+    parser.add_argument("--max_anchorloc",
+                        type=float,
+                        default=0.4,
+                        help="maximum of the two anchor x-locations")
+    parser.add_argument("--anchor_height",
+                        type=float,
+                        default=0.5,
+                        help="anchor height")
+    parser.add_argument("--anchor_jitter",
+                        type=float,
+                        default=0.0,
+                        help="jitter in anchor locations")
+    parser.add_argument("--height_jitter",
+                        type=float,
+                        default=0.0,
+                        help="jitter in anchor heights")
 
     def postprocess(args):
 
         args = domino_postproc(args)
         args.all_flex_objects = bool(int(args.all_flex_objects))
-
+        
         return args
 
     if not parse:
@@ -79,14 +111,17 @@ class ClothSagging(Dominoes, FlexDataset):
                  use_squishy=False,
                  use_fluid=False,
                  step_physics=False,
-                 drape_object="alma_floor_lamp", #alma_floor_lamp, metal_sculpture, white_lamp, vase_01, linbrazil_diz_armchair, desk_lamp
-                 tether_stiffness_range = [0.1, 1.0],
-                 bend_stiffness_range = [0.1, 1.0],#[0.0, 1.0],
-                 stretch_stiffness_range = [0.1, 1.0],
-                 distance_ratio_range = [0.25,0.45],#[0.2, 0.8],
-                 anchor_locations = [-0.4, 0.4],
+                 tether_stiffness_range = [0.0, 1.0],
+                 bend_stiffness_range = [0.0, 1.0],#[0.0, 1.0],
+                 stretch_stiffness_range = [0.0, 1.0],
+                 min_distance_ratio = 0.5,
+                 max_distance_ratio = 0.5,
+                 min_anchorloc = -0.4,
+                 max_anchorloc = 0.4,
+                 anchor_height = 0.5,                
                  anchor_jitter = 0.2,#0.2,
-                 height_jitter = 0.3,#0.3,
+                 height_jitter = 0.2,#0.3,
+                 collision_label_threshold=0.1,
                  **kwargs):
 
         Dominoes.__init__(self, port=port, **kwargs)
@@ -103,14 +138,19 @@ class ClothSagging(Dominoes, FlexDataset):
         if self.use_fluid:
             self.ft_selection = random.choice(self.FLUID_TYPES.fluid_type_names)
 
-        self.drape_object = drape_object
         self.tether_stiffness_range = tether_stiffness_range
         self.bend_stiffness_range = bend_stiffness_range
         self.stretch_stiffness_range = stretch_stiffness_range
-        self.distance_ratio_range = distance_ratio_range
-        self.anchor_locations = anchor_locations
+        self.min_distance_ratio = min_distance_ratio
+        self.max_distance_ratio = max_distance_ratio
+        self.min_anchorloc = min_anchorloc
+        self.max_anchorloc = max_anchorloc
+        self.anchor_height = anchor_height        
         self.anchor_jitter = anchor_jitter
         self.height_jitter = height_jitter
+
+        # for detecting collisions
+        self.collision_label_thresh = collision_label_threshold
 
     def _set_add_physics_object(self):
         if self.all_flex_objects:
@@ -254,11 +294,11 @@ class ClothSagging(Dominoes, FlexDataset):
 
         self.cloth = self.CLOTH_RECORD
         self.cloth_id = self._get_next_object_id()
-        self.cloth_position = {"x": 0.0, "y": 1.5, "z":-0.6}
-        self.cloth_color = [0.8,0.0,0.0]
+        self.cloth_position = {"x": random.uniform(-0.2,0.2), "y": random.uniform(1.3,1.5), "z":random.uniform(-0.6,-0.4)}
+        self.cloth_color = self.target_color if self.target_color is not None else self.random_color()
         self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
         self.cloth_mass = 0.5
-        self.cloth_data = {"name": "cloth_square", "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
+        self.cloth_data = {"name": self.cloth.name, "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
 
         commands = self.add_cloth_object(
             record = self.cloth,
@@ -271,6 +311,9 @@ class ClothSagging(Dominoes, FlexDataset):
             bend_stiffness = random.uniform(self.bend_stiffness_range[0], self.bend_stiffness_range[1]), #changing this will lead to visible changes in cloth deformability
             stretch_stiffness = random.uniform(self.stretch_stiffness_range[0], self.stretch_stiffness_range[1]), # doesn't do much visually!
             o_id = self.cloth_id)
+
+        # replace the target w the cloth
+        self._replace_target_with_object(self.cloth, self.cloth_data)
 
         # set mass
         commands.append({"$type": "set_flex_object_mass",
@@ -291,73 +334,6 @@ class ClothSagging(Dominoes, FlexDataset):
 
         return commands
 
-    def drop_squishy(self) -> List[dict]:
-
-        self.squishy = self.SOFT_RECORD
-        self.squishy_id = self._get_next_object_id()
-        self.squishy_position = {'x': 0., 'y': 1.5, 'z': 0.}
-        rotation = {k:0 for k in ['x','y','z']}
-
-        self.squishy_color = [0.0,0.8,1.0]
-        self.squishy_scale = {k:0.5 for k in ['x','y','z']}
-        self.squishy_mass = 2.0
-
-        commands = self.add_soft_object(
-            record = self.squishy,
-            position = self.squishy_position,
-            rotation = rotation,
-            scale=self.squishy_scale,
-            o_id = self.squishy_id)
-
-        # set mass
-        commands.append({"$type": "set_flex_object_mass",
-                         "mass": self.squishy_mass,
-                         "id": self.squishy_id})
-
-        commands.append(
-            {"$type": "set_color",
-             "color": {"r": self.squishy_color[0], "g": self.squishy_color[1], "b": self.squishy_color[2], "a": 1.},
-             "id": self.squishy_id})
-
-        self._add_name_scale_color(
-            self.squishy, {'color': self.squishy_color, 'scale': self.squishy_scale, 'id': self.squishy_id})
-        self.masses = np.append(self.masses, self.squishy_mass)
-
-        return commands
-
-    def drop_fluid(self) -> List[dict]:
-
-        commands = []
-
-        # create a pool for the fluid
-        self.pool_id = self._get_next_object_id()
-        print("POOL ID", self.pool_id)
-        self.non_flex_objects.append(self.pool_id)
-        commands.append(self.add_transforms_object(record=self.RECEPTACLE_RECORD,
-                                                   position=TDWUtils.VECTOR3_ZERO,
-                                                   rotation=TDWUtils.VECTOR3_ZERO,
-                                                   o_id=self.pool_id,
-                                                   add_data=True))
-        commands.append({"$type": "set_kinematic_state",
-                         "id": self.pool_id,
-                         "is_kinematic": True,
-                         "use_gravity": False})
-
-        # add the fluid; this will also step physics forward 500 times
-        self.fluid_id = self._get_next_object_id()
-        print("FLUID ID", self.fluid_id)
-        commands.extend(self.add_fluid_object(
-            position={"x": 0.0, "y": 1.0, "z": 0.0},
-            rotation=TDWUtils.VECTOR3_ZERO,
-            o_id=self.fluid_id,
-            fluid_type=self.ft_selection))
-        self.fluid_object_ids.append(self.fluid_id)
-
-        # restore usual time step
-        commands.append({"$type": "set_time_step", "time_step": 0.01})
-
-        return commands
-
     def _place_ramp_under_probe(self) -> List[dict]:
 
         cmds = Dominoes._place_ramp_under_probe(self)
@@ -370,13 +346,13 @@ class ClothSagging(Dominoes, FlexDataset):
         return []
 
     def _get_zone_location(self, scale):
-        dratio = random.uniform(self.distance_ratio_range[0], self.distance_ratio_range[1])
-        dist = max(self.anchor_locations) - min(self.anchor_locations)
+        dratio = random.uniform(self.min_distance_ratio, self.max_distance_ratio)
+        dist = self.max_anchorloc - self.min_anchorloc
         zonedist =  dratio * dist
         return {
-            "x": max(self.anchor_locations)-zonedist,
+            "x": self.max_anchorloc-zonedist,
             "y": 0.0 if not self.remove_zone else 10.0,
-            "z": 0.0 if not self.remove_zone else 10.0
+            "z": random.uniform(-0.2,0.4) if not self.remove_zone else 10.0
         }
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
@@ -386,12 +362,15 @@ class ClothSagging(Dominoes, FlexDataset):
 
         commands = []
 
+        # anchor object list
+        anchor_list = ["cone","cube","cylinder","pyramid","triangular_prism"]
+        
         # add two objects on each side of a target object
-        self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
+        self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
         self.objrec1_id = self._get_next_object_id()
-        self.objrec1_position = {'x': min(self.anchor_locations)-random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
-        self.objrec1_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec1_scale = {'x': 0.2, 'y': 1.2+random.uniform(-self.height_jitter,self.height_jitter), 'z': 0.5}
+        self.objrec1_position = {'x': self.min_anchorloc-random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
+        self.objrec1_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+        self.objrec1_scale = {'x': random.uniform(0.1,0.3), 'y': self.anchor_height+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
         self.objrec1_mass = 25.0
         commands.extend(self.add_flex_solid_object(
                               record = self.objrec1,
@@ -404,11 +383,11 @@ class ClothSagging(Dominoes, FlexDataset):
                               o_id = self.objrec1_id,
                               ))
 
-        self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
+        self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
         self.objrec2_id = self._get_next_object_id()
-        self.objrec2_position = {'x': max(self.anchor_locations)+random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
-        self.objrec2_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec2_scale = {'x': 0.2, 'y': 0.7+random.uniform(-self.height_jitter,self.height_jitter), 'z': 0.5}
+        self.objrec2_position = {'x': self.max_anchorloc+random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
+        self.objrec2_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+        self.objrec2_scale = {'x': random.uniform(0.1,0.3), 'y': self.anchor_height+0.1+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
         self.objrec2_mass = 25.0
         commands.extend(self.add_flex_solid_object(
                                record = self.objrec2,
@@ -420,13 +399,32 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec2_scale,
                                o_id = self.objrec2_id,
                                ))
-
+        
+        # drape object        
+        drape_list = ["alma_floor_lamp","buddah","desk_lamp","linbrazil_diz_armchair"]
+        
+        #drape_list = ["linbrazil_diz_armchair"]
+        self.drape_object = random.choice(drape_list)
         self.objrec3 = MODEL_LIBRARIES["models_core.json"].get_record(self.drape_object)
         self.objrec3_id = self._get_next_object_id()
-        self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.5}
-        self.objrec3_rotation = {k:0 for k in ['x','y','z']}
-        self.objrec3_scale = {'x': 1.0, 'y': 0.8, 'z': 1.0}
+        self.objrec3_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': random.uniform(0,45), 'z': 0},#
         self.objrec3_mass = 100.0
+        
+        print("drape object: ",self.drape_object)
+        if self.drape_object == "alma_floor_lamp":        
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.1}
+            self.objrec3_scale = {'x': 1.0, 'y': 0.8, 'z': 1.0}
+        elif self.drape_object == "linbrazil_diz_armchair":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.4}
+            self.objrec3_scale = {'x': 1.2, 'y': 1.2, 'z': 1.0}
+        elif self.drape_object == "buddah":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.3}
+            self.objrec3_scale = {'x': 1.2, 'y': 1.2, 'z': 1.2}
+        elif self.drape_object == "desk_lamp":
+            self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.1}
+            self.objrec3_scale = {'x': 1.2, 'y': 1.2, 'z': 1.2}
+            
+            
         commands.extend(self.add_flex_solid_object(
                                record = self.objrec3,
                                position = self.objrec3_position,
@@ -437,17 +435,127 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec3_scale,
                                o_id = self.objrec3_id,
                                ))
+                               
+        # additional anchor
+        if random.uniform(0.0,1.0)>0.3:
+            self.objrec4 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
+            self.objrec4_id = self._get_next_object_id()
+            takeloc = random.choice([self.min_anchorloc-0.5,self.max_anchorloc+0.5])
+            self.objrec4_position = {'x': takeloc-random.uniform(0.0,self.anchor_jitter), 'y': 0., 'z': 0.}
+            self.objrec4_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': 0, 'z': 0},
+            self.objrec4_scale = {'x': random.uniform(0.1,0.3), 'y': 0.5+random.uniform(-self.height_jitter,self.height_jitter), 'z': random.uniform(0.2,0.5)}
+            self.objrec4_mass = 25.0
+            commands.extend(self.add_flex_solid_object(
+                                   record = self.objrec4,
+                                   position = self.objrec4_position,
+                                   rotation = self.objrec4_rotation,
+                                   mesh_expansion = 0.0,
+                                   particle_spacing = 0.035,
+                                   mass = self.objrec4_mass,
+                                   scale = self.objrec4_scale,
+                                   o_id = self.objrec4_id,
+                                   ))
 
         commands.extend(self.drop_cloth() if self.use_cloth else [])
 
         return commands
 
+    @staticmethod
+    def get_flex_object_collision(flex, obj1, obj2, collision_thresh=0.15):
+        '''
+        flex: FlexParticles Data
+        '''
+        collision = False
+        p1 = p2 = None
+        for n in range(flex.get_num_objects()):
+            if flex.get_id(n) == obj1:
+                p1 = flex.get_particles(n)
+            elif flex.get_id(n) == obj2:
+                p2 = flex.get_particles(n)
+
+        if (p1 is not None) and (p2 is not None):
+
+            p1 = np.array(p1)[:,0:3]
+            p2 = np.array(p2)[:,0:3]
+
+            dists = np.sqrt(np.square(p1[:,None] - p2[None,:]).sum(-1))
+            collision = (dists < collision_thresh).max()
+            min_dist = dists.min()
+            print(obj1, p1.shape, obj2, p2.shape, "min_dist", min_dist, "colliding?", collision)
+
+        return (min_dist, collision)
+
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
+
+        labels, resp, grame_num, done = RigidbodiesDataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
+
+        has_target = (not self.remove_target) or self.replace_target
+        has_zone = not self.remove_zone
+        labels.create_dataset("has_target", data=has_target)
+        labels.create_dataset("has_zone", data=has_zone)
+        if not (has_target or has_zone):
+            return labels, resp, frame_num, done
+
+        print("frame num", frame_num)
+        flex = None
+        for r in resp[:-1]:
+            if FlexParticles.get_data_type_id(r) == "flex":
+                flex = FlexParticles(r)
+
+        if has_target and has_zone and (flex is not None):
+            min_dist, are_touching = self.get_flex_object_collision(flex,
+                                                          obj1=self.target_id,
+                                                          obj2=self.zone_id,
+                                                          collision_thresh=self.collision_label_thresh)
+            labels.create_dataset("minimum_distance_target_to_zone", data=min_dist)
+            labels.create_dataset("target_contacting_zone", data=are_touching)
+
+        return labels, resp, frame_num, done
+
+    @staticmethod
+    def get_controller_label_funcs(classname = 'ClothSagging'):
+
+        funcs = super(ClothSagging, ClothSagging).get_controller_label_funcs(classname)
+        funcs += get_all_label_funcs()
+
+        def minimum_distance_target_to_zone(f):
+            frames = list(f['frames'].keys())
+            min_dists = np.stack([
+                np.array(f['frames'][fr]['labels']['minimum_distance_target_to_zone'])
+                for fr in frames], axis=0)
+            return float(min_dists.min())
+
+        funcs += [minimum_distance_target_to_zone]
+
+        return funcs
+
+    def _set_occlusion_attributes(self) -> None:
+
+        self.occluder_angular_spacing = 10
+        self.occlusion_distance_fraction = [0.6, 0.8]
+        self.occluder_rotation_jitter = 30.
+        self.occluder_min_z = self.middle_scale['z'] + 0.25
+        self.occluder_min_size = 0.8
+        self.occluder_max_size = 1.2
+        self.rescale_occluder_height = True
+        
+    def _set_distractor_attributes(self) -> None:
+
+        self.distractor_angular_spacing = 15
+        self.distractor_distance_fraction = [0.4,1.0]
+        self.distractor_rotation_jitter = 30
+        self.distractor_min_z = self.middle_scale['z'] + 0.25
+        self.distractor_min_size = 0.8
+        self.distractor_max_size = 1.2
+
 if __name__ == '__main__':
     import platform, os
 
     args = get_flex_args("flex_dominoes")
-
-    print("core object types", MODEL_CORE)
 
     if platform.system() == 'Linux':
         if args.gpu is not None:
@@ -463,6 +571,7 @@ if __name__ == '__main__':
         print("WARNING: Flex fluids are only supported in Windows")
 
     C = ClothSagging(
+        port=args.port,
         launch_build=launch_build,
         all_flex_objects=args.all_flex_objects,
         use_cloth=args.cloth,
@@ -526,8 +635,15 @@ if __name__ == '__main__':
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors        
-    )
+        no_moving_distractors=args.no_moving_distractors,
+        collision_label_threshold=args.collision_label_threshold,
+        max_distance_ratio = args.max_distance_ratio,
+        min_distance_ratio = args.min_distance_ratio,        
+        max_anchorloc = args.max_anchorloc,
+        min_anchorloc = args.min_anchorloc,
+        anchor_height = args.anchor_height,
+        anchor_jitter = args.anchor_jitter,
+        height_jitter = args.height_jitter)
 
     if bool(args.run):
         C.run(num=args.num,
