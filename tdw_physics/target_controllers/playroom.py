@@ -29,8 +29,8 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 ALL_CATEGORIES = list(set([r.wcategory for r in MODEL_LIBRARIES['models_full.json'].records]))
-# OCCLUDER_CATEGORIES = "coffee table,houseplant,vase,chair,cat,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant,sculpture,plant,rodent"
-# DISTRACTOR_CATEGORIES = "coffee table,houseplant,vase,chair,cat,dog,sofa,flowerpot,coffee maker,stool,laptop,laptop computer,globe,bookshelf,desktop computer,garden plant,garden plant,garden plant,sculpture,plant,rodent"
+MEDIUM_CATEGORIES = "toy,beetle,teakettle,radio,trumpet,globe,cup,elephant,spectacles,fan,orange,spider,garden plant,bat,whale,book,bottle,scissors,soda can,shoe,alligator,bird,sandwich,coffee,grape,toaster,bowl,coaster,microscope,turtle,vase,bee,dog,duck,raw vegetable,apple,bread,dice,rodent,box,rock,camera,golf ball,bear,hammer,gloves,towel,cow,canoe,bucket,coin,money,computer mouse,hairbrush,slipper,suitcase,comb,bookend,jug,hat,key,hourglass,banana,cat,violin,snake,basket,candle,fish,pot,beverage,crustacean,looking glass,flower,sheep,skate,croissant,horse,wineglass,saw,calculator,flowerpot,pencil,pan,surfboard,skateboard,donut,sculpture,giraffe,zebra,ice cream,umbrella"
+ANIMALS_TOYS_FRUIT = "toy,beetle,elephant,spider,bat,whale,alligator,bird,grape,turtle,bee,dog,duck,raw vegetable,apple,bread,rodent,bear,cow,computer mouse,banana,cat,snake,fish,crustacean,flower,sheep,croissant,horse,giraffe,zebra"
 
 OCCLUDER_CATEGORIES = "sculpture,globe,chair,houseplant,plant,garden plant,bookshelf,coffee maker,flowerpot,stool,lamp,desktop computer,laptop computer,dog,cat,giraffe,rodent,turtle,dolphin"
 DISTRACTOR_CATEGORIES = OCCLUDER_CATEGORIES
@@ -105,7 +105,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--target_categories",
                         type=none_or_str,
-                        default=None,
+                        default=ANIMALS_TOYS_FRUIT,
                         help="Allowable target categories")
 
     parser.add_argument("--tscale",
@@ -120,7 +120,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--probe_categories",
                         type=none_or_str,
-                        default=None,
+                        default=ANIMALS_TOYS_FRUIT,
                         help="Allowable probe categories")
 
     parser.add_argument("--pscale",
@@ -202,19 +202,23 @@ class Playroom(Collision):
     def __init__(self, port=1071,
                  probe_categories=None,
                  target_categories=None,
+                 size_min=0.1,
+                 size_max=2.5,
                  **kwargs):
 
         self.probe_categories = probe_categories
         self.target_categories = target_categories
+        self.size_min = size_min
+        self.size_max = size_max
         super().__init__(port=port, **kwargs)
 
     def set_probe_types(self, olist):
-        tlist = self.get_types(olist, libraries=MODEL_LIBRARIES.keys(), categories=self.probe_categories, flex_only=False)
+        tlist = self.get_types(olist, libraries=["models_full.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._probe_types = tlist
         print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types])
 
     def set_target_types(self, olist):
-        tlist = self.get_types(olist, libraries=MODEL_LIBRARIES.keys(), categories=self.target_categories, flex_only=False)
+        tlist = self.get_types(olist, libraries=["models_full.json"], categories=self.target_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._target_types = tlist
         print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types])
 

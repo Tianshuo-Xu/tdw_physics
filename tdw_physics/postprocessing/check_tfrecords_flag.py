@@ -1,11 +1,11 @@
 import numpy as np
 import tensorflow as tf
 
-flag = 'is_moving'
+flag = 'reference_id'
 #flag = 'is_object_in_view'
-dataset = 'ball_hits_primitive2_experiment'
-f = tf.python_io.tf_record_iterator(path='/mnt/fs1/datasets/'+ str(dataset) + \
-        '/new_tfdata/' + flag + '/' + '1-0-3.tfrecords')
+dataset = 'playroom_simple_v1'
+f = tf.python_io.tf_record_iterator(path='/data/dbear/tdw_datasets/'+ str(dataset) + \
+        '/new_tfdata/' + flag + '/' + 'trial-0000.tfrecords')
 # f = tf.python_io.tf_record_iterator(path='/mnt/fs4/cfan/tdw-agents/data/'+ str(dataset) + \
 #         '/new_tfdata/' + flag + '/' + '0-0-3.tfrecords')
 datum = tf.train.Example()

@@ -647,7 +647,9 @@ class Dominoes(RigidbodiesDataset):
                   categories=None,
                   flex_only=True,
                   aspect_ratio_min=None,
-                  aspect_ratio_max=None):
+                  aspect_ratio_max=None,
+                  size_min=None,
+                  size_max=None):
 
         if isinstance(objlist, str):
             objlist = [objlist]
@@ -667,6 +669,20 @@ class Dominoes(RigidbodiesDataset):
             tlist = [r for r in tlist if self.aspect_ratios(r)[0] > aspect_ratio_min]
         if aspect_ratio_max:
             tlist = [r for r in tlist if self.aspect_ratios(r)[1] < aspect_ratio_max]
+
+        if size_min or size_max:
+            if size_min is None:
+                size_min = 0.0
+            if size_max is None:
+                size_max = 1000.0
+            rlist = []
+            for r in tlist:
+                dims = self.get_record_dimensions(r)
+                dmin, dmax = [min(dims), max(dims)]
+                if (dmax > size_min) and (dmin < size_max):
+                    rlist.append(r)
+
+            tlist = [r for r in rlist]
 
         assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
@@ -1090,13 +1106,18 @@ class Dominoes(RigidbodiesDataset):
         dims = Dominoes.get_record_dimensions(record)
         dmin, dmax = [min(dims), max(dims)]
 
+
         scale = 1.0
         smin, smax = get_range(size_range)
 
         if dmax < smin:
             scale = smin / dmax
-        elif dmin > smax:
+        elif dmax > smax:
             scale = smax / dmax
+
+        print("%s rescaled by %.2f" % (record.name, scale))
+        print("dims", dims, "dminmax", dmin, dmax)
+        print("bounds now", [d * scale for d in dims])
 
         return arr_to_xyz(np.array([scale] * 3))
 
