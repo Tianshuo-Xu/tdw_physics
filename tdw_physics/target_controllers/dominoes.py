@@ -284,6 +284,9 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--training_data_mode",
                         action="store_true",
                         help="Overwrite some parameters to generate training data without target objects, zones, etc.")
+    parser.add_argument("--readout_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")    
     parser.add_argument("--match_probe_and_target_color",
                         action="store_true",
                         help="Probe and target will have the same color.")    
@@ -424,8 +427,7 @@ def get_args(dataset_dir: str, parse=True):
         if args.training_data_mode:
 
             # multiply the number of trials by a factor
-            if args.num_multiplier > 1.0:
-                args.num = int(float(args.num) * args.num_multiplier)
+            args.num = int(float(args.num) * args.num_multiplier)
 
             # change the random seed in a deterministic way
             args.random = 0
@@ -442,8 +444,34 @@ def get_args(dataset_dir: str, parse=True):
             args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
-            args.save_meshes = True            
+            args.save_meshes = True
 
+        # produce "readout" training data with red target and yellow zone,
+        # but seed is still different from whatever it was in the commandline_args.txt config
+        elif args.readout_data_mode:
+
+            # multiply the number of trials by a factor
+            args.num = int(float(args.num) * args.num_multiplier)
+            
+            # change the random seed in a deterministic way
+            args.random = 0
+            args.seed = (args.seed * 3000) % 1999
+
+            # target is red, zone is yellow, others are random
+            args.color = args.tcolor = [1.0, 0.0, 0.0]
+            args.zcolor = [1.0, 1.0, 0.0]
+            args.pcolor = args.mcolor = args.rcolor = None
+
+            # only use the flex objects and make sure the distractors don't move
+            args.only_use_flex_objects = args.no_moving_distractors = True
+
+            # only save out the RGB images and the segmentation masks
+            args.write_passes = "_img,_id"
+            args.save_passes = ""
+            args.save_movies = False
+            args.save_meshes = True            
+            
+            
         return args
 
     if not parse:
