@@ -369,7 +369,7 @@ def get_args(dataset_dir: str, parse=True):
             assert len(rgb) == 3, rgb
             args.tcolor = args.color = rgb
         else:
-            args.color = None
+            args.tcolor = args.color = None
 
         if args.zcolor is not None:
             rgb = [float(c) for c in args.zcolor.split(',')]
@@ -424,8 +424,8 @@ def get_args(dataset_dir: str, parse=True):
         if args.training_data_mode:
 
             # multiply the number of trials by a factor
-            if int(args.num_multiplier) > 1:
-                args.num = args.num * int(args.num_multiplier)
+            if args.num_multiplier > 1.0:
+                args.num = int(float(args.num) * args.num_multiplier)
 
             # change the random seed in a deterministic way
             args.random = 0
@@ -433,8 +433,7 @@ def get_args(dataset_dir: str, parse=True):
 
             # randomize colors and wood textures
             args.match_probe_and_target_color = False
-            args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None
-            # args.tmaterial = args.zmaterial = args.pmaterial = args.mmaterial = args.rmaterial = "Wood"
+            args.color = args.tcolor = args.zcolor = args.pcolor = args.mcolor = args.rcolor = None
 
             # only use the flex objects and make sure the distractors don't move
             args.only_use_flex_objects = args.no_moving_distractors = True
@@ -1917,7 +1916,7 @@ if __name__ == "__main__":
         probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,
-        target_color=args.color,
+        target_color=args.tcolor,
         probe_color=args.pcolor,
         middle_color=args.mcolor,
         collision_axis_length=args.collision_axis_length,
