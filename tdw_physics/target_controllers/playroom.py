@@ -46,13 +46,13 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
 
-    
+
     ## Changed defaults
     parser.add_argument("--room",
                         type=str,
                         default="tdw",
                         help="Which room to be in")
-    
+
     ### zone
     parser.add_argument("--zscale",
                         type=str,
@@ -162,7 +162,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--camera_max_height",
                         type=float,
                         default=3.5,
-                        help="minimum angle of camera rotation around centerpoint")    
+                        help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
                         default=0,
@@ -177,6 +177,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="radial distance from camera to centerpoint")
 
     ## occluders and distractors
+    parser.add_argument("--occluder",
+                        type=none_or_str,
+                        default="full",
+                        help="The names or library of occluder objects to use")
+    parser.add_argument("--distractor",
+                        type=none_or_str,
+                        default="full",
+                        help="The names or library of occluder objects to use")
     parser.add_argument("--occluder_aspect_ratio",
                         type=none_or_str,
                         default="[0.5,2.5]",

@@ -24,8 +24,8 @@ from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
 
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
-PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
-FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
+FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -1223,7 +1223,7 @@ class Dominoes(RigidbodiesDataset):
             rot["z"] = 90
             self.probe_initial_position["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
             self.probe_initial_position["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
-            
+
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
 
