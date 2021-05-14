@@ -41,7 +41,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
     domino, domino_postproc = get_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[common, domino], conflict_handler='resolve', fromfile_prefix_chars='@')
 
+
+    
     ## Changed defaults
+    parser.add_argument("--room",
+                        type=str,
+                        default="tdw",
+                        help="Which room to be in")
+    
     ### zone
     parser.add_argument("--zscale",
                         type=str,
@@ -110,7 +117,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--tscale",
                         type=str,
-                        default="[0.5,1.0]",
+                        default="[0.75,1.5]",
                         help="scale of target objects")
 
     ### probe
@@ -125,14 +132,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--pscale",
                         type=str,
-                        default="[0.5,1.0]",
+                        default="[0.75,1.5]",
                         help="scale of probe objects")
 
 
     ### layout
     parser.add_argument("--collision_axis_length",
                         type=float,
-                        default=2.0,
+                        default=1.5,
                         help="Length of spacing between probe and target objects at initialization.")
 
     ## collision specific arguments
@@ -142,6 +149,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
 
     ## camera
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=2.0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_height",
+                        type=float,
+                        default=3.5,
+                        help="minimum angle of camera rotation around centerpoint")    
     parser.add_argument("--camera_min_angle",
                         type=float,
                         default=0,
@@ -152,7 +167,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[1.5,3.0]",
+                        default="[0.01,1.5]",
                         help="radial distance from camera to centerpoint")
 
     ## occluders and distractors
@@ -178,7 +193,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="number of occluders")
     parser.add_argument("--num_distractors",
                         type=none_or_int,
-                        default=3,
+                        default=1,
                         help="number of distractors")
 
     def postprocess(args):
