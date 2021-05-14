@@ -521,6 +521,7 @@ class Dominoes(RigidbodiesDataset):
                  flex_only=False,
                  no_moving_distractors=False,
                  match_probe_and_target_color=False,
+                 probe_horizontal=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -593,6 +594,7 @@ class Dominoes(RigidbodiesDataset):
         self.probe_rotation_range = probe_rotation_range
         self.probe_mass_range = get_range(probe_mass_range)
         self.probe_material = probe_material
+        self.probe_horizontal = probe_horizontal
         self.match_probe_and_target_color = match_probe_and_target_color
 
         self.middle_scale_range = target_scale_range
@@ -1217,7 +1219,11 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
-
+        if self.probe_horizontal:
+            rot["z"] = 90
+            self.probe_initial_position["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
+            self.probe_initial_position["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
+            
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
 

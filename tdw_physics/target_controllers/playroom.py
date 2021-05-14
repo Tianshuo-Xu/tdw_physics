@@ -30,10 +30,10 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
 
 ALL_CATEGORIES = list(set([r.wcategory for r in MODEL_LIBRARIES['models_full.json'].records]))
 MEDIUM_CATEGORIES = "toy,beetle,teakettle,radio,trumpet,globe,cup,elephant,spectacles,fan,orange,spider,garden plant,bat,whale,book,bottle,scissors,soda can,shoe,alligator,bird,sandwich,coffee,grape,toaster,bowl,coaster,microscope,turtle,vase,bee,dog,duck,raw vegetable,apple,bread,dice,rodent,box,rock,camera,golf ball,bear,hammer,gloves,towel,cow,canoe,bucket,coin,money,computer mouse,hairbrush,slipper,suitcase,comb,bookend,jug,hat,key,hourglass,banana,cat,violin,snake,basket,candle,fish,pot,beverage,crustacean,looking glass,flower,sheep,skate,croissant,horse,wineglass,saw,calculator,flowerpot,pencil,pan,surfboard,skateboard,donut,sculpture,giraffe,zebra,ice cream,umbrella"
-ANIMALS_TOYS_FRUIT = "toy,beetle,elephant,spider,bat,whale,alligator,bird,grape,turtle,bee,dog,duck,raw vegetable,apple,bread,rodent,bear,cow,computer mouse,banana,cat,snake,fish,crustacean,flower,sheep,croissant,horse,giraffe,zebra"
+ANIMALS_TOYS_FRUIT = "toy,beetle,elephant,spider,bat,whale,alligator,bird,grape,turtle,bee,dog,duck,raw vegetable,apple,bread,rodent,bear,cow,computer mouse,banana,cat,snake,fish,crustacean,flower,sheep,croissant,horse,giraffe,zebra,sculpture,globe,houseplant,coffee maker,flowerpot,lamp"
 
-OCCLUDER_CATEGORIES = "sculpture,globe,chair,houseplant,plant,garden plant,bookshelf,coffee maker,flowerpot,stool,lamp,desktop computer,laptop computer,dog,cat,giraffe,rodent,turtle,dolphin"
-DISTRACTOR_CATEGORIES = OCCLUDER_CATEGORIES
+OCCLUDER_CATEGORIES = ANIMALS_TOYS_FRUIT
+DISTRACTOR_CATEGORIES = ANIMALS_TOYS_FRUIT
 
 def get_playroom_args(dataset_dir: str, parse=True):
 
@@ -69,13 +69,13 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ### probe
     parser.add_argument("--plift",
                         type=float,
-                        default=0.,
+                        default=0.0,
                         help="Lift the probe object off the floor. Useful for rotated objects")
 
     ### force
     parser.add_argument("--fscale",
                         type=str,
-                        default="[5.0,10.0]",
+                        default="[10.0,10.0]",
                         help="range of scales to apply to push force")
     parser.add_argument("--fwait",
                         type=none_or_str,
@@ -84,12 +84,12 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--frot",
                         type=str,
-                        default="[-20,20]",
+                        default="[-30,30]",
                         help="range of angles in xz plane to apply push force")
 
     parser.add_argument("--foffset",
                         type=str,
-                        default="0.0,0.8,0.0",
+                        default="0.0,0.0,0.0",
                         help="offset from probe centroid from which to apply force, relative to probe scale")
 
     parser.add_argument("--fjitter",
@@ -248,8 +248,17 @@ class Playroom(Collision):
 
         return funcs
 
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 150 # End after X frames even if objects are still moving.
+        self.flow_thresh = 10.0
+        if frame > 150:
+            return True
+        elif (not self._is_object_in_view(resp, self.probe_id)):
+            return True
+        elif (self._max_optical_flow(resp) < self.flow_thresh) and (frame > (self.force_wait + 5)):
+            return True
+        else:
+            return False
 
     def _set_distractor_attributes(self) -> None:
 
@@ -257,8 +266,8 @@ class Playroom(Collision):
         self.distractor_distance_fraction = [0.3,0.6]
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = 0.75
-        self.distractor_min_size = 1.0
-        self.distractor_max_size = 2.0
+        self.distractor_min_size = 0.5
+        self.distractor_max_size = 1.0
 
     def _set_occlusion_attributes(self) -> None:
 
@@ -267,7 +276,7 @@ class Playroom(Collision):
         self.occluder_rotation_jitter = 30.
         self.occluder_min_z = 0.75
         self.occluder_min_size = 0.5
-        self.occluder_max_size = 1.5
+        self.occluder_max_size = 1.0
         self.rescale_occluder_height = True
 
 

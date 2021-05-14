@@ -13,7 +13,7 @@ import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors, Meshes
+from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
@@ -720,6 +720,52 @@ class Dataset(Controller, ABC):
                             np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+
+    def _is_object_in_view(self, resp, o_id, pix_thresh=10) -> bool:
+
+        id_map = None
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_id":
+                        id_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
+
+        if id_map is None:
+            return True
+
+        obj_index = [i for i,_o_id in enumerate(self.object_ids) if _o_id == o_id]
+        if not len(obj_index):
+            return True
+        else:
+            obj_index = obj_index[0]
+
+        obj_seg_color = self.object_segmentation_colors[obj_index]
+        obj_map = (id_map == obj_seg_color).min(axis=-1, keepdims=True)
+        in_view = obj_map.sum() >= pix_thresh
+        return in_view
+
+
+    def _max_optical_flow(self, resp):
+
+        flow_map = None
+        for r in resp[:-1]:        
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_flow":        
+                        flow_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
+
+        if flow_map is None:
+            return float(0)
+
+        else:
+            return flow_map.sum(-1).max().astype(float)
+        
     def _get_object_meshes(self, resp: List[bytes]) -> None:
 
         self.object_meshes = dict()
