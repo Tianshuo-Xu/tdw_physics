@@ -6,6 +6,7 @@ import importlib
 import numpy as np
 from enum import Enum
 import random
+import stopit
 from typing import List, Dict, Tuple
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
@@ -23,6 +24,7 @@ from tdw_physics.postprocessing.labels import is_trial_valid
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+SPECIAL_NAMES =[r.name for r in MODEL_LIBRARIES['models_special.json'].records]
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
@@ -112,7 +114,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--target_categories",
                         type=none_or_str,
-                        default=ANIMALS_TOYS_FRUIT,
+                        default=None,
+                        # default=ANIMALS_TOYS_FRUIT,
                         help="Allowable target categories")
 
     parser.add_argument("--tscale",
@@ -127,7 +130,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="comma-separated list of possible target objects")
     parser.add_argument("--probe_categories",
                         type=none_or_str,
-                        default=ANIMALS_TOYS_FRUIT,
+                        default=None,
+                        # default=ANIMALS_TOYS_FRUIT,
                         help="Allowable probe categories")
 
     parser.add_argument("--pscale",
@@ -217,8 +221,10 @@ class Playroom(Collision):
     def __init__(self, port=1071,
                  probe_categories=None,
                  target_categories=None,
-                 size_min=0.1,
-                 size_max=2.5,
+                 size_min=0.05,
+                 size_max=4.0,
+                 # size_min=None,
+                 # size_max=None,
                  **kwargs):
 
         self.probe_categories = probe_categories
@@ -228,14 +234,14 @@ class Playroom(Collision):
         super().__init__(port=port, **kwargs)
 
     def set_probe_types(self, olist):
-        tlist = self.get_types(olist, libraries=["models_full.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._probe_types = tlist
-        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types])
+        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
 
     def set_target_types(self, olist):
-        tlist = self.get_types(olist, libraries=["models_full.json"], categories=self.target_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.target_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._target_types = tlist
-        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types])
+        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
