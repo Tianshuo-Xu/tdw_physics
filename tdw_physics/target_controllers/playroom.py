@@ -22,9 +22,11 @@ from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get
 from tdw_physics.target_controllers.collision import Collision
 from tdw_physics.postprocessing.labels import is_trial_valid
 
-MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
-PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
-SPECIAL_NAMES =[r.name for r in MODEL_LIBRARIES['models_special.json'].records]
+MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
+PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
+SPECIAL_NAMES =[r.name for r in MODEL_LIBRARIES['models_special.json'].records if not r.do_not_use]
+ALL_NAMES = MODEL_NAMES + SPECIAL_NAMES + PRIMITIVE_NAMES
+
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
@@ -110,7 +112,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ###target
     parser.add_argument("--target",
                         type=none_or_str,
-                        default=','.join(MODEL_NAMES),
+                        default=','.join(ALL_NAMES),
                         help="comma-separated list of possible target objects")
     parser.add_argument("--target_categories",
                         type=none_or_str,
@@ -126,7 +128,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ### probe
     parser.add_argument("--probe",
                         type=none_or_str,
-                        default=','.join(MODEL_NAMES),
+                        default=','.join(ALL_NAMES),
                         help="comma-separated list of possible target objects")
     parser.add_argument("--probe_categories",
                         type=none_or_str,
