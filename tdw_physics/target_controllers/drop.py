@@ -557,7 +557,8 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors        
     )
 
     if bool(args.run):

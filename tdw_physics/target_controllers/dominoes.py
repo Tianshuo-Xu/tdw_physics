@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import sys
 import h5py
 import json
 import copy
@@ -286,10 +287,13 @@ def get_args(dataset_dir: str, parse=True):
                         help="Overwrite some parameters to generate training data without target objects, zones, etc.")
     parser.add_argument("--readout_data_mode",
                         action="store_true",
-                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")    
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")
+    parser.add_argument("--testing_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")        
     parser.add_argument("--match_probe_and_target_color",
                         action="store_true",
-                        help="Probe and target will have the same color.")    
+                        help="Probe and target will have the same color.")
 
     def postprocess(args):
         # choose a valid room
@@ -469,8 +473,25 @@ def get_args(dataset_dir: str, parse=True):
             args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
-            args.save_meshes = True            
-            
+            args.save_meshes = True
+
+        # produce the same trials as the testing trials, but with red / yellow;
+        # seed MUST be pulled from a config.
+        elif args.testing_data_mode:
+
+            assert args.random == 0, "You can't regenerate the testing data without --random 0"
+            assert args.seed != -1, "Seed has to be specified but is instead the default"
+            assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
+
+            # red and yellow target and zone
+            args.use_test_mode_colors = True
+
+            args.write_passes = "_img,_id,_depth,_normals,_flow"
+            args.save_passes = "_img,_id"
+            args.save_movies = True
+            args.save_meshes = True
+        else:
+            args.use_test_mode_colors = False
             
         return args
 
@@ -548,6 +569,7 @@ class Dominoes(RigidbodiesDataset):
                  flex_only=False,
                  no_moving_distractors=False,
                  match_probe_and_target_color=False,
+                 use_test_mode_colors=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -664,6 +686,8 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
+
+        self.use_test_mode_colors = use_test_mode_colors
 
     def get_types(self,
                   objlist,
@@ -835,6 +859,9 @@ class Dominoes(RigidbodiesDataset):
 
         # Place occluder objects in the background
         commands.extend(self._place_occluders())
+
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)
 
         return commands
 
@@ -1188,7 +1215,7 @@ class Dominoes(RigidbodiesDataset):
         # Add the object with random physics values
         commands = []
 
-        ### TODO: better sampling of random physics values
+        ### better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
@@ -1381,6 +1408,23 @@ class Dominoes(RigidbodiesDataset):
         self.target_id = data["id"]
 
         self.replace_target = True
+
+    def _set_test_mode_colors(self, commands) -> None:
+
+        tcolor = {'r': 1.0, 'g': 0.0, 'b': 0.0, 'a': 1.0}
+        zcolor = {'r': 1.0, 'g': 1.0, 'b': 0.0, 'a': 1.0}
+        exclude = {'r': 1.0, 'g': 0.0, 'b': 0.0}
+        exclude_range = 0.25
+
+        for c in commands:
+            if "set_color" in c.values():
+                o_id = c['id']
+                if o_id == self.target_id:
+                    c['color'] = tcolor
+                elif o_id == self.zone_id:
+                    c['color'] = zcolor
+                elif any((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
+                    c['color'] = {'r': c['color']['b'], 'b': c['color']['g'], 'g': c['color']['r'], 'a': 1.0}        
 
     def _build_intermediate_structure(self) -> List[dict]:
         """
@@ -1987,7 +2031,8 @@ if __name__ == "__main__":
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        match_probe_and_target_color=args.match_probe_and_target_color
+        match_probe_and_target_color=args.match_probe_and_target_color,
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):

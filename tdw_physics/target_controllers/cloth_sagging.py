@@ -643,7 +643,9 @@ if __name__ == '__main__':
         min_anchorloc = args.min_anchorloc,
         anchor_height = args.anchor_height,
         anchor_jitter = args.anchor_jitter,
-        height_jitter = args.height_jitter)
+        height_jitter = args.height_jitter,
+        use_test_mode_colors=args.use_test_mode_colors        
+    )
 
     if bool(args.run):
         C.run(num=args.num,

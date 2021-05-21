@@ -464,7 +464,8 @@ if __name__ == "__main__":
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        match_probe_and_target_color=args.match_probe_and_target_color        
+        match_probe_and_target_color=args.match_probe_and_target_color,
+        use_test_mode_colors=args.use_test_mode_colors        
     )
 
     if bool(args.run):

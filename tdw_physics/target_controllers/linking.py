@@ -681,7 +681,8 @@ if __name__ == "__main__":
         ramp_color=args.rcolor,
         ramp_base_height_range=args.rheight,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors        
     )
 
     if bool(args.run):
