@@ -368,7 +368,7 @@ class Dataset(Controller, ABC):
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 25 == 0:
+        if trial_num % 10 == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
@@ -751,13 +751,13 @@ class Dataset(Controller, ABC):
     def _max_optical_flow(self, resp):
 
         flow_map = None
-        for r in resp[:-1]:        
+        for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
             if r_id == "imag":
                 im = Images(r)
                 for i in range(im.get_num_passes()):
                     pass_mask = im.get_pass_mask(i)
-                    if pass_mask == "_flow":        
+                    if pass_mask == "_flow":
                         flow_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
 
         if flow_map is None:
@@ -765,7 +765,7 @@ class Dataset(Controller, ABC):
 
         else:
             return flow_map.sum(-1).max().astype(float)
-        
+
     def _get_object_meshes(self, resp: List[bytes]) -> None:
 
         self.object_meshes = dict()

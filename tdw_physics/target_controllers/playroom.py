@@ -322,7 +322,7 @@ if __name__ == "__main__":
         else:
             os.environ["DISPLAY"] = ":0"
 
-        launch_build = False
+        launch_build = True
     else:
         launch_build = True
 
