@@ -1429,9 +1429,11 @@ class Dominoes(RigidbodiesDataset):
                     c['color'] = tcolor
                 elif o_id == self.zone_id:
                     c['color'] = zcolor
-                elif all((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
-                    c['color'] = {'r': c['color']['b'], 'b': c['color']['g'], 'g': c['color']['r'], 'a': 1.0}
-                    
+                elif any((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
+                    rgb = self.random_color_from_rng(exclude=[exclude[k] for k in ['r','g','b']],
+                                                     exclude_range=exclude_range,
+                                                     seed=self.trial_seed)
+                    c['color'] = {'r': rgb[0], 'g': rgb[1], 'b': rgb[2], 'a': 1.0}
 
     def _build_intermediate_structure(self) -> List[dict]:
         """
