@@ -18,7 +18,7 @@ for dir in $stim_dirs
 do
     echo $dir;
     config="$2/$dir/commandline_args.txt";
-    cmd="python $controller @$config --dir $out_dir/$dir $num";
+    cmd="python $controller @$config --testing_data_mode --dir $out_dir/$dir $num";
     echo $cmd;
     $cmd;
     echo "completeted regeneration of $num $dir stims"; 

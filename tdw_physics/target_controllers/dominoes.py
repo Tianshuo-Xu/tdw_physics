@@ -296,9 +296,15 @@ def get_args(dataset_dir: str, parse=True):
                         help="Probe and target will have the same color.")
 
     def postprocess(args):
+
+        # testing set data drew from a different set of models; needs to be preserved
+        # for correct occluder/distractor sampling
+        if args.testing_data_mode:
+            PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+            FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
+        
         # choose a valid room
         assert args.room in ['box', 'tdw', 'house'], args.room
-
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -1423,8 +1429,9 @@ class Dominoes(RigidbodiesDataset):
                     c['color'] = tcolor
                 elif o_id == self.zone_id:
                     c['color'] = zcolor
-                elif any((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
-                    c['color'] = {'r': c['color']['b'], 'b': c['color']['g'], 'g': c['color']['r'], 'a': 1.0}        
+                elif all((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
+                    c['color'] = {'r': c['color']['b'], 'b': c['color']['g'], 'g': c['color']['r'], 'a': 1.0}
+                    
 
     def _build_intermediate_structure(self) -> List[dict]:
         """
