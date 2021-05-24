@@ -866,6 +866,7 @@ class Dominoes(RigidbodiesDataset):
         # Place occluder objects in the background
         commands.extend(self._place_occluders())
 
+        # test mode colors
         if self.use_test_mode_colors:
             self._set_test_mode_colors(commands)
 
