@@ -293,6 +293,10 @@ class Drop(MultiDominoes):
         # Place occluder objects in the background
         commands.extend(self._place_occluders(z_pos_scale=1))
 
+        # test mode colors
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)        
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
