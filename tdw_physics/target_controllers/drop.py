@@ -518,9 +518,14 @@ class Drop(MultiDominoes):
 if __name__ == "__main__":
 
     args = get_drop_args("drop")
-    print("all object types", MODEL_NAMES)
-    print("drop objects", args.drop)
-    print("target objects", args.target)
+
+    import platform, os
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+
 
     DC = Drop(
         randomize=args.random,
@@ -558,7 +563,7 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        use_test_mode_colors=args.use_test_mode_colors        
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
