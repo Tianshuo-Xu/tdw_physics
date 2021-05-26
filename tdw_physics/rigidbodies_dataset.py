@@ -174,6 +174,20 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         return rgb
 
+    def random_color_from_rng(self, exclude=None, exclude_range=0.33, seed=0):
+
+        rng = np.random.RandomState(seed)
+        rgb = [rng.random(), rng.random(), rng.random()]
+
+        if exclude is None:
+            return rgb
+        assert len(exclude) == 3, exclude
+        while any([np.abs(exclude[i] - rgb[i]) < exclude_range for i in range(3)]):
+            rgb = [rng.random(), rng.random(), rng.random()]
+
+        return rgb        
+        
+
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
 

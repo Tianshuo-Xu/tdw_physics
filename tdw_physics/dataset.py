@@ -66,6 +66,7 @@ class Dataset(Controller, ABC):
         self.seed = seed
         if not bool(self.randomize):
             random.seed(self.seed)
+            print("SET RANDOM SEED: %d" % self.seed)
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
@@ -76,7 +77,7 @@ class Dataset(Controller, ABC):
         '''
         with open(str(self.command_log), "at") as f:
             f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
-        return super().communicate(commands)        
+        return super().communicate(commands)
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
@@ -204,9 +205,9 @@ class Dataset(Controller, ABC):
         # the dir where files and metadata will go
         if not Path(output_dir).exists():
             Path(output_dir).mkdir(parents=True)
-        
+
         # save a log of the commands send to TDW build
-        self.command_log = Path(output_dir).joinpath('tdw_commands.json')        
+        self.command_log = Path(output_dir).joinpath('tdw_commands.json')
 
         # which passes to write to the HDF5
         self.write_passes = write_passes

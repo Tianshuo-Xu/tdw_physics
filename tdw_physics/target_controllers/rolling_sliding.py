@@ -255,6 +255,10 @@ class RollingSliding(MultiDominoes):
         # Place occluder objects in the background
         commands.extend(self._place_occluders())
 
+        # test mode colors
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)        
+
         return commands
 
     def _place_and_push_target_object(self) -> List[dict]:
@@ -267,8 +271,8 @@ class RollingSliding(MultiDominoes):
         record, data = self.random_primitive(self._target_types,
                                              scale=self.target_scale_range,
                                              color=self.target_color,
-                                             add_data=(not self.remove_target)
-        )
+                                             add_data=False)
+                                             # add_data=(not self.remove_target)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
         self.target = record
         self.target_type = data["name"]
@@ -293,36 +297,55 @@ class RollingSliding(MultiDominoes):
             commands.extend(self._place_ramp_under_probe())
             self.probe_initial_position['x'] += self.target_lift #HACK rotation might've led to the object falling of the back of the ramp, so we're moving it forward
 
+        # commands.extend(
+        #     self.add_physics_object(
+        #         record=record,
+        #         position=self.probe_initial_position,
+        #         rotation=rot,
+        #         mass=self.probe_mass,
+        #         # dynamic_friction=0.5,
+        #         # static_friction=0.5,
+        #         # bounciness=0.1,
+        #         dynamic_friction=0.4,
+        #         static_friction=0.4,
+        #         bounciness=0,
+        #         o_id=o_id))
+
         commands.extend(
-            self.add_physics_object(
+            self.add_primitive(
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
+                material=self.target_material,
+                color=rgb,
+                scale=scale,
                 # dynamic_friction=0.5,
                 # static_friction=0.5,
                 # bounciness=0.1,
                 dynamic_friction=0.4,
                 static_friction=0.4,
                 bounciness=0,
-                o_id=o_id))
+                o_id=o_id,
+                add_data=True
+            ))        
 
         # Set the target material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.target_material)))
+        # commands.extend(
+        #     self.get_object_material_commands(
+        #         record, o_id, self.get_material_name(self.target_material)))
 
         # the target is the probe
         self.target_position = self.probe_initial_position
 
         # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id}])
+        # commands.extend([
+        #     {"$type": "set_color",
+        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+        #      "id": o_id},
+            # {"$type": "scale_object",
+            #  "scale_factor": scale,
+            #  "id": o_id}])
 
         # Set its collision mode
         commands.extend([
@@ -677,7 +700,8 @@ if __name__ == "__main__":
         rolling_sliding_axis_length = args.rolling_sliding_axis_length,
         target_lift = args.tlift,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors        
     )
 
     if bool(args.run):

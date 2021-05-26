@@ -85,7 +85,7 @@ def get_flex_args(dataset_dir: str, parse=True):
 
         args = domino_postproc(args)
         args.all_flex_objects = bool(int(args.all_flex_objects))
-        
+
         return args
 
     if not parse:
@@ -118,7 +118,7 @@ class ClothSagging(Dominoes, FlexDataset):
                  max_distance_ratio = 0.5,
                  min_anchorloc = -0.4,
                  max_anchorloc = 0.4,
-                 anchor_height = 0.5,                
+                 anchor_height = 0.5,
                  anchor_jitter = 0.2,#0.2,
                  height_jitter = 0.2,#0.3,
                  collision_label_threshold=0.1,
@@ -145,7 +145,7 @@ class ClothSagging(Dominoes, FlexDataset):
         self.max_distance_ratio = max_distance_ratio
         self.min_anchorloc = min_anchorloc
         self.max_anchorloc = max_anchorloc
-        self.anchor_height = anchor_height        
+        self.anchor_height = anchor_height
         self.anchor_jitter = anchor_jitter
         self.height_jitter = height_jitter
 
@@ -364,7 +364,7 @@ class ClothSagging(Dominoes, FlexDataset):
 
         # anchor object list
         anchor_list = ["cone","cube","cylinder","pyramid","triangular_prism"]
-        
+
         # add two objects on each side of a target object
         self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
         self.objrec1_id = self._get_next_object_id()
@@ -399,19 +399,19 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec2_scale,
                                o_id = self.objrec2_id,
                                ))
-        
-        # drape object        
+
+        # drape object
         drape_list = ["alma_floor_lamp","buddah","desk_lamp","linbrazil_diz_armchair"]
-        
+
         #drape_list = ["linbrazil_diz_armchair"]
         self.drape_object = random.choice(drape_list)
         self.objrec3 = MODEL_LIBRARIES["models_core.json"].get_record(self.drape_object)
         self.objrec3_id = self._get_next_object_id()
         self.objrec3_rotation = {k:0 for k in ['x','y','z']}#{'x': 0, 'y': random.uniform(0,45), 'z': 0},#
         self.objrec3_mass = 100.0
-        
+
         print("drape object: ",self.drape_object)
-        if self.drape_object == "alma_floor_lamp":        
+        if self.drape_object == "alma_floor_lamp":
             self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.1}
             self.objrec3_scale = {'x': 1.0, 'y': 0.8, 'z': 1.0}
         elif self.drape_object == "linbrazil_diz_armchair":
@@ -423,8 +423,8 @@ class ClothSagging(Dominoes, FlexDataset):
         elif self.drape_object == "desk_lamp":
             self.objrec3_position = {'x': 0., 'y': 0., 'z': -1.1}
             self.objrec3_scale = {'x': 1.2, 'y': 1.2, 'z': 1.2}
-            
-            
+
+
         commands.extend(self.add_flex_solid_object(
                                record = self.objrec3,
                                position = self.objrec3_position,
@@ -435,7 +435,7 @@ class ClothSagging(Dominoes, FlexDataset):
                                scale = self.objrec3_scale,
                                o_id = self.objrec3_id,
                                ))
-                               
+
         # additional anchor
         if random.uniform(0.0,1.0)>0.3:
             self.objrec4 = MODEL_LIBRARIES["models_flex.json"].get_record(random.choice(anchor_list))
@@ -542,7 +542,7 @@ class ClothSagging(Dominoes, FlexDataset):
         self.occluder_min_size = 0.8
         self.occluder_max_size = 1.2
         self.rescale_occluder_height = True
-        
+
     def _set_distractor_attributes(self) -> None:
 
         self.distractor_angular_spacing = 15
@@ -557,22 +557,15 @@ if __name__ == '__main__':
 
     args = get_flex_args("flex_dominoes")
 
+    import platform
     if platform.system() == 'Linux':
         if args.gpu is not None:
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
 
-        launch_build = False
-    else:
-        launch_build = True
-
-    if platform.system() != 'Windows' and args.fluid:
-        print("WARNING: Flex fluids are only supported in Windows")
-
     C = ClothSagging(
         port=args.port,
-        launch_build=launch_build,
         all_flex_objects=args.all_flex_objects,
         use_cloth=args.cloth,
         use_squishy=args.squishy,
@@ -638,12 +631,14 @@ if __name__ == '__main__':
         no_moving_distractors=args.no_moving_distractors,
         collision_label_threshold=args.collision_label_threshold,
         max_distance_ratio = args.max_distance_ratio,
-        min_distance_ratio = args.min_distance_ratio,        
+        min_distance_ratio = args.min_distance_ratio,
         max_anchorloc = args.max_anchorloc,
         min_anchorloc = args.min_anchorloc,
         anchor_height = args.anchor_height,
         anchor_jitter = args.anchor_jitter,
-        height_jitter = args.height_jitter)
+        height_jitter = args.height_jitter,
+        use_test_mode_colors=args.use_test_mode_colors
+    )
 
     if bool(args.run):
         C.run(num=args.num,

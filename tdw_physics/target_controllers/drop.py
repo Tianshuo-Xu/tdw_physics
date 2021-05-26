@@ -293,6 +293,10 @@ class Drop(MultiDominoes):
         # Place occluder objects in the background
         commands.extend(self._place_occluders(z_pos_scale=1))
 
+        # test mode colors
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)        
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -518,9 +522,14 @@ class Drop(MultiDominoes):
 if __name__ == "__main__":
 
     args = get_drop_args("drop")
-    print("all object types", MODEL_NAMES)
-    print("drop objects", args.drop)
-    print("target objects", args.target)
+
+    import platform, os
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+
 
     DC = Drop(
         randomize=args.random,
@@ -557,7 +566,8 @@ if __name__ == "__main__":
         occluder_categories=args.occluder_categories,
         num_occluders=args.num_occluders,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):

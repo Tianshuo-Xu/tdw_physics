@@ -601,6 +601,14 @@ if __name__ == "__main__":
 
     args = get_linking_args("linking")
 
+    import platform
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+
+
     LC = Linking(
         # links
         link_objects=args.middle,
@@ -681,7 +689,8 @@ if __name__ == "__main__":
         ramp_color=args.rcolor,
         ramp_base_height_range=args.rheight,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
