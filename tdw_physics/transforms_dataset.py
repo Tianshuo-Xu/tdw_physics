@@ -128,7 +128,7 @@ class TransformsDataset(Dataset, ABC):
 
         # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         # print(frame_num, r_types)
-
+        
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
             if r_id == "tran":

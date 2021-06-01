@@ -35,6 +35,15 @@ def get_args(dataset_dir: str, parse=True):
     common = get_parser(dataset_dir, get_help=False)
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
+    parser.add_argument("--is_perturb",
+                        action="store_true",
+                        help="Wheather or not to add perturbation to the data")
+
+    parser.add_argument("--inject_noise_to_initial",
+                        type=float,
+                        default=0.01,
+                        help="inject noise to initial value")
+
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=3,
@@ -291,10 +300,13 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--testing_data_mode",
                         action="store_true",
                         help="Overwrite some parameters to generate training data without target objects, zones, etc.")
+    parser.add_argument("--testing_noimg_data_mode",
+                        action="store_true",
+                        help="Overwrite some parameters to generate training data without target objects, zones, etc.")
     parser.add_argument("--match_probe_and_target_color",
                         action="store_true",
                         help="Probe and target will have the same color.")
-
+   
     def postprocess(args):
 
         # testing set data drew from a different set of models; needs to be preserved
@@ -496,6 +508,20 @@ def get_args(dataset_dir: str, parse=True):
             args.save_passes = "_img,_id"
             args.save_movies = True
             args.save_meshes = True
+        elif args.testing_noimg_data_mode:
+
+            assert args.random == 0, "You can't regenerate the testing data without --random 0"
+            assert args.seed != -1, "Seed has to be specified but is instead the default"
+            assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
+
+            # red and yellow target and zone
+            args.use_test_mode_colors = True
+
+            args.write_passes = "_img"
+            args.save_passes = "" #_img"
+
+            args.save_movies = False
+            args.save_meshes = False
         else:
             args.use_test_mode_colors = False
 
@@ -576,6 +602,8 @@ class Dominoes(RigidbodiesDataset):
                  no_moving_distractors=False,
                  match_probe_and_target_color=False,
                  use_test_mode_colors=False,
+                 inject_noise_to_initial=0,
+                 is_perturb=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -586,6 +614,12 @@ class Dominoes(RigidbodiesDataset):
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
 
+        #perturbation
+        self.is_perturb = is_perturb
+        if is_perturb:
+            self.rng = np.random.RandomState(0)
+
+        self.inject_noise_to_initial = inject_noise_to_initial
         ## which room to use
         self.room = room
 
@@ -1173,6 +1207,12 @@ class Dominoes(RigidbodiesDataset):
                 "z": 0. if not self.remove_target else 10.0
             }
 
+        if self.is_perturb:
+            # inject noise to pos
+            self.target_position["x"] += self.rng.normal(0, self.inject_noise_to_initial) 
+            self.target_position["z"] += self.rng.normal(0, self.inject_noise_to_initial) 
+
+
         # Commands for adding hte object
         commands = []
         commands.extend(
@@ -1226,6 +1266,13 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
+
+
+        if self.is_perturb:
+            # inject noise to pos
+            self.probe_initial_position["x"] += self.rng.normal(0, self.inject_noise_to_initial) 
+            self.probe_initial_position["z"] += self.rng.normal(0, self.inject_noise_to_initial) 
+
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
@@ -1826,10 +1873,11 @@ class MultiDominoes(Dominoes):
                  lateral_jitter=0.2,
                  middle_material=None,
                  remove_middle=False,
+                 inject_noise_to_initial=0,
+                 is_perturb=False,
                  **kwargs):
 
-        super().__init__(port=port, **kwargs)
-
+        super().__init__(port=port, is_perturb=is_perturb,  inject_noise_to_initial=inject_noise_to_initial, **kwargs)
         # Default to same type as target
         self.set_middle_types(middle_objects)
 
@@ -1848,6 +1896,7 @@ class MultiDominoes(Dominoes):
         self.spacing = self.collision_axis_length / (self.num_middle_objects + 1.)
         self.spacing_jitter = spacing_jitter
         self.lateral_jitter = lateral_jitter
+
 
     def set_middle_types(self, olist):
         if isinstance(olist, str):
@@ -1942,6 +1991,13 @@ class MultiDominoes(Dominoes):
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
             self.middle_type = data["name"]
             self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
+            
+
+            if self.is_perturb:
+                # inject noise to pos
+                pos["x"] += self.rng.normal(0, self.inject_noise_to_initial) 
+                pos["z"] += self.rng.normal(0, self.inject_noise_to_initial)
+                print("middle object", pos)
 
             commands.extend(
                 self.add_physics_object(
@@ -1982,8 +2038,7 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
-
-
+    
     DomC = MultiDominoes(
         port=args.port,
         room=args.room,
@@ -2049,7 +2104,9 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
+        inject_noise_to_initial=args.inject_noise_to_initial,
+        is_perturb=args.is_perturb
     )
 
     if bool(args.run):

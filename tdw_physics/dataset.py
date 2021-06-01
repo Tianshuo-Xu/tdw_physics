@@ -208,7 +208,6 @@ class Dataset(Controller, ABC):
 
         # save a log of the commands send to TDW build
         self.command_log = Path(output_dir).joinpath('tdw_commands.json')
-
         # which passes to write to the HDF5
         self.write_passes = write_passes
         if isinstance(self.write_passes, str):
@@ -316,11 +315,12 @@ class Dataset(Controller, ABC):
             if not filepath.exists():
 
                 # Save out images
-                self.png_dir = None
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists():
-                        self.png_dir.mkdir(parents=True)
+                if self.save_movies:
+                    self.png_dir = None
+                    if any([pa in PASSES for pa in self.save_passes]):
+                        self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                        if not self.png_dir.exists():
+                            self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
                 self.trial(filepath=filepath,
@@ -437,28 +437,29 @@ class Dataset(Controller, ABC):
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
         # Save out the target/zone segmentation mask
-        _id = f['frames']['0000']['images']['_id']
-        #get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        #get colors
-        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        #get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        #as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        #save image
-        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+        # if "_id" in self.save_passes:
+        #     _id = f['frames']['0000']['images']['_id']
+        #     #get PIL image
+        #     _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #     #get colors
+        #     zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+        #     zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        #     target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+        #     target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        #     #get individual maps
+        #     zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        #     target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        #     #colorize
+        #     zone_map = zone_map * ZONE_COLOR
+        #     target_map = target_map * TARGET_COLOR
+        #     joint_map = zone_map + target_map
+        #     # add alpha
+        #     alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        #     joint_map = np.dstack((joint_map, alpha))
+        #     #as image
+        #     map_img = Image.fromarray(np.uint8(joint_map))
+        #     #save image
+        #     map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()
