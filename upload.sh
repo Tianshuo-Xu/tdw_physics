@@ -1,0 +1,4 @@
+rsync -vaP -e "ssh" --exclude=data/ --exclude=data3/ --exclude=data2 --exclude=log --exclude=tmp --exclude vispy * hsiaoyut@node$1-ccncluster:~/2021/tdw_physics/ #dev_head_compute0#
+#rsync -vaP -e "ssh" --exclude=data/ --exclude=dump_* --exclude=eval_* --exclude vispy * hsiaoyut@render1-neuroaicluster.stanford.edu:~/2021/tdw_physics/ #dev_head_compute0#
+#rsync -vaP -e "ssh" --exclude=data/ --exclude=data3/ --exclude=data2 --exclude=log --exclude=tmp --exclude vispy --exclude eval * hsiaoyut@render1-neuroaicluster.stanford.edu:~/2021/tdw_physics/ #dev_head_compute0#
+#rsync -vaP -e "ssh" --exclude=data3/ --exclude=data2 --exclude=log --exclude=tmp --exclude vispy * hsiaoyut@render2-neuroaicluster.stanford.edu:~/2021/tdw_physics/ #dev_head_compute0#
