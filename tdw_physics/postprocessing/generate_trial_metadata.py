@@ -105,8 +105,8 @@ if __name__ == '__main__':
                                   label_funcs=[
                                       stimulus_name,
                                       probe_name,
-                                      probe_segmentation_color,
-                                      static_model_names
+                                      # probe_segmentation_color,
+                                      # static_model_names
                                   ],
                                   add_controller_funcs=False,
                                   overwrite= True,

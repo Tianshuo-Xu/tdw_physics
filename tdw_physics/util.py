@@ -30,7 +30,7 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
     
 
 # The names of the image passes
-PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]    
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]    
 
 def str_to_xyz(s: str, to_json=False):
     xyz = s.split(',')
