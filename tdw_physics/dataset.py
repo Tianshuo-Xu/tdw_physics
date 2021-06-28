@@ -181,6 +181,7 @@ class Dataset(Controller, ABC):
             save_movies: bool = False,
             save_labels: bool = False,
             save_meshes: bool = False,
+            terminate: bool = True,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -252,15 +253,16 @@ class Dataset(Controller, ABC):
 
         # Terminate TDW
         # Windows doesn't know signal timeout
-        if platform.system() == 'Windows': end = self.communicate({"$type": "terminate"})
-        else: #Unix systems can use signal to timeout
-            with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
-                assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
-                end = self.communicate({"$type": "terminate"})
-            if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
-                print("tdw closed successfully")
-            elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
-                print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
+        if terminate:
+            if platform.system() == 'Windows': end = self.communicate({"$type": "terminate"})
+            else: #Unix systems can use signal to timeout
+                with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+                    assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+                    end = self.communicate({"$type": "terminate"})
+                if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+                    print("tdw closed successfully")
+                elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+                    print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
         # Save the command line args
         if self.save_args:
