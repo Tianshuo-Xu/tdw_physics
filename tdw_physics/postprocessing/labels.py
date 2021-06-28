@@ -288,6 +288,15 @@ def probe_name(d):
     probe_name = model_names[_p]
     return str(probe_name)
 
+def target_name(d):
+    obj_ids = get_object_ids(d)
+    target_id = get_static_val(d, 'target_id')
+    _t = [i for i,o in enumerate(obj_ids) if o == target_id][0]
+    model_names = get_static_val(d, 'model_names')
+    target_name = model_names[_t]
+    return str(target_name)
+
+
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)
     probe_id = get_static_val(d, 'probe_id')
@@ -296,6 +305,28 @@ def probe_segmentation_color(d):
     probe_seg_color = seg_colors[_p]
     return [int(c) for c in probe_seg_color]
 
+def object_segmentation_color(d, object_key='target_id'):
+    obj_ids = get_object_ids(d)
+    probe_id = get_static_val(d, object_key)
+    _p = [i for i,o in enumerate(obj_ids) if o == probe_id][0]
+    seg_colors = get_static_val(d, 'object_segmentation_colors')
+    probe_seg_color = seg_colors[_p]
+    return [int(c) for c in probe_seg_color]
+
+def target_segmentation_color(d):
+    return object_segmentation_color(d, 'target_id')
+
+def zone_segmentation_color(d):
+    return object_segmentation_color(d, 'zone_id')
+
+def target_id(d):
+    return int(get_static_val(d, 'target_id'))
+
+def zone_id(d):
+    return int(get_static_val(d, 'zone_id'))
+
+def probe_id(d):
+    return int(get_static_val(d, 'probe_id'))
 
 def static_model_names(d):
     m_names = model_names(d)
@@ -307,7 +338,7 @@ def static_model_names(d):
 
 def stimulus_name(d):
     return str(get_static_val(d, 'stimulus_name'))
-    
+
 
 ########################
 #####INFRASTRUCTURE#####

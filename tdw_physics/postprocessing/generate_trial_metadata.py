@@ -44,7 +44,7 @@ def compute_metadata_from_stimuli(
     stims = sorted(glob.glob(stimulus_dir + file_pattern))
 
     # try to infer the controller class
-    if controller_class is None:
+    if (controller_class is None) and add_controller_funcs:
         meta_file = Path(stimulus_dir).joinpath('metadata.json')
         if meta_file.exists():
             trial_meta = json.loads(meta_file.read_text())[0]
@@ -66,7 +66,7 @@ def compute_metadata_from_stimuli(
         f.close()
 
     # write out new metadata
-    json_str = json.dumps(metadata, indent=4)    
+    json_str = json.dumps(metadata, indent=4)
     meta_file = Path(stimulus_dir).joinpath(outfile + ('' if overwrite else '_post') + '.json')
     meta_file.write_text(json_str, encoding='utf-8')
     print("Wrote new metadata: %s\nfor %d trials" % (str(meta_file), len(metadata)))
@@ -75,7 +75,7 @@ def compute_metadata_from_stimuli(
 def concatenate_metadata_fields(
         stimulus_dir: str,
         metafile: str = 'metadata.json',
-        fields: List[str] = None,        
+        fields: List[str] = None,
         outfile: str = 'metadata_by_field.json') -> None:
 
     meta = Path(stimulus_dir).joinpath(metafile)
@@ -92,26 +92,47 @@ def concatenate_metadata_fields(
     json_str = json.dumps(outdata, indent=4)
     outfile = Path(stimulus_dir).joinpath(outfile)
     outfile.write_text(json_str, encoding='utf-8')
-        
+
     return
-        
-        
-        
+
+
+
 if __name__ == '__main__':
-    # print(get_controller_label_funcs_by_class())
 
     stim_dir = sys.argv[1]
-    compute_metadata_from_stimuli(stim_dir,
+
+    basic_labels = [
+        stimulus_name,
+        target_id,
+        zone_id,
+        target_segmentation_color,
+        zone_segmentation_color,
+        does_target_contact_zone
+    ]
+
+    # for d in sorted(os.listdir(stim_dir)):
+    #     for _d in ['hdf5s', 'hdf5s-redyellow']:
+    #         stims = os.path.join(stim_dir, d, _d) + '/'
+    #         print(stims)
+
+    stims = stim_dir
+    compute_metadata_from_stimuli(stims,
                                   label_funcs=[
                                       stimulus_name,
                                       probe_name,
                                       probe_segmentation_color,
+                                      target_name,
+                                      target_segmentation_color,
+                                      zone_segmentation_color,
                                       static_model_names
                                   ],
+                                  # label_funcs=basic_labels,
                                   add_controller_funcs=False,
                                   overwrite= True,
                                   outfile='model_names')
+                                  # outfile='trial_labels')
 
-    concatenate_metadata_fields(stim_dir,
+    concatenate_metadata_fields(stims,
                                 metafile='model_names.json',
+                                outfile='model_names_by_field.json',
                                 fields=None)
