@@ -208,6 +208,18 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def _place_container(self) -> List[dict]:
+        '''
+        TODO
+        '''
+        return []
+
+    def _place_distractor(self) -> List[dict]:
+        '''
+        TODO
+        '''
+        return []
+
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
     
@@ -222,6 +234,7 @@ class RelationArrangement(Playroom):
         commands.extend(self._place_target_zone())
 
         ## place container
+        commands.extend(self._place_container())
 
         ## place target
         commands.extend(self._place_target_object())
@@ -230,6 +243,7 @@ class RelationArrangement(Playroom):
         commands.extend(self._place_camera())
 
         ## place distractor
+        commands.extend(self._place_distractor())
 
         return commands
         
