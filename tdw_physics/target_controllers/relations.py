@@ -104,7 +104,11 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--material_types",
                         type=none_or_str,
                         default="Wood,Metal,Ceramic",
-                        help="Which class of materials to sample material names from")    
+                        help="Which class of materials to sample material names from")
+    parser.add_argument("--cposition",
+                        type=str,
+                        default="[[-0.25,0.25],0.0,[-0.25,0.25]]",
+                        help="Position ranges for the container")
 
     def postprocess(args):
 
@@ -116,6 +120,9 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.cscale = handle_random_transform_args(args.cscale)
         args.tscale = handle_random_transform_args(args.tscale)
         args.dscale = handle_random_transform_args(args.dscale)
+
+        args.cposition = handle_random_transform_args(args.cposition)
+        args.cposition["y"] = 0.0
 
         return args
 
@@ -131,6 +138,7 @@ class RelationArrangement(Playroom):
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
+                 container_position_range=[0.0],
                  container_scale_range=[1.0,1.0],
                  target_scale_range=[1.0,1.0],
                  distractor_scale_range=[1.0,1.0],                 
@@ -146,6 +154,9 @@ class RelationArrangement(Playroom):
         self.set_container_types(container)
         self.set_target_types(target)
         self.set_distractor_types(distractor)
+
+        ## object positions
+        self.container_position_range = container_position_range
         
         ## object scales
         self.container_scale_range = container_scale_range
@@ -235,11 +246,20 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def _flip_container(self) -> None:
+        self.container_flipped = True
+        self.container_rotation.update({"z": 180})
+        _,height,_ = self.get_record_dimensions(self.container)
+        self.container_position["y"] += self.container_scale["y"] * height
+
     def _place_container(self) -> List[dict]:
         '''
         TODO
         '''
         commands = []
+
+        ## choose a relation type
+        self.relation = random.choice(self._relation_types)
 
         ## create the container
         record, data = self.random_primitive(self._container_types,
@@ -252,11 +272,30 @@ class RelationArrangement(Playroom):
         ## scale the container so it's in the required size range
         self.container_scale = self.rescale_record_to_size(record, self.container_scale_range)
 
+        ## jitter the xz position of the container
+        self.container_position = get_random_xyz_transform(self.container_position_range)
+
+        ## rotate the container in the xz plane
+        self.container_rotation = self.get_y_rotation([0, 360])
+
+        ## if relationship is not contain, [possibly] flip
+        print("RELATION", self.relation.name)
+        if self.relation == Relation.support:
+            self._flip_container()
+        elif self.relation == Relation.contain:
+            self.container_flipped = False
+        else:
+            if random.choice([0,1]):
+                self._flip_container()
+                
+            
+        
+
         ## place the container
         add_container_cmds = self.add_primitive(
             record=self.container,
-            position=TDWUtils.VECTOR3_ZERO,
-            rotation=TDWUtils.VECTOR3_ZERO,
+            position=self.container_position,
+            rotation=self.container_rotation,
             scale=self.container_scale,
             material=self.container_material,
             color=data["color"],
@@ -369,6 +408,9 @@ if __name__ == '__main__':
         container=args.container,
         target=args.target,
         distractor=args.distractor,
+
+        ## positions
+        container_position_range=args.cposition,
 
         ## scales
         zone_scale_range=args.zscale,
