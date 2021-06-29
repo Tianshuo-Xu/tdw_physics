@@ -141,6 +141,16 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         default="[0.75,1.5]",
                         help="scale of probe objects")
 
+    ## size ranges for objects
+    parser.add_argument("--size_min",
+                        type=none_or_str,
+                        default="0.05",
+                        help="Minimum size for probe and target objects")
+    parser.add_argument("--size_max",
+                        type=none_or_str,
+                        default="4.0",
+                        help="Maximum size for probe and target objects")    
+
 
     ### layout
     parser.add_argument("--collision_axis_length",
@@ -212,6 +222,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
+        args.size_min = handle_random_transform_args(args.size_min)
+        args.size_max = handle_random_transform_args(args.size_max)
 
         ## don't let background objects move
         args.no_moving_distractors = True
@@ -233,8 +245,6 @@ class Playroom(Collision):
                  target_categories=None,
                  size_min=0.05,
                  size_max=4.0,
-                 # size_min=None,
-                 # size_max=None,
                  **kwargs):
 
         self.probe_categories = probe_categories
@@ -242,16 +252,18 @@ class Playroom(Collision):
         self.size_min = size_min
         self.size_max = size_max
         super().__init__(port=port, **kwargs)
+        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
+        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))        
 
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._probe_types = tlist
-        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
+        # print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
 
     def set_target_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.target_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._target_types = tlist
-        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
+        # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
@@ -382,7 +394,9 @@ if __name__ == "__main__":
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        match_probe_and_target_color=args.match_probe_and_target_color
+        match_probe_and_target_color=args.match_probe_and_target_color,
+        size_min=args.size_min,
+        size_max=args.size_max
     )
 
     if bool(args.run):
