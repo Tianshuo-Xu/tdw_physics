@@ -127,6 +127,7 @@ def get_relational_args(dataset_dir: str, parse=True):
 class RelationArrangement(Playroom):
 
     def __init__(self, port=1071,
+                 relation=list(Relation),
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
@@ -137,15 +138,24 @@ class RelationArrangement(Playroom):
 
         super().__init__(port=port, **kwargs)
 
-        ## object types
-        self._container_types = self.set_types(container)
-        self._target_types = self.set_types(target)
-        self._distractor_types = self.set_types(distractor)
+        ## relation types
+        self.set_relation_types(relation)
+        print("relation types", [r.name for r in self._relation_types])
 
+        ## object types
+        self.set_container_types(container)
+        self.set_target_types(target)
+        self.set_distractor_types(distractor)
+        
         ## object scales
         self.container_scale_range = container_scale_range
         self.target_scale_range = target_scale_range
         self.distractor_scale_range = distractor_scale_range
+
+        ## object textures
+        self.container_material = None
+        self.target_material = None
+        self.distractor_material = None
         
 
         print("sampling containers from", [(r.name, r.wcategory) for r in self._container_types], len(self._container_types))
@@ -153,7 +163,15 @@ class RelationArrangement(Playroom):
         print("sampling distractors from", [(r.name, r.wcategory) for r in self._distractor_types], len(self._distractor_types))
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 60
+        return frame > 90
+
+    def _write_frame_labels(self, frame_grp, resp, frame_num, sleeping):
+        return RigidbodiesDataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
+
+    def set_relation_types(self, rlist):
+        if not isinstance(rlist, list):
+            rlist = [rlist]
+        self._relation_types = [r for r in rlist if r in Relation]
 
     def set_types(self, olist):
         tlist = self.get_types(olist,
@@ -162,6 +180,15 @@ class RelationArrangement(Playroom):
                                flex_only=False,
                                size_min=None, size_max=None)
         return tlist
+
+    def set_container_types(self, olist):
+        self._container_types = self.set_types(olist)
+
+    def set_target_types(self, olist):
+        self._target_types = self.set_types(olist)
+
+    def set_distractor_types(self, olist):
+        self._distractor_types = self.set_types(olist)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         # randomization
@@ -212,7 +239,73 @@ class RelationArrangement(Playroom):
         '''
         TODO
         '''
-        return []
+        commands = []
+
+        ## create the container
+        record, data = self.random_primitive(self._container_types,
+                                             scale=1.0,
+                                             color=None,
+                                             add_data=False)
+        self.container = record
+        self.container_id = data["id"]
+
+        ## scale the container so it's in the required size range
+        self.container_scale = self.rescale_record_to_size(record, self.container_scale_range)
+
+        ## place the container
+        add_container_cmds = self.add_primitive(
+            record=self.container,
+            position=TDWUtils.VECTOR3_ZERO,
+            rotation=TDWUtils.VECTOR3_ZERO,
+            scale=self.container_scale,
+            material=self.container_material,
+            color=data["color"],
+            mass=5.0,
+            scale_mass=True,
+            o_id=self.container_id,
+            add_data=True,
+            make_kinematic=True,
+            apply_texture=(True if self.container_material else False)
+        )
+        commands.extend(add_container_cmds)
+
+        return commands
+
+    def _place_target_object(self) -> List[dict]:
+        """
+        Choose and place the target object as a function of relation type
+        """
+        commands = []
+
+        ## create the target
+        record, data = self.random_primitive(self._target_types,
+                                             scale=1.0,
+                                             color=None,
+                                             add_data=False)
+        self.target = record
+        self.target_id = data["id"]
+
+        ## rescale the target
+        self.target_scale = self.rescale_record_to_size(record, self.target_scale_range)
+
+        add_target_cmds = self.add_primitive(
+            record=self.target,
+            position={"x": 0.0, "y": 0.5, "z": 0.0},
+            rotation=TDWUtils.VECTOR3_ZERO,
+            scale=self.target_scale,
+            material=self.target_material,
+            color=data["color"],
+            mass=2.5,
+            scale_mass=False,
+            o_id=self.target_id,
+            add_data=True,
+            make_kinematic=False,
+            apply_texture=(True if self.target_material else False)
+        )
+        commands.extend(add_target_cmds)
+
+        return commands
+        
 
     def _place_distractor(self) -> List[dict]:
         '''
@@ -230,6 +323,7 @@ class RelationArrangement(Playroom):
         else:
             self.trial_seed = -1 # not used
 
+
         ## place "zone" (i.e. a mat on the floor)
         commands.extend(self._place_target_zone())
 
@@ -246,7 +340,6 @@ class RelationArrangement(Playroom):
         commands.extend(self._place_distractor())
 
         return commands
-        
 
 if __name__ == '__main__':
 
@@ -265,6 +358,9 @@ if __name__ == '__main__':
     print(args.relation)
 
     RC = RelationArrangement(
+        ## relation
+        relation=args.relation,
+        
         ## objects
         container=args.container,
         target=args.target,

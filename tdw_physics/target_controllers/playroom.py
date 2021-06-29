@@ -252,8 +252,8 @@ class Playroom(Collision):
         self.size_min = size_min
         self.size_max = size_max
         super().__init__(port=port, **kwargs)
-        print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
-        print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))        
+        # print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
+        # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))        
 
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
