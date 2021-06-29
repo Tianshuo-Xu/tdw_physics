@@ -341,6 +341,10 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+
+        return []
+
 if __name__ == '__main__':
 
     import platform, os
