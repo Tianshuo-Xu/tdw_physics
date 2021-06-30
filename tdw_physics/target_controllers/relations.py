@@ -54,10 +54,9 @@ def get_relational_args(dataset_dir: str, parse=True):
 
     ## Relation type
     parser.add_argument("--relation",
-                        type=Relation,
-                        choices=list(Relation),
+                        type=str,
+                        default=','.join([r.name for r in Relation]),
                         help="Which relation type to construct")
-
 
     ## Object types
     parser.add_argument("--container",
@@ -126,6 +125,8 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="How much to jitter the target position")
     
     def postprocess(args):
+
+        args.relation = [r for r in Relation if r.name in args.relation.split(',')]
 
         args.container = [nm for nm in args.container.split(',') if nm in ALL_NAMES]
         args.target = [nm for nm in args.target.split(',') if nm in ALL_NAMES]
@@ -350,14 +351,14 @@ class RelationArrangement(Playroom):
         ## if contain or support, place the target on the container;
         if (self.relation == Relation.support) or (self.relation == Relation.contain):
             self.target_position = copy.deepcopy(self.container_position)
-            self.target_position["y"] += self.container_height
+            self.target_position["y"] = self.container_height
 
         ## elif occlude, put it mostly behind the container
         elif self.relation == Relation.occlude:
             unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta)
             self.target_position = {
                 "x": unit_v["x"] * tpos,
-                "y": 0.0,
+                "y": self.container_height,
                 "z": unit_v["z"] * tpos
             }
 
@@ -367,7 +368,7 @@ class RelationArrangement(Playroom):
             unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta + l_or_r)
             self.target_position = {
                 "x": unit_v["x"] * tpos,
-                "y": 0.0,
+                "y": self.container_height,
                 "z": unit_v["z"] * tpos
             }
             
