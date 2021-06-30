@@ -81,6 +81,10 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[1.0,2.0]",
                         help="scale of target object")
+    parser.add_argument("--max_target_scale_ratio",
+                        type=float,
+                        default=1.0,
+                        help="Max ratio between target and container scale")
     parser.add_argument("--dscale",
                         type=str,
                         default="[1.0,2.0]",
@@ -355,7 +359,7 @@ class RelationArrangement(Playroom):
         return commands
 
     def _choose_target_position(self) -> None:
-        self.target_position = None
+        self.target_position = self.left_or_right = None
         theta = random.uniform(*get_range(self.target_angle_range)) * random.choice([-1.,1.])
         tx,ty,tz = [self.get_record_dimensions(self.target)[i] * self.target_scale[k] * 0.5
                     for i,k in enumerate(XYZ)]
@@ -381,8 +385,8 @@ class RelationArrangement(Playroom):
 
         ## elif null, put it to one side of the container
         elif self.relation == Relation.null:
-            l_or_r = random.choice([-90, 90])
-            unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta + l_or_r)
+            self.left_or_right = random.choice([-90, 90])
+            unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta + self.left_or_right)
             self.target_position = {
                 "x": unit_v["x"] * tpos,
                 "y": self.container_height,
@@ -407,10 +411,10 @@ class RelationArrangement(Playroom):
         if self.target_always_horizontal or bool(random.choice([0,1])):
             self.target_horizontal = True
             sy = self.get_record_dimensions(self.target)[1] * self.target_scale["y"]
-            self.target_rotation["z"] = 90
+            self.target_rotation["z"] = random.choice([-90, 90])
 
-            self.target_position["z"] += -np.sin(np.radians(self.target_rotation["y"])) * 0.5 * sy
-            self.target_position["x"] += np.cos(np.radians(self.target_rotation["y"])) * 0.5 * sy
+            self.target_position["z"] += -np.sin(np.radians(self.target_rotation["y"])) * 0.5 * sy * np.sign(self.target_rotation["z"])
+            self.target_position["x"] += np.cos(np.radians(self.target_rotation["y"])) * 0.5 * sy * np.sign(self.targe_rotation["z"])
 
 
         if self.relation != Relation.support:
@@ -436,8 +440,8 @@ class RelationArrangement(Playroom):
         _tscale_range = copy.deepcopy(self.target_scale_range)
         _cscale = self.container_scale
         _tscale_range = [
-            min(_tscale_range[0], *[_cscale[k] for k in XYZ]),
-            min(_tscale_range[1], *[_cscale[k] for k in XYZ])
+            min(_tscale_range[0], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio,
+            min(_tscale_range[1], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio
         ]
         self.target_scale = self.rescale_record_to_size(record, _tscale_range)
 
@@ -472,13 +476,98 @@ class RelationArrangement(Playroom):
         commands.extend(add_target_cmds)
 
         return commands
-        
+
+    def _choose_distractor_position(self) -> None:
+        self.distractor_position = None
+        theta = random.uniform(*get_range(self.target_angle_range)) * random.choice([-1.,1.])
+        dx,dy,dz = [self.get_record_dimensions(self.distractor)[i] * self.distractor_scale[k] * 0.5
+                    for i,k in enumerate(XYZ)]
+        offset = max(dx, dy, dz)
+        try:
+            dpos = random.uniform(*get_range(self.target_position_range)) + offset
+        except:
+            dpos = random.uniform(*get_range(self.target_position_range['x'])) + offset
+
+        ## if relation is null, make sure distractor is on opposite side
+        if self.left_or_right is None:
+            l_or_r = random.choice([-90, 90])
+        else:
+            l_or_r = -self.left_or_right
+        unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta + l_or_r)
+        self.distractor_position = {
+            "x": unit_v["x"] * dpos,
+            "y": self.container_height,
+            "z": unit_v["z"] * dpos
+        }
+
+        ## jitter position
+        for k in ["x", "z"]:
+            self.distractor_position[k] += random.uniform(-self.target_position_jitter, self.target_position_jitter)
+
+    def _choose_distractor_rotation(self) -> None:
+
+        ## random pose in xz plane
+        self.distractor_rotation = self.get_y_rotation(self.target_rotation_range)
+        self.distractor_rotation["y"] += random.choice([0, 180])
+
+        ## whether to make the distractor horizontal or not
+        self.distractor_horizontal = bool(random.choice([0,1]))
+        if self.distractor_horizontal:
+            dy = self.get_record_dimensions(self.distractor)[1] * self.distractor_scale["y"]
+            self.distractor_rotation["z"] = random.choice([-90,90])
+            self.distractor_position["z"] += -np.sin(np.radians(self.distractor_rotation["y"])) * 0.5 * dy * np.sign(self.distractor_rotation["z"])
+            self.distractor_position["x"] += np.cos(np.radians(self.distractor_rotation["y"])) * 0.5 * dy * np.sign(self.distractor_rotation["z"])
+
+            self.distractor_position["y"] += self.get_record_dimensions(self.distractor)[0] * self.distractor_scale["x"] * 0.5
+
+        self.distractor_rotation["z"] += random.uniform(-self.target_rotation_jitter, self.target_rotation_jitter)
 
     def _place_distractor(self) -> List[dict]:
         '''
-        TODO
+        Choose and place a distractor to the left or right of the scene.
         '''
-        return []
+        commands = []
+
+        ## create the distractor
+        record, data = self.random_primitive(self._distractor_types,
+                                             scale=1.0,
+                                             color=None,
+                                             add_data=False)
+        self.distractor = record
+        self.distractor_id = data["id"]
+
+        ## scale the distractor
+        self.distractor_scale = self.rescale_record_to_size(record, self.distractor_scale_range)
+
+        ## choose its position
+        self._choose_distractor_position()
+
+        ## choose its pose/rotation
+        self._choose_distractor_rotation()
+
+        if self.PRINT:
+            print("DISTRACTOR POS", self.distractor_position)
+
+        add_distractor_cmds = self.add_primitive(
+            record=self.distractor,
+            position=self.distractor_position,
+            rotation=self.distractor_rotation,
+            scale=self.distractor_scale,
+            material=self.distractor_material,
+            color=data["color"],
+            mass=2.0,
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            bounciness=0.0,
+            scale_mass=False,
+            o_id=self.distractor_id,
+            add_data=True,
+            make_kinematic=False,
+            apply_texture(True if self.distractor_material else False)
+        )
+        commands.extend(add_distractor_cmds)
+        
+        return commands 
 
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
@@ -550,6 +639,7 @@ if __name__ == '__main__':
         container_scale_range=args.cscale,
         target_scale_range=args.tscale,
         distractor_scale_range=args.dscale,
+        max_target_scale_ratio=args.max_target_scale_ratio,
 
         ## common
         launch_build=launch_build,
