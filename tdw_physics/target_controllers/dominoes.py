@@ -1459,6 +1459,7 @@ class Dominoes(RigidbodiesDataset):
 
         a_pos = avatar_position
 
+        ## camera position and ray
         self.camera_position = a_pos
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
@@ -1467,6 +1468,12 @@ class Dominoes(RigidbodiesDataset):
         self.camera_radius = np.linalg.norm(camera_ray)
         camera_ray /= np.linalg.norm(camera_ray)
         self.camera_ray = arr_to_xyz(camera_ray)
+
+        ## unit vector that points opposite the camera
+        opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
+        opposite /= np.linalg.norm(opposite)
+        opposite = arr_to_xyz(opposite)
+        self.opposite_unit_vector = opposite
 
         if self.PRINT:
             print("camera distance", self.camera_radius)
