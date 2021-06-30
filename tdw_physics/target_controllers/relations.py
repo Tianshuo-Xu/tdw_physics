@@ -210,14 +210,17 @@ class RelationArrangement(Playroom):
         self.container_material = None
         self.target_material = None
         self.distractor_material = None
-        
+
+        ## when to stop trial
+        self.flow_thresh = 10.0
+        self.min_frames = 90
 
         print("sampling containers from", [(r.name, r.wcategory) for r in self._container_types], len(self._container_types))
         print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
         print("sampling distractors from", [(r.name, r.wcategory) for r in self._distractor_types], len(self._distractor_types))
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 90
+        return ((frame > self.min_frames) and (self._max_optical_flow(resp) < self.flow_thresh))
 
     def _write_frame_labels(self, frame_grp, resp, frame_num, sleeping):
         return RigidbodiesDataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
@@ -412,7 +415,7 @@ class RelationArrangement(Playroom):
 
         if self.relation != Relation.support:
             self.target_rotation["z"] += random.uniform(-self.target_rotation_jitter, self.target_rotation_jitter)
-        else:
+        if self.target_horizontal:
             self.target_position["y"] += self.get_record_dimensions(self.target)[0] * self.target_scale["x"] * 0.5
 
     def _place_target_object(self) -> List[dict]:
