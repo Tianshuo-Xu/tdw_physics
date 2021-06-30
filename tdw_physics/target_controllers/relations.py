@@ -115,13 +115,20 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.0,1.0]",
                         help="Position ranges for the target/distractor (offset from container)")
+    parser.add_argument("--trotation",
+                        type=str,
+                        default="[0,180]",
+                        help="Pose ranges for the target/distractor")
+    parser.add_argument("--thorizontal",
+                        action="store_true",
+                        help="Whether to rotate the target object so that it's horizontal")
     parser.add_argument("--tangle",
                         type=str,
                         default="[0,30]",
                         help="How much to jitter the target position angle relative to container")        
     parser.add_argument("--tjitter",
                         type=float,
-                        default="0.25",
+                        default="0.2",
                         help="How much to jitter the target position")
     
     def postprocess(args):
@@ -141,6 +148,7 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.cposition["y"] = 0.0
 
         args.tposition = handle_random_transform_args(args.tposition)
+        args.trotation = handle_random_transform_args(args.trotation)
         args.tangle = handle_random_transform_args(args.tangle)
 
         return args
@@ -160,11 +168,14 @@ class RelationArrangement(Playroom):
                  container_position_range=[0.0],
                  container_scale_range=[1.0,1.0],
                  target_position_range=[-0.5,0.5],
+                 target_rotation_range=[0,180],
+                 target_always_horizontal=False,
                  target_angle_range=[-30,30],                 
                  target_scale_range=[1.0,1.0],
                  target_position_jitter=0.25,
+                 target_rotation_jitter=30,
                  distractor_scale_range=[1.0,1.0],
-                 max_target_scale_ratio=1.25,
+                 max_target_scale_ratio=1.0,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -184,8 +195,11 @@ class RelationArrangement(Playroom):
         ## object positions
         self.container_position_range = container_position_range
         self.target_position_range = target_position_range
+        self.target_rotation_range = target_rotation_range
+        self.target_always_horizontal = target_always_horizontal
         self.target_angle_range = target_angle_range
         self.target_position_jitter = target_position_jitter
+        self.target_rotation_jitter = target_rotation_jitter
         
         ## object scales
         self.container_scale_range = container_scale_range
@@ -379,6 +393,28 @@ class RelationArrangement(Playroom):
         for k in ["x", "z"]:
             self.target_position[k] += random.uniform(-self.target_position_jitter, self.target_position_jitter)
 
+    def _choose_target_rotation(self) -> None:
+
+        ## random pose in xz plane
+        self.target_rotation = self.get_y_rotation(self.target_rotation_range)
+        self.target_rotation["y"] += random.choice([0, 180])
+
+        ## whether to make the target horizontal or not
+        self.target_horizontal = False
+        if self.target_always_horizontal or bool(random.choice([0,1])):
+            self.target_horizontal = True
+            sy = self.get_record_dimensions(self.target)[1] * self.target_scale["y"]
+            self.target_rotation["z"] = 90
+
+            self.target_position["z"] += -np.sin(np.radians(self.target_rotation["y"])) * 0.5 * sy
+            self.target_position["x"] += np.cos(np.radians(self.target_rotation["y"])) * 0.5 * sy
+
+
+        if self.relation != Relation.support:
+            self.target_rotation["z"] += random.uniform(-self.target_rotation_jitter, self.target_rotation_jitter)
+        else:
+            self.target_position["y"] += self.get_record_dimensions(self.target)[0] * self.target_scale["x"] * 0.5
+
     def _place_target_object(self) -> List[dict]:
         """
         Choose and place the target object as a function of relation type
@@ -404,18 +440,26 @@ class RelationArrangement(Playroom):
 
         ## choose the target position as a function of relation type
         self._choose_target_position()
+
+        ## chose the target pose
+        self._choose_target_rotation()
+
         if self.PRINT:
             print("CONTAINER POS", self.container_position)
             print("TARGET POS", self.target_position)
+        
 
         add_target_cmds = self.add_primitive(
             record=self.target,
             position=self.target_position,
-            rotation=TDWUtils.VECTOR3_ZERO,
+            rotation=self.target_rotation,
             scale=self.target_scale,
             material=self.target_material,
             color=data["color"],
-            mass=2.5,
+            mass=2.0,
+            static_friction=1.0,
+            dynamic_friction=1.0,
+            bounciness=0.0,
             scale_mass=False,
             o_id=self.target_id,
             add_data=True,
@@ -493,8 +537,10 @@ if __name__ == '__main__':
         ## positions
         container_position_range=args.cposition,
         target_position_range=args.tposition,
+        target_rotation_range=args.trotation,
         target_angle_range=args.tangle,
         target_position_jitter=args.tjitter,
+        target_always_horizontal=args.thorizontal,
 
         ## scales
         zone_scale_range=args.zscale,
