@@ -72,45 +72,7 @@ def get_relational_args(dataset_dir: str, parse=True):
                         default="b05_lobster",
                         help="comma-separated list of distractor object names")
 
-    ## Object scales
-    parser.add_argument("--cscale",
-                        type=str,
-                        default="[1.0,2.0]",
-                        help="scale of container")
-    parser.add_argument("--tscale",
-                        type=str,
-                        default="[1.0,2.0]",
-                        help="scale of target object")
-    parser.add_argument("--max_target_scale_ratio",
-                        type=float,
-                        default=1.0,
-                        help="Max ratio between target and container scale")
-    parser.add_argument("--dscale",
-                        type=str,
-                        default="[1.0,2.0]",
-                        help="scale of distractor")
-
-    ## Changed defaults
-    parser.add_argument("--room",
-                        type=str,
-                        default="tdw",
-                        help="Which room to be in")
-    parser.add_argument("--zscale",
-                        type=str,
-                        default="-1.0",
-                        help="scale of target zone")
-    parser.add_argument("--zcolor",
-                        type=none_or_str,
-                        default=None,
-                        help="comma-separated R,G,B values for the target zone color. None is random")
-    parser.add_argument("--zmaterial",
-                        type=none_or_str,
-                        default=None,
-                        help="Material name for zone. If None, samples from material_type")
-    parser.add_argument("--material_types",
-                        type=none_or_str,
-                        default="Wood,Metal,Ceramic",
-                        help="Which class of materials to sample material names from")
+    ## Object positions
     parser.add_argument("--cposition",
                         type=str,
                         default="[[-0.25,0.25],0.0,[-0.25,0.25]]",
@@ -133,7 +95,74 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--tjitter",
                         type=float,
                         default="0.2",
-                        help="How much to jitter the target position")
+                        help="How much to jitter the target position")    
+
+    ## Object scales
+    parser.add_argument("--cscale",
+                        type=str,
+                        default="[1.0,2.0]",
+                        help="scale of container")
+    parser.add_argument("--tscale",
+                        type=str,
+                        default="[1.0,2.0]",
+                        help="scale of target object")
+    parser.add_argument("--max_target_scale_ratio",
+                        type=float,
+                        default=1.0,
+                        help="Max ratio between target and container scale")
+    parser.add_argument("--dscale",
+                        type=str,
+                        default="[1.0,2.0]",
+                        help="scale of distractor")
+
+    ## Camera
+    parser.add_argument("--camera_distance",
+                        type=none_or_str,
+                        default="[1.75,2.5]",
+                        help="radial distance from camera to centerpoint")
+    parser.add_argument("--camera_min_height",
+                        type=float,
+                        default=0.75,
+                         help="min height of camera")
+    parser.add_argument("--camera_max_height",
+                        type=float,
+                        default=2.0,
+                        help="max height of camera")
+    parser.add_argument("--camera_min_angle",
+                        type=float,
+                        default=0,
+                        help="minimum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_max_angle",
+                        type=float,
+                        default=360,
+                        help="maximum angle of camera rotation around centerpoint")
+    parser.add_argument("--camera_left_right_reflections",
+                        action="store_true",
+                        help="Whether camera angle range includes reflections along the collision axis")    
+
+    ## Changed defaults
+    parser.add_argument("--room",
+                        type=str,
+                        default="tdw",
+                        help="Which room to be in")
+    parser.add_argument("--zscale",
+                        type=str,
+                        default="-1.0",
+                        help="scale of target zone")
+    parser.add_argument("--zcolor",
+                        type=none_or_str,
+                        default=None,
+                        help="comma-separated R,G,B values for the target zone color. None is random")
+    parser.add_argument("--zmaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material name for zone. If None, samples from material_type")
+    parser.add_argument("--material_types",
+                        type=none_or_str,
+                        default="Wood,Metal,Ceramic",
+                        help="Which class of materials to sample material names from")
+    
+
     
     def postprocess(args):
 
@@ -155,6 +184,8 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.trotation = handle_random_transform_args(args.trotation)
         args.tangle = handle_random_transform_args(args.tangle)
 
+        args.camera_distance = handle_random_transform_args(args.camera_distance)
+
         return args
 
     args = parser.parse_args()
@@ -171,7 +202,7 @@ class RelationArrangement(Playroom):
                  distractor=PRIMITIVE_NAMES,
                  container_position_range=[0.0],
                  container_scale_range=[1.0,1.0],
-                 target_position_range=[-0.5,0.5],
+                 target_position_range=[0.0,1.0],
                  target_rotation_range=[0,180],
                  target_always_horizontal=False,
                  target_angle_range=[-30,30],                 
@@ -414,7 +445,7 @@ class RelationArrangement(Playroom):
             self.target_rotation["z"] = random.choice([-90, 90])
 
             self.target_position["z"] += -np.sin(np.radians(self.target_rotation["y"])) * 0.5 * sy * np.sign(self.target_rotation["z"])
-            self.target_position["x"] += np.cos(np.radians(self.target_rotation["y"])) * 0.5 * sy * np.sign(self.targe_rotation["z"])
+            self.target_position["x"] += np.cos(np.radians(self.target_rotation["y"])) * 0.5 * sy * np.sign(self.target_rotation["z"])
 
 
         if self.relation != Relation.support:
@@ -563,7 +594,7 @@ class RelationArrangement(Playroom):
             o_id=self.distractor_id,
             add_data=True,
             make_kinematic=False,
-            apply_texture(True if self.distractor_material else False)
+            apply_texture=(True if self.distractor_material else False)
         )
         commands.extend(add_distractor_cmds)
         
@@ -640,6 +671,14 @@ if __name__ == '__main__':
         target_scale_range=args.tscale,
         distractor_scale_range=args.dscale,
         max_target_scale_ratio=args.max_target_scale_ratio,
+
+        ## camera
+        camera_radius=args.camera_distance,
+        camera_min_angle=args.camera_min_angle,
+        camera_max_angle=args.camera_max_angle,
+        camera_min_height=args.camera_min_height,
+        camera_max_height=args.camera_max_height,
+        camera_left_right_reflections=args.camera_left_right_reflections,
 
         ## common
         launch_build=launch_build,
