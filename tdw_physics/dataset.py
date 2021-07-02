@@ -286,7 +286,8 @@ class Dataset(Controller, ABC):
     def trial_loop(self,
                    num: int,
                    output_dir: str,
-                   temp_path: str) -> None:
+                   temp_path: str,
+                   save_frame: int=None) -> None:
 
 
         output_dir = Path(output_dir)
@@ -338,8 +339,15 @@ class Dataset(Controller, ABC):
                             png_dir=self.png_dir,
                             size=[self._height, self._width],
                             overwrite=True,
-                            remove_pngs=True,
+                            remove_pngs=(True if save_frame is None else False),
                             use_parent_dir=False)
+                        
+                    if save_frame is not None:
+                        frames = os.listdir(str(self.png_dir))
+                        sv = sorted(frames)[save_frame]
+                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True) 
+                        
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                 if self.save_meshes:
                     for o_id in self.object_ids:

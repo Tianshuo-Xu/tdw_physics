@@ -79,7 +79,7 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="Position ranges for the container")
     parser.add_argument("--tposition",
                         type=str,
-                        default="[0.0,1.0]",
+                        default="[0.3,1.0]",
                         help="Position ranges for the target/distractor (offset from container)")
     parser.add_argument("--trotation",
                         type=str,
@@ -100,29 +100,29 @@ def get_relational_args(dataset_dir: str, parse=True):
     ## Object scales
     parser.add_argument("--cscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[0.75,1.5]",
                         help="scale of container")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[0.75,1.5]",
                         help="scale of target object")
     parser.add_argument("--max_target_scale_ratio",
                         type=float,
-                        default=1.0,
+                        default=0.8,
                         help="Max ratio between target and container scale")
     parser.add_argument("--dscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[0.75,1.5]",
                         help="scale of distractor")
 
     ## Camera
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[1.75,2.5]",
+                        default="[2.0,2.5]",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
-                        default=0.75,
+                        default=1.25,
                          help="min height of camera")
     parser.add_argument("--camera_max_height",
                         type=float,
@@ -200,17 +200,17 @@ class RelationArrangement(Playroom):
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
-                 container_position_range=[0.0],
-                 container_scale_range=[1.0,1.0],
-                 target_position_range=[0.0,1.0],
+                 container_position_range=[-0.25,0.25],
+                 container_scale_range=[1.0,1.5],
+                 target_position_range=[0.25,1.0],
                  target_rotation_range=[0,180],
                  target_always_horizontal=False,
                  target_angle_range=[-30,30],                 
-                 target_scale_range=[1.0,1.0],
+                 target_scale_range=[1.0,1.5],
                  target_position_jitter=0.25,
                  target_rotation_jitter=30,
-                 distractor_scale_range=[1.0,1.0],
-                 max_target_scale_ratio=1.0,
+                 distractor_scale_range=[1.0,1.5],
+                 max_target_scale_ratio=0.8,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -247,7 +247,7 @@ class RelationArrangement(Playroom):
         self.distractor_material = None
 
         ## when to stop trial
-        self.flow_thresh = 10.0
+        self.flow_thresh = 5.0
         self.min_frames = 90
 
         print("sampling containers from", [(r.name, r.wcategory) for r in self._container_types], len(self._container_types))
@@ -283,6 +283,8 @@ class RelationArrangement(Playroom):
         self._distractor_types = self.set_types(olist)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
+        RigidbodiesDataset._write_static_data(self, static_group)
+        
         # randomization
         try:
             static_group.create_dataset("room", data=self.room)
@@ -304,6 +306,27 @@ class RelationArrangement(Playroom):
             static_group.create_dataset("trial_num", data=self._trial_num)
         except (AttributeError,TypeError):
             pass
+
+        # models
+        try:
+            static_group.create_dataset("zone_id", data=self.zone_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_id", data=self.target_id)
+            static_group.create_dataset("target_name", data=self.target.name.encode('utf8'))            
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("container_id", data=self.container_id)
+            static_group.create_dataset("container_name", data=self.container.name.encode('utf8'))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("distractor_id", data=self.distractor_id)
+            static_group.create_dataset("distractor_name", data=self.container.name.encode('utf8'))
+        except (AttributeError,TypeError):
+            pass                        
 
     def _place_camera(self) -> List[dict]:
         commands = []
