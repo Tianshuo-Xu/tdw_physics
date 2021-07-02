@@ -43,7 +43,7 @@ class Relation(Enum):
 
     def __str__(self):
         return self.value
-    
+
 
 def get_relational_args(dataset_dir: str, parse=True):
 
@@ -57,6 +57,16 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default=','.join([r.name for r in Relation]),
                         help="Which relation type to construct")
+
+    ## scenarios
+    parser.add_argument("--start",
+                        type=none_or_int,
+                        default=0,
+                        help="which scenario to start with")
+    parser.add_argument("--end",
+                        type=none_or_int,
+                        default=None,
+                        help="which scenario to end on (exclusive)")
 
     ## Object types
     parser.add_argument("--container",
@@ -91,11 +101,11 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--tangle",
                         type=str,
                         default="[0,30]",
-                        help="How much to jitter the target position angle relative to container")        
+                        help="How much to jitter the target position angle relative to container")
     parser.add_argument("--tjitter",
                         type=float,
                         default="0.2",
-                        help="How much to jitter the target position")    
+                        help="How much to jitter the target position")
 
     ## Object scales
     parser.add_argument("--cscale",
@@ -138,7 +148,7 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_left_right_reflections",
                         action="store_true",
-                        help="Whether camera angle range includes reflections along the collision axis")    
+                        help="Whether camera angle range includes reflections along the collision axis")
 
     ## Changed defaults
     parser.add_argument("--room",
@@ -161,9 +171,9 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="Wood,Metal,Ceramic",
                         help="Which class of materials to sample material names from")
-    
 
-    
+
+
     def postprocess(args):
 
         args.relation = [r for r in Relation if r.name in args.relation.split(',')]
@@ -195,6 +205,8 @@ def get_relational_args(dataset_dir: str, parse=True):
 
 class RelationArrangement(Playroom):
 
+    PRINT = False
+
     def __init__(self, port=1071,
                  relation=list(Relation),
                  container=PRIMITIVE_NAMES,
@@ -205,7 +217,7 @@ class RelationArrangement(Playroom):
                  target_position_range=[0.25,1.0],
                  target_rotation_range=[0,180],
                  target_always_horizontal=False,
-                 target_angle_range=[-30,30],                 
+                 target_angle_range=[-30,30],
                  target_scale_range=[1.0,1.5],
                  target_position_jitter=0.25,
                  target_rotation_jitter=30,
@@ -235,7 +247,7 @@ class RelationArrangement(Playroom):
         self.target_angle_range = target_angle_range
         self.target_position_jitter = target_position_jitter
         self.target_rotation_jitter = target_rotation_jitter
-        
+
         ## object scales
         self.container_scale_range = container_scale_range
         self.target_scale_range = target_scale_range
@@ -284,7 +296,7 @@ class RelationArrangement(Playroom):
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         RigidbodiesDataset._write_static_data(self, static_group)
-        
+
         # randomization
         try:
             static_group.create_dataset("room", data=self.room)
@@ -314,7 +326,7 @@ class RelationArrangement(Playroom):
             pass
         try:
             static_group.create_dataset("target_id", data=self.target_id)
-            static_group.create_dataset("target_name", data=self.target.name.encode('utf8'))            
+            static_group.create_dataset("target_name", data=self.target.name.encode('utf8'))
         except (AttributeError,TypeError):
             pass
         try:
@@ -326,7 +338,7 @@ class RelationArrangement(Playroom):
             static_group.create_dataset("distractor_id", data=self.distractor_id)
             static_group.create_dataset("distractor_name", data=self.container.name.encode('utf8'))
         except (AttributeError,TypeError):
-            pass                        
+            pass
 
     def _place_camera(self) -> List[dict]:
         commands = []
@@ -422,7 +434,7 @@ class RelationArrangement(Playroom):
             tpos = random.uniform(*get_range(self.target_position_range)) + offset
         except:
             tpos = random.uniform(*get_range(self.target_position_range['x'])) + offset
-        
+
         ## if contain or support, place the target on the container;
         if (self.relation == Relation.support) or (self.relation == Relation.contain):
             self.target_position = copy.deepcopy(self.container_position)
@@ -446,7 +458,7 @@ class RelationArrangement(Playroom):
                 "y": self.container_height,
                 "z": unit_v["z"] * tpos
             }
-            
+
         else:
             raise NotImplementedError("You need to institute a rule for this relation type")
 
@@ -508,7 +520,7 @@ class RelationArrangement(Playroom):
         if self.PRINT:
             print("CONTAINER POS", self.container_position)
             print("TARGET POS", self.target_position)
-        
+
 
         add_target_cmds = self.add_primitive(
             record=self.target,
@@ -620,12 +632,12 @@ class RelationArrangement(Playroom):
             apply_texture=(True if self.distractor_material else False)
         )
         commands.extend(add_distractor_cmds)
-        
-        return commands 
+
+        return commands
 
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
-    
+
         ## randomization across trials
         if not(self.randomize):
             self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
@@ -641,7 +653,7 @@ class RelationArrangement(Playroom):
         commands.extend(self._place_container())
 
         ## teleport the avatar
-        commands.extend(self._place_camera())        
+        commands.extend(self._place_camera())
 
         ## place target (depends on camera position for occlude)
         commands.extend(self._place_target_object())
@@ -674,7 +686,7 @@ if __name__ == '__main__':
     RC = RelationArrangement(
         ## relation
         relation=args.relation,
-        
+
         ## objects
         container=args.container,
         target=args.target,
@@ -728,9 +740,3 @@ if __name__ == '__main__':
         )
     else:
         RC.communicate({"$type": "terminate"})
-    
-
-    
-
-
-    
