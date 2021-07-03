@@ -67,7 +67,11 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=none_or_int,
                         default=None,
                         help="which scenario to end on (exclusive)")
-
+    parser.add_argument("--training_data",
+                        type=none_or_int,
+                        default=1,
+                        help="Whether to use training data or testing data")
+    
     ## Object types
     parser.add_argument("--container",
                         type=none_or_str,
@@ -110,11 +114,11 @@ def get_relational_args(dataset_dir: str, parse=True):
     ## Object scales
     parser.add_argument("--cscale",
                         type=str,
-                        default="[0.75,1.5]",
+                        default="[1.0,2.0]",
                         help="scale of container")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[0.75,1.5]",
+                        default="[1.0,2.0]",
                         help="scale of target object")
     parser.add_argument("--max_target_scale_ratio",
                         type=float,
@@ -122,13 +126,13 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="Max ratio between target and container scale")
     parser.add_argument("--dscale",
                         type=str,
-                        default="[0.75,1.5]",
+                        default="[1.0,2.0]",
                         help="scale of distractor")
 
     ## Camera
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[2.0,2.5]",
+                        default="[1.5,2.5]",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
