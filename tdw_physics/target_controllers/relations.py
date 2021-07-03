@@ -114,25 +114,25 @@ def get_relational_args(dataset_dir: str, parse=True):
     ## Object scales
     parser.add_argument("--cscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[0.75,1.25]",
                         help="scale of container")
     parser.add_argument("--tscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[1.0,1.5]",
                         help="scale of target object")
     parser.add_argument("--max_target_scale_ratio",
                         type=float,
-                        default=0.8,
+                        default=0.9,
                         help="Max ratio between target and container scale")
     parser.add_argument("--dscale",
                         type=str,
-                        default="[1.0,2.0]",
+                        default="[0.75,1.25]",
                         help="scale of distractor")
 
     ## Camera
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[1.5,2.5]",
+                        default="[1.75,2.5]",
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -389,7 +389,7 @@ class RelationArrangement(Playroom):
         self.container_id = data["id"]
 
         ## scale the container so it's in the required size range
-        self.container_scale = self.rescale_record_to_size(record, self.container_scale_range)
+        self.container_scale = self.rescale_record_to_size(record, self.container_scale_range, randomize=True)
         _,cheight,_ = self.get_record_dimensions(self.container)
         self.container_height = cheight * self.container_scale["y"]
 
@@ -513,7 +513,7 @@ class RelationArrangement(Playroom):
             min(_tscale_range[0], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio,
             min(_tscale_range[1], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio
         ]
-        self.target_scale = self.rescale_record_to_size(record, _tscale_range)
+        self.target_scale = self.rescale_record_to_size(record, _tscale_range, randomize=True)
 
         ## choose the target position as a function of relation type
         self._choose_target_position()
@@ -607,7 +607,7 @@ class RelationArrangement(Playroom):
         self.distractor_id = data["id"]
 
         ## scale the distractor
-        self.distractor_scale = self.rescale_record_to_size(record, self.distractor_scale_range)
+        self.distractor_scale = self.rescale_record_to_size(record, self.distractor_scale_range, randomize=True)
 
         ## choose its position
         self._choose_distractor_position()
@@ -648,6 +648,9 @@ class RelationArrangement(Playroom):
             random.seed(self.trial_seed)
         else:
             self.trial_seed = -1 # not used
+
+        print("CONTROLLER SEED: %d" % self.seed)
+        print("TRIAL SEED: %d" % self.trial_seed)
 
 
         ## place "zone" (i.e. a mat on the floor)

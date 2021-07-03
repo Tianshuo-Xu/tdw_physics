@@ -1103,14 +1103,18 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     @staticmethod
-    def rescale_record_to_size(record, size_range=1.0):
+    def rescale_record_to_size(record, size_range=1.0, randomize=False):
 
         dims = Dominoes.get_record_dimensions(record)
         dmin, dmax = [min(dims), max(dims)]
 
 
         scale = 1.0
-        smin, smax = get_range(size_range)
+        if randomize:
+            smin = random.uniform(*get_range(size_range))
+            smax = random.uniform(smin, get_range(size_range)[1])
+        else:
+            smin, smax = get_range(size_range)
 
         if dmax < smin:
             scale = smin / dmax
