@@ -13,7 +13,7 @@ import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors, Meshes
+from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
@@ -23,7 +23,7 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 from tdw_physics.util_geom import save_obj
 import shutil
 
-PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
@@ -182,6 +182,7 @@ class Dataset(Controller, ABC):
             save_movies: bool = False,
             save_labels: bool = False,
             save_meshes: bool = False,
+            terminate: bool = True,
             args_dict: dict={}) -> None:
         """
         Create the dataset.
@@ -253,15 +254,16 @@ class Dataset(Controller, ABC):
 
         # Terminate TDW
         # Windows doesn't know signal timeout
-        if platform.system() == 'Windows': end = self.communicate({"$type": "terminate"})
-        else: #Unix systems can use signal to timeout
-            with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
-                assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
-                end = self.communicate({"$type": "terminate"})
-            if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
-                print("tdw closed successfully")
-            elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
-                print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
+        if terminate:
+            if platform.system() == 'Windows': end = self.communicate({"$type": "terminate"})
+            else: #Unix systems can use signal to timeout
+                with stopit.SignalTimeout(5) as to_ctx_mgr: #since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+                    assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+                    end = self.communicate({"$type": "terminate"})
+                if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+                    print("tdw closed successfully")
+                elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+                    print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
         # Save the command line args
         if self.save_args:
@@ -285,7 +287,8 @@ class Dataset(Controller, ABC):
     def trial_loop(self,
                    num: int,
                    output_dir: str,
-                   temp_path: str) -> None:
+                   temp_path: str,
+                   save_frame: int=None) -> None:
 
 
         output_dir = Path(output_dir)
@@ -337,8 +340,15 @@ class Dataset(Controller, ABC):
                             png_dir=self.png_dir,
                             size=[self._height, self._width],
                             overwrite=True,
-                            remove_pngs=True,
+                            remove_pngs=(True if save_frame is None else False),
                             use_parent_dir=False)
+                        
+                    if save_frame is not None:
+                        frames = os.listdir(str(self.png_dir))
+                        sv = sorted(frames)[save_frame]
+                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True) 
+                        
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                 if self.save_meshes:
                     for o_id in self.object_ids:
@@ -369,7 +379,7 @@ class Dataset(Controller, ABC):
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 100 == 0:
+        if trial_num % 10 == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
@@ -721,6 +731,52 @@ class Dataset(Controller, ABC):
                             np.array([0,0,0], dtype=np.uint8).reshape(1,3))
 
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+
+    def _is_object_in_view(self, resp, o_id, pix_thresh=10) -> bool:
+
+        id_map = None
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_id":
+                        id_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
+
+        if id_map is None:
+            return True
+
+        obj_index = [i for i,_o_id in enumerate(self.object_ids) if _o_id == o_id]
+        if not len(obj_index):
+            return True
+        else:
+            obj_index = obj_index[0]
+
+        obj_seg_color = self.object_segmentation_colors[obj_index]
+        obj_map = (id_map == obj_seg_color).min(axis=-1, keepdims=True)
+        in_view = obj_map.sum() >= pix_thresh
+        return in_view
+
+
+    def _max_optical_flow(self, resp):
+
+        flow_map = None
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_flow":
+                        flow_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
+
+        if flow_map is None:
+            return float(0)
+
+        else:
+            return flow_map.sum(-1).max().astype(float)
+
     def _get_object_meshes(self, resp: List[bytes]) -> None:
 
         self.object_meshes = dict()
