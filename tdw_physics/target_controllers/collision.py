@@ -230,6 +230,10 @@ class Collision(Dominoes):
         # Place occluder objects in the background
         commands.extend(self._place_occluders())
 
+        # test mode colors
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)        
+
         return commands
 
     def _build_intermediate_structure(self) -> List[dict]:
@@ -464,7 +468,8 @@ if __name__ == "__main__":
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
-        match_probe_and_target_color=args.match_probe_and_target_color        
+        match_probe_and_target_color=args.match_probe_and_target_color,
+        use_test_mode_colors=args.use_test_mode_colors        
     )
 
     if bool(args.run):

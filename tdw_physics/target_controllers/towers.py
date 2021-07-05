@@ -33,7 +33,7 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
 '''
-The tower controller generats stims in which the target object is 
+The tower controller generats stims in which the target object is
     amongst a set of stacked objects. A probe object is launched at the base
     and *may* knock over the tower
 '''
@@ -70,7 +70,7 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser.add_argument("--rheight",
                         type=none_or_str,
                         default="0",
-                        help="Height of the ramp base")            
+                        help="Height of the ramp base")
     parser.add_argument("--collision_axis_length",
                         type=float,
                         default=3.0,
@@ -130,11 +130,11 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser.add_argument("--zone",
                         type=none_or_str,
                         default="cube",
-                        help="type of zone object")        
+                        help="type of zone object")
     parser.add_argument("--zscale",
                         type=str,
                         default="3.0,0.01,3.0",
-                        help="scale of target zone")    
+                        help="scale of target zone")
     parser.add_argument("--fscale",
                         type=str,
                         default="4.0",
@@ -154,7 +154,7 @@ def get_tower_args(dataset_dir: str, parse=True):
     parser.add_argument("--fwait",
                         type=none_or_str,
                         default="[15,15]",
-                        help="How many frames to wait before applying the force")        
+                        help="How many frames to wait before applying the force")
     parser.add_argument("--camera_distance",
                         type=float,
                         default=3.0,
@@ -211,8 +211,8 @@ def get_tower_args(dataset_dir: str, parse=True):
         args = domino_postproc(args)
 
         # ramp height
-        args.rheight = handle_random_transform_args(args.rheight)                
-        
+        args.rheight = handle_random_transform_args(args.rheight)
+
         # whether to use a cap object on the tower
         if args.tower_cap is not None:
             cap_list = args.tower_cap.split(',')
@@ -226,7 +226,7 @@ def get_tower_args(dataset_dir: str, parse=True):
         return args
 
     if not parse:
-        return (parser, postprocess)    
+        return (parser, postprocess)
 
     args = parser.parse_args()
     # args = domino_postproc(args)
@@ -238,7 +238,7 @@ class Tower(MultiDominoes):
 
     STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
     STANDARD_MASS_FACTOR = 1.0 # cubes
-    
+
     def __init__(self,
                  port: int = None,
                  num_blocks=3,
@@ -302,7 +302,7 @@ class Tower(MultiDominoes):
             return is_trial_valid(f, valid_key='did_fall')
 
         funcs += [num_middle_objects, did_tower_fall]
-        
+
         return funcs
 
     def _write_frame_labels(self,
@@ -347,7 +347,7 @@ class Tower(MultiDominoes):
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
         cmds = super().get_per_frame_commands(resp, frame)
-        
+
         # check if tower fell
         self.did_fall = False
         if frame == self.force_wait:
@@ -399,7 +399,7 @@ class Tower(MultiDominoes):
         grad = self.middle_scale_gradient
         self.block_scales = [self._get_block_scale(offset=grad*(mid-i)) for i in range(self.num_blocks)]
         self.blocks = []
-        
+
         # place the blocks
         for m in range(self.num_blocks):
             record, data = self.random_primitive(
@@ -421,7 +421,8 @@ class Tower(MultiDominoes):
             block_mass = random.uniform(*get_range(self.middle_mass_range))
             block_mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
             block_mass *= self.STANDARD_MASS_FACTOR
-            
+
+            ## master
             # commands.extend(
             #     self.add_physics_object(
             #         record=record,
@@ -432,6 +433,7 @@ class Tower(MultiDominoes):
             #         static_friction=random.uniform(0, 0.9),
             #         bounciness=random.uniform(0, 1),
             #         o_id=o_id))
+
 
             commands.extend(
                 self.add_primitive(
@@ -470,7 +472,7 @@ class Tower(MultiDominoes):
             data.update({'position': block_pos, 'rotation': block_rot, 'mass': block_mass})
             print("middle object data", data)
             self.blocks.append((record, data))
-            self.tower_height = height            
+            self.tower_height = height
 
         return commands
 
@@ -492,7 +494,7 @@ class Tower(MultiDominoes):
 
         mass = random.uniform(*get_range(self.middle_mass_range))
         mass *= (np.prod(xyz_to_arr(scale)) / np.prod(xyz_to_arr(self.STANDARD_BLOCK_SCALE)))
-        mass *= self.STANDARD_MASS_FACTOR        
+        mass *= self.STANDARD_MASS_FACTOR
 
         commands.extend(
             self.add_physics_object(
@@ -584,12 +586,19 @@ if __name__ == "__main__":
 
     args = get_tower_args("towers")
 
-    if args.toys:
-        C = ToyTower
-    else:
-        C = Tower
+    import platform
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
 
-    TC = C(
+    if args.toys:
+        TC = ToyTower
+    else:
+        TC = Tower
+
+    TC = Tower(
         port=args.port,
         # toy tower
         probe_categories=args.probe_categories,
@@ -609,7 +618,7 @@ if __name__ == "__main__":
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
-        zone_friction=args.zfriction,        
+        zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
         middle_objects=args.middle,
@@ -655,7 +664,8 @@ if __name__ == "__main__":
         ramp_color=args.rcolor,
         ramp_base_height_range=args.rheight,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors                
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
@@ -665,7 +675,7 @@ if __name__ == "__main__":
                width=args.width,
                height=args.height,
                framerate=args.framerate,
-               write_passes=args.write_passes.split(','),               
+               write_passes=args.write_passes.split(','),
                save_passes=args.save_passes.split(','),
                save_movies=args.save_movies,
                save_labels=args.save_labels,
