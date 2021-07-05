@@ -53,6 +53,23 @@ def avg_label(label_list):
         return None
 
 #################
+#### DYNAMIC ####
+#################
+
+def get_collisions(d, frame_num=0, env_collisions=False):
+    fkeys = [k for k in d['frames'].keys()]
+    return d['frames'][fkeys[frame_num]]['collisions' if not env_collisions else 'env_collisions']
+
+def find_collisions_frames(d, cdata='contacts', env_collisions=False):
+    n_frames = len([k for k in d['frames'].keys()])
+    collisions = []
+    for n in range(n_frames):
+        contacts = get_collisions(d, n, env_collisions)[cdata]
+        collisions.append(bool(len(contacts)))
+    return np.where(collisions)[0]
+    
+
+#################
 #### IMAGES #####
 #################
 
@@ -295,7 +312,6 @@ def target_name(d):
     model_names = get_static_val(d, 'model_names')
     target_name = model_names[_t]
     return str(target_name)
-
 
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)

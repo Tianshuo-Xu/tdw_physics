@@ -21,6 +21,14 @@ from tdw_physics.target_controllers.dominoes import (get_args,
                                                      none_or_int)
 from tdw_physics.target_controllers.playroom import Playroom
 
+# postproc
+from tdw_physics.postprocessing.labels import (stimulus_name,
+                                               get_static_val,
+                                               object_visible_area,
+                                               is_any_object_fully_occluded,
+                                               get_collisions)
+
+
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
 SPECIAL_NAMES =[r.name for r in MODEL_LIBRARIES['models_special.json'].records if not r.do_not_use]
@@ -207,6 +215,36 @@ def get_relational_args(dataset_dir: str, parse=True):
 
     return args
 
+## postprocessing
+def container_visible_area(d):
+    return object_visible_area(d, 'container_id', frame_num=-1)
+def target_visible_area(d):
+    return object_visible_area(d, 'target_id', frame_num=-1)
+def distractor_visible_area(d):
+    return object_visible_area(d, 'distractor_id', frame_num=-1)
+def is_target_visible(d, thresh=0.01):
+    return bool(target_visible_area(d) > thresh)
+def is_distractor_visible(d, thresh=0.01):
+    return bool(distractor_visible_area(d) > thresh)
+def is_container_visible(d, thresh=0.01):
+    return bool(container_visible_area(d) > thresh)
+def all_visible(d, thresh=0.01):
+    return all((f(d, thresh) for f in [is_target_visible, is_distractor_visible, is_container_visible]))
+
+def target_not_touching_ground(d, frame_num=-1):
+    '''Checks whether the target is container or supported'''
+    enco = list(get_collisions(d, frame_num, env_collisions=True)['object_ids'])
+    coll = list(get_collisions(d, frame_num, env_collisions=False)['object_ids'])
+    coll = [list(c) for c in coll]
+    target_id = get_static_val(d, 'target_id')
+    container_id = get_static_val(d, 'container_id')
+
+    target_on_ground = target_id in enco
+    target_on_container = ([target_id, container_id] in coll) or ([container_id, target_id] in coll)
+    return bool((not target_on_ground))
+    
+
+## controller
 class RelationArrangement(Playroom):
 
     PRINT = False
