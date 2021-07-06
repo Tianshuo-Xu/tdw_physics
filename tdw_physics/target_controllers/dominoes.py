@@ -715,6 +715,7 @@ class Dominoes(RigidbodiesDataset):
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
+
         if categories is not None:
             if not isinstance(categories, list):
                 categories = categories.split(',')
