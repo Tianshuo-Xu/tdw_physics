@@ -65,6 +65,9 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default=','.join([r.name for r in Relation]),
                         help="Which relation type to construct")
+    parser.add_argument("--single_object",
+                        action="store_true",
+                        help="Generate scenes with a target object only")
 
     ## scenarios
     parser.add_argument("--start",
@@ -83,15 +86,15 @@ def get_relational_args(dataset_dir: str, parse=True):
     ## Object types
     parser.add_argument("--container",
                         type=none_or_str,
-                        default="b04_bowl_smooth",
+                        default="box_tapered_beech",
                         help="comma-separated list of container names")
     parser.add_argument("--target",
                         type=none_or_str,
-                        default="b04_clownfish",
+                        default="886673_duck",
                         help="comma-separated list of target object names")
     parser.add_argument("--distractor",
                         type=none_or_str,
-                        default="b05_lobster",
+                        default="b04_red_grapes",
                         help="comma-separated list of distractor object names")
 
     ## Object positions
@@ -251,6 +254,7 @@ class RelationArrangement(Playroom):
 
     def __init__(self, port=1071,
                  relation=list(Relation),
+                 single_object=False,
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
@@ -272,6 +276,7 @@ class RelationArrangement(Playroom):
         ## relation types
         self.set_relation_types(relation)
         print("relation types", [r.name for r in self._relation_types])
+        self.single_object = single_object
 
         ## how much larger target can be than the container
         self.max_target_scale_ratio = max_target_scale_ratio
@@ -681,6 +686,22 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def _remove_container_and_distractor(self) -> List[dict]:
+
+        commands = [
+            {"$type": self._get_destroy_object_command_name(self.container_id),
+             "id": int(self.container_id)},
+            {"$type": self._get_destroy_object_command_name(self.distractor_id),
+             "id": int(self.distractor_id)},            
+        ]
+
+        if self.zone_id in self.object_ids:
+            self.object_ids = [self.zone_id, self.target_id]
+        else:
+            self.object_ids = [self.target_id]
+
+        return commands
+
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
@@ -710,6 +731,10 @@ class RelationArrangement(Playroom):
         ## place distractor (depends on camera position)
         commands.extend(self._place_distractor())
 
+        ## if it's a single object trial, remove the other objects
+        if self.single_object:
+            commands.extend(self._remove_container_and_distractor())
+
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -735,6 +760,7 @@ if __name__ == '__main__':
     RC = RelationArrangement(
         ## relation
         relation=args.relation,
+        single_object=args.single_object,
 
         ## objects
         container=args.container,
