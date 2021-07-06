@@ -79,7 +79,7 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=none_or_int,
                         default=1,
                         help="Whether to use training data or testing data")
-    
+
     ## Object types
     parser.add_argument("--container",
                         type=none_or_str,
@@ -242,7 +242,7 @@ def target_not_touching_ground(d, frame_num=-1):
     target_on_ground = target_id in enco
     target_on_container = ([target_id, container_id] in coll) or ([container_id, target_id] in coll)
     return bool((not target_on_ground))
-    
+
 
 ## controller
 class RelationArrangement(Playroom):
@@ -303,13 +303,17 @@ class RelationArrangement(Playroom):
         ## when to stop trial
         self.flow_thresh = 5.0
         self.min_frames = 90
+        self.max_frames = 300
 
         print("sampling containers from", [(r.name, r.wcategory) for r in self._container_types], len(self._container_types))
         print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
         print("sampling distractors from", [(r.name, r.wcategory) for r in self._distractor_types], len(self._distractor_types))
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return ((frame > self.min_frames) and (self._max_optical_flow(resp) < self.flow_thresh))
+        if frame >= self.max_frames:
+            return True
+        else:
+            return ((frame > self.min_frames) and (self._max_optical_flow(resp) < self.flow_thresh))
 
     def _write_frame_labels(self, frame_grp, resp, frame_num, sleeping):
         return RigidbodiesDataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
