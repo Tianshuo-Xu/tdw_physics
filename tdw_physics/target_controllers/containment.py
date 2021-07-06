@@ -604,6 +604,14 @@ if __name__ == "__main__":
 
     args = get_containment_args("containment")
 
+    import platform
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+
+
     CC = Containment(
         port=args.port,
         # contained
@@ -684,7 +692,8 @@ if __name__ == "__main__":
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
         flex_only=args.only_use_flex_objects,
-        no_moving_distractors=args.no_moving_distractors
+        no_moving_distractors=args.no_moving_distractors,
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
