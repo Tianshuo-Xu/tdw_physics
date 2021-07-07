@@ -8,6 +8,7 @@ from pathlib import Path
 import argparse
 from labels import get_pass_mask
 from PIL import Image
+from tqdm import tqdm
 
 default_ffmpeg_args = [
     '-vcodec', 'libx264',
@@ -112,30 +113,50 @@ def pngs_from_hdf5(filepath, pass_mask="_img"):
 
     return pngdir
 
-def main(stimulus_dir: str, file_pattern: str = "*.hdf5", pass_mask="_img", size=[256,256]):
+def main(stimulus_dir: str,
+         file_pattern: str = "*.hdf5",         
+         save_dir: str = None,
+         add_prefix=False,
+         pass_mask="_img",
+         size=[256,256]):
 
     filepaths = glob.glob(os.path.join(stimulus_dir, file_pattern))
     print("files", filepaths)
-    for fpath in filepaths:
+
+    if save_dir is not None:
+        save_dir = Path(save_dir)
+        if not save_dir.exists():
+            save_dir.mkdir(parents=True)
+            
+    for fpath in tqdm(filepaths):
         mp4name = fpath.split('.')[0] + pass_mask + ".mp4"
         pngdir = pngs_from_hdf5(fpath, pass_mask=pass_mask)
         pngs_to_mp4(filename=mp4name,
                     image_stem=pass_mask[1:] + "_",
                     png_dir=pngdir,
-                    use_parent_dir=False,
+                    use_parent_dir=add_prefix,
                     size=size,
                     remove_pngs=True,
                     rename_movies=False)
         rm = subprocess.run('rm -rf ' + str(pngdir), shell=True)
 
+        if save_dir is not None:
+            save_nm = Path(save_dir).joinpath(Path(mp4name).name)
+            mv = subprocess.run('mv ' + mp4name + ' ' + str(save_nm), shell=True)
+            
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=str, help="The directory of HDF5s to create MP4s from")
+    parser.add_argument("--save_dir", type=str, default=None, help="The directory where to save resulting MP4s")
     parser.add_argument("--files", type=str, default="*.hdf5", help="The pattern of files to rename")
     parser.add_argument("--add_prefix", action="store_true", help="Add the name of the dir as prefix to MP4s")
     parser.add_argument("--height", type=int, default=256, help="Height of movies in pixels")
     parser.add_argument("--width", type=int, default=256, help="Width of movies in pixels")    
                     
     args = parser.parse_args()
-    main(args.dir, args.files, size=[args.height, args.width])
+    main(stimulus_dir=args.dir,
+         file_pattern=args.files,
+         save_dir=args.save_dir,
+         add_prefix=args.add_prefix,
+         size=[args.height, args.width])
