@@ -7,6 +7,7 @@ from typing import List, Dict, Tuple
 from pathlib import Path
 import argparse
 from labels import get_pass_mask
+from PIL import Image
 
 default_ffmpeg_args = [
     '-vcodec', 'libx264',
@@ -99,24 +100,33 @@ def pngs_from_hdf5(filepath, pass_mask="_img"):
 
     ## read the HDF5 and save out pngs one by one
     fh = h5py.File(str(filepath), 'r')
-    num_pngs = len(list(fh['frames'].keys()))
+    frames = sorted(list(fh['frames'].keys()))
+    num_pngs = len(frames)
     for n in range(num_pngs):
-        img = get_pass_mask(fh, frame_num=n, img_key=pass_mask)
         pngname = pass_mask[1:] + ("_%04d.png" % n)
         png = pngdir.joinpath(pngname)
-        with open(png, "wb") as p:
-            p.write(img)
+        with open(png, 'wb') as p:
+            p.write(fh['frames'][frames[n]]['images'][pass_mask][:])
 
     fh.close()
 
-    return
+    return pngdir
 
-def main(stimulus_dir: str, file_pattern: str = "*.hdf5", pass_mask="_img"):
+def main(stimulus_dir: str, file_pattern: str = "*.hdf5", pass_mask="_img", size=[256,256]):
 
     filepaths = glob.glob(os.path.join(stimulus_dir, file_pattern))
     print("files", filepaths)
     for fpath in filepaths:
-        pngs_from_hdf5(fpath, pass_mask=pass_mask)
+        mp4name = fpath.split('.')[0] + pass_mask + ".mp4"
+        pngdir = pngs_from_hdf5(fpath, pass_mask=pass_mask)
+        pngs_to_mp4(filename=mp4name,
+                    image_stem=pass_mask[1:] + "_",
+                    png_dir=pngdir,
+                    use_parent_dir=False,
+                    size=size,
+                    remove_pngs=True,
+                    rename_movies=False)
+        rm = subprocess.run('rm -rf ' + str(pngdir), shell=True)
 
 if __name__ == "__main__":
 
@@ -124,5 +134,8 @@ if __name__ == "__main__":
     parser.add_argument("--dir", type=str, help="The directory of HDF5s to create MP4s from")
     parser.add_argument("--files", type=str, default="*.hdf5", help="The pattern of files to rename")
     parser.add_argument("--add_prefix", action="store_true", help="Add the name of the dir as prefix to MP4s")
+    parser.add_argument("--height", type=int, default=256, help="Height of movies in pixels")
+    parser.add_argument("--width", type=int, default=256, help="Width of movies in pixels")    
+                    
     args = parser.parse_args()
-    main(args.dir, args.files)
+    main(args.dir, args.files, size=[args.height, args.width])
