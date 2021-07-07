@@ -445,28 +445,30 @@ class Dataset(Controller, ABC):
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
         # Save out the target/zone segmentation mask
-        _id = f['frames']['0000']['images']['_id']
-        #get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        #get colors
-        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        #get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        #as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        #save image
-        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+        if (self.zone_id in self.object_ids) and (self.target_id in self.object_ids):
+            
+            _id = f['frames']['0000']['images']['_id']
+            #get PIL image
+            _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+            #get colors
+            zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+            #get individual maps
+            zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+            target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+            #colorize
+            zone_map = zone_map * ZONE_COLOR
+            target_map = target_map * TARGET_COLOR
+            joint_map = zone_map + target_map
+            # add alpha
+            alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+            joint_map = np.dstack((joint_map, alpha))
+            #as image
+            map_img = Image.fromarray(np.uint8(joint_map))
+            #save image
+            map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()
@@ -711,6 +713,11 @@ class Dataset(Controller, ABC):
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
+
+        if len(self.object_ids) == 0:
+            self.object_segmentation_colors = []
+            return
+        
         for r in resp:
             if OutputData.get_data_type_id(r) == 'segm':
                 seg = SegmentationColors(r)

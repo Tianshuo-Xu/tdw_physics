@@ -68,6 +68,9 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--single_object",
                         action="store_true",
                         help="Generate scenes with a target object only")
+    parser.add_argument("--no_object",
+                        action="store_true",
+                        help="Generate scenes with a target object only")    
 
     ## scenarios
     parser.add_argument("--start",
@@ -255,6 +258,7 @@ class RelationArrangement(Playroom):
     def __init__(self, port=1071,
                  relation=list(Relation),
                  single_object=False,
+                 no_object=False,
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
@@ -277,6 +281,7 @@ class RelationArrangement(Playroom):
         self.set_relation_types(relation)
         print("relation types", [r.name for r in self._relation_types])
         self.single_object = single_object
+        self.no_object = no_object
 
         ## how much larger target can be than the container
         self.max_target_scale_ratio = max_target_scale_ratio
@@ -702,6 +707,20 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def _remove_target(self) -> List[dict]:
+
+        commands = [
+            {"$type": self._get_destroy_object_command_name(self.target_id),
+             "id": int(self.target_id)},
+        ]
+
+        if self.zone_id in self.object_ids:
+            self.object_ids = [self.zone_id]
+        else:
+            self.object_ids = []
+
+        return commands
+
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
@@ -732,8 +751,11 @@ class RelationArrangement(Playroom):
         commands.extend(self._place_distractor())
 
         ## if it's a single object trial, remove the other objects
-        if self.single_object:
+        if self.single_object or self.no_object:
             commands.extend(self._remove_container_and_distractor())
+
+        if self.no_object:
+            commands.extend(self._remove_target())
 
         return commands
 
@@ -761,6 +783,7 @@ if __name__ == '__main__':
         ## relation
         relation=args.relation,
         single_object=args.single_object,
+        no_object=args.no_object,
 
         ## objects
         container=args.container,
