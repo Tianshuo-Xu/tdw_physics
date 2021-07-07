@@ -1,9 +1,12 @@
 import os, sys, copy, glob
+import h5py
+import numpy as np
 from subprocess import PIPE, STDOUT, DEVNULL
 import subprocess
 from typing import List, Dict, Tuple
 from pathlib import Path
 import argparse
+from labels import get_pass_mask
 
 default_ffmpeg_args = [
     '-vcodec', 'libx264',
@@ -79,16 +82,47 @@ def rename_mp4s(
             newname = stimulus_dir.name + '_' + path.split('/')[-1]
         newpath = stimulus_dir.joinpath(newname)
         mv = ["mv", path, str(newpath)]
-        subprocess.run(' '.join(mv), shell=True) 
+        subprocess.run(' '.join(mv), shell=True)
+
+def pngs_from_hdf5(filepath, pass_mask="_img"):
+    """
+    Create a directory of pngs from an hdf5 file.
+    """
+
+    ## create a png dir
+    filepath = Path(filepath)
+    stem = filepath.name.split('.')[0]
+    parentdir = filepath.parent
+    pngdir = parentdir.joinpath("%s_pngs" % stem)
+    if not pngdir.exists():
+        pngdir.mkdir(parents=True)
+
+    ## read the HDF5 and save out pngs one by one
+    fh = h5py.File(str(filepath), 'r')
+    num_pngs = len(list(fh['frames'].keys()))
+    for n in range(num_pngs):
+        img = get_pass_mask(fh, frame_num=n, img_key=pass_mask)
+        pngname = pass_mask[1:] + ("_%04d.png" % n)
+        png = pngdir.joinpath(pngname)
+        with open(png, "wb") as p:
+            p.write(img)
+
+    fh.close()
+
+    return
+
+def main(stimulus_dir: str, file_pattern: str = "*.hdf5", pass_mask="_img"):
+
+    filepaths = glob.glob(os.path.join(stimulus_dir, file_pattern))
+    print("files", filepaths)
+    for fpath in filepaths:
+        pngs_from_hdf5(fpath, pass_mask=pass_mask)
 
 if __name__ == "__main__":
 
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=str, help="The directory of mp4s to rename")
-    parser.add_argument("--files", type=str, default="*_img.mp4", help="The pattern of files to rename")
-    parser.add_argument("--remove_prefix", action="store_true", help="remove the name of the dir as prefix")
+    parser.add_argument("--dir", type=str, help="The directory of HDF5s to create MP4s from")
+    parser.add_argument("--files", type=str, default="*.hdf5", help="The pattern of files to rename")
+    parser.add_argument("--add_prefix", action="store_true", help="Add the name of the dir as prefix to MP4s")
     args = parser.parse_args()
-    
-    rename_mp4s(stimulus_dir=args.dir, remove_dir_prefix=args.remove_prefix, file_pattern=args.files)
-
+    main(args.dir, args.files)
