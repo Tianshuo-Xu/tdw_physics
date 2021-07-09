@@ -37,7 +37,6 @@ These arguments are common for every controller.
 
 | Controller Class        | Description                                                  | Script                                                       | Subclassed From                 |
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------- |
-
 | Dominoes | Probe and target objects are placed at either end of a "collision axis." A target zone is placed near the target. Optional occluder and distractor objects are placed alongside the collision axis. The probe is pushed toward the target. | `dominoes.py` | `RigidBodiesDataset` |
 | MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `MultiDominoes` |
 | Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
