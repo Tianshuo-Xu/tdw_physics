@@ -22,7 +22,7 @@ from tdw_physics.util import (MODEL_LIBRARIES,
                               none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes
-from tdw_physics.target_controllers.towers import Tower, get_tower_args
+from tdw_physics.target_controllers.support import Tower, get_tower_args
 from tdw_physics.postprocessing.labels import is_trial_valid
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
