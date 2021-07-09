@@ -35,17 +35,17 @@ These arguments are common for every controller.
 
 ## Controllers
 
-| Controller Class        | Description                                                  | Script                                                       | Subclassed From                 |
+| Physion Scenario Name | Controller Class       | Description                                                  | Script                                                       | Subclassed From                 |
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------- |
-| Dominoes | Probe and target objects are placed at either end of a "collision axis." A target zone is placed near the target. Optional occluder and distractor objects are placed alongside the collision axis. The probe is pushed toward the target. | `dominoes.py` | `RigidBodiesDataset` |
-| MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `MultiDominoes` |
-| Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
-| Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Tower` |
-| Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `MultiDominoes` |
-| Collision  | A probe object is pushed or flung at various velocities toward a target object. | `collision.py` | `Dominoes` |
-| Containment  | A target object and several "distractors" are dropped in the vicinity of a container-like object (e.g. a bowl.) | `containment.py` | `Tower` |
-| RollingSliding  | One object rolls or slides down a ramp toward a target object, optionally with an "obstacle" in the way | `rolling_sliding.py` | `MultiDominoes` |
-| ClothSagging  | A cloth is draped across several other objects, including a "zone" object. | `cloth_sagging.py` | `FlexDominoes` |
+| All | Dominoes | Probe and target objects are placed at either end of a "collision axis." A target zone is placed near the target. Optional occluder and distractor objects are placed alongside the collision axis. The probe is pushed toward the target. | `dominoes.py` | `RigidBodiesDataset` |
+| Dominoes | MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `MultiDominoes` |
+| Support | Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
+| Link | Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Tower` |
+| Drop | Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `MultiDominoes` |
+| Collide | Collision  | A probe object is pushed or flung at various velocities toward a target object. | `collision.py` | `Dominoes` |
+| Contain | Containment  | A target object and several "distractors" are dropped in the vicinity of a container-like object (e.g. a bowl.) | `containment.py` | `Tower` |
+| Roll | RollingSliding  | One object rolls or slides down a ramp toward a target object, optionally with an "obstacle" in the way | `rolling_sliding.py` | `MultiDominoes` |
+| Drape | ClothSagging  | A cloth is draped across several other objects, including a "zone" object. | `cloth_sagging.py` | `FlexDominoes` |
 
 ## Use Cases
 
