@@ -99,7 +99,7 @@ def get_flex_args(dataset_dir: str, parse=True):
 
 class ClothSagging(Dominoes, FlexDataset):
 
-    FLEX_RECORDS = ModelLibrarian(str(Path("flex.json").resolve())).records
+    FLEX_RECORDS = ModelLibrarian(os.path.join(os.path.dirname(__file__), 'flex.json')).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
     SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
     RECEPTACLE_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("fluid_receptacle1x1")
