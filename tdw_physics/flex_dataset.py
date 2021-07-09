@@ -178,6 +178,7 @@ class FlexDataset(TransformsDataset, ABC):
         # Cache the static data.
         self._solid_actors.append(_SolidActor(o_id=o_id, mass_scale=mass_scale, mesh_expansion=mesh_expansion,
                                               particle_spacing=particle_spacing))
+        
         return [add_object,
                 {"$type": "scale_object",
                  "scale_factor": scale,
@@ -200,7 +201,7 @@ class FlexDataset(TransformsDataset, ABC):
                         scale: Dict[str, float] = None, volume_sampling: float = 2, surface_sampling: float = 0,
                         cluster_spacing: float = 0.2, cluster_radius: float = 0.2, cluster_stiffness: float = 0.2,
                         link_radius: float = 0.1, link_stiffness: float = 0.5, particle_spacing: float = 0.02,
-                        mass_scale: float = 1, o_id: Optional[int] = None) -> List[dict]:
+                        mass_scale: float = 1, draw_particles=False, o_id: Optional[int] = None) -> List[dict]:
         """
         Add a Flex Soft Actor object and cache static data. See Command API for more Flex parameter info.
 
@@ -253,7 +254,8 @@ class FlexDataset(TransformsDataset, ABC):
                  "link_radius": link_radius,
                  "link_stiffness": link_stiffness,
                  "particle_spacing": particle_spacing,
-                 "mass_scale": mass_scale},
+                 "mass_scale": mass_scale,
+                 "draw_particles": draw_particles},
                 {"$type": "assign_flex_container",
                  "container_id": 0,
                  "id": o_id}]
@@ -261,7 +263,7 @@ class FlexDataset(TransformsDataset, ABC):
     def add_cloth_object(self, record: ModelRecord, position: Dict[str, float], rotation: Dict[str, float],
                          scale: Dict[str, float] = None, mesh_tesselation: int = 1, stretch_stiffness: float = 0.1,
                          bend_stiffness: float = 0.1, tether_stiffness: float = 0, tether_give: float = 0,
-                         pressure: float = 0, mass_scale: float = 1, o_id: Optional[int] = None) -> List[dict]:
+                         pressure: float = 0, mass_scale: float = 1, draw_particles=False, o_id: Optional[int] = None) -> List[dict]:
         """
         Add a Flex Cloth Actor object and cache static data. See Command API for more Flex parameter info.
 
@@ -309,7 +311,8 @@ class FlexDataset(TransformsDataset, ABC):
                  "tether_stiffness": tether_stiffness,
                  "tether_give": tether_give,
                  "pressure": pressure,
-                 "mass_scale": mass_scale},
+                 "mass_scale": mass_scale,
+                 "draw_particles": draw_particles},
                 {"$type": "assign_flex_container",
                  "container_id": 0,
                  "id": o_id}

@@ -299,6 +299,9 @@ def get_args(dataset_dir: str, parse=True):
 
         # testing set data drew from a different set of models; needs to be preserved
         # for correct occluder/distractor sampling
+        PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
+        FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
+
         if not (args.training_data_mode or args.readout_data_mode):
             PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
@@ -451,10 +454,11 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            args.write_passes = "_img,_id,_depth"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
+            args.use_test_mode_colors = False
 
         # produce "readout" training data with red target and yellow zone,
         # but seed is still different from whatever it was in the commandline_args.txt config
@@ -468,6 +472,7 @@ def get_args(dataset_dir: str, parse=True):
             args.seed = (args.seed * 3000) % 1999
 
             # target is red, zone is yellow, others are random
+            args.use_test_mode_colors = False
             args.color = args.tcolor = [1.0, 0.0, 0.0]
             args.zcolor = [1.0, 1.0, 0.0]
             args.pcolor = args.mcolor = args.rcolor = None
@@ -1094,6 +1099,7 @@ class Dominoes(RigidbodiesDataset):
     def _place_target_zone(self) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
+
         record, data = self.random_primitive(self._zone_types,
                                              scale=self.zone_scale_range,
                                              color=self.zone_color,
@@ -1982,7 +1988,6 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
-
 
     DomC = MultiDominoes(
         port=args.port,

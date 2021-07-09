@@ -56,6 +56,7 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
+        self.command_log = None
 
         super().__init__(port=port,
                          check_version=check_version,
@@ -75,8 +76,9 @@ class Dataset(Controller, ABC):
         '''
         Save a log of the commands so that they can be rerun
         '''
-        with open(str(self.command_log), "at") as f:
-            f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+        if self.command_log is not None:
+            with open(str(self.command_log), "at") as f:
+                f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
         return super().communicate(commands)
 
     def clear_static_data(self) -> None:
@@ -329,6 +331,7 @@ class Dataset(Controller, ABC):
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
+
                     for pass_mask in self.save_passes:
                         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
                         cmd, stdout, stderr = pngs_to_mp4(
@@ -339,6 +342,7 @@ class Dataset(Controller, ABC):
                             overwrite=True,
                             remove_pngs=True,
                             use_parent_dir=False)
+
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
 
