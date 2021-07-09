@@ -124,6 +124,10 @@ if __name__ == '__main__':
                                       target_name,
                                       target_segmentation_color,
                                       zone_segmentation_color,
+                                      occluder_name,
+                                      occluder_segmentation_color,
+                                      distractor_name,
+                                      distractor_segmentation_color,
                                       static_model_names
                                   ],
                                   # label_funcs=basic_labels,

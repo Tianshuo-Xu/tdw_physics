@@ -67,7 +67,7 @@ def find_collisions_frames(d, cdata='contacts', env_collisions=False):
         contacts = get_collisions(d, n, env_collisions)[cdata]
         collisions.append(bool(len(contacts)))
     return np.where(collisions)[0]
-    
+
 
 #################
 #### IMAGES #####
@@ -313,6 +313,12 @@ def target_name(d):
     target_name = model_names[_t]
     return str(target_name)
 
+def occluder_name(d):
+    return str(get_static_val(d, 'model_names')[-1])
+
+def distractor_name(d):
+    return str(get_static_val(d, 'model_names')[-2])
+
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)
     probe_id = get_static_val(d, 'probe_id')
@@ -334,6 +340,24 @@ def target_segmentation_color(d):
 
 def zone_segmentation_color(d):
     return object_segmentation_color(d, 'zone_id')
+
+def object_segmentation_color_by_ind(d, ind=0):
+    obj_ids = get_object_ids(d)
+    try:
+        _id = [i for i,o in enumerate(obj_ids)][ind]
+    except KeyError:
+        return None
+
+    seg_colors = get_static_val(d, 'object_segmentation_colors')
+    seg_color = seg_colors[_id]
+    return [int(c) for c in seg_color]
+
+def occluder_segmentation_color(d):
+    return object_segmentation_color_by_ind(d, -1)
+
+def distractor_segmentation_color(d):
+    return object_segmentation_color_by_ind(d, -2)
+
 
 def target_id(d):
     return int(get_static_val(d, 'target_id'))
