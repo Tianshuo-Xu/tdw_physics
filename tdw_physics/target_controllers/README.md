@@ -32,16 +32,21 @@ These arguments are common for every controller.
 | `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]`. These passes must also be written to HDF5 if they are to be saved as PNGs or MP4s. | 
 | `--save_movies` | `store_true` | `False` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
 | `--save_labels` | `store_true` | `False` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
+| `--save_meshes` | `store_true` | `False` | Meshes for each of the objects in the scene will be saved in the HDF5s. |
 
 ## Controllers
 
-| Scenario        | Description                                                  | Script                                                       | Subclassed From                 |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------- |
-| Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `RigidBodiesDataset` |
-| MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `RigidBodiesDataset` |
-| Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
-| Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Tower` |
-| Gravity | Two ramps face each other. A ball pushed down one will roll up the other and be launched as a projectile or roll back to the middle. | `gravity.py` | `Dominoes` |
+| Physion Scenario Name | Controller Class       | Description                                                  | Script                                                       | Subclassed From                 |
+| ------------ | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | -------------------- |
+| All | Dominoes | Probe and target objects are placed at either end of a "collision axis." A target zone is placed near the target. Optional occluder and distractor objects are placed alongside the collision axis. The probe is pushed toward the target. | `dominoes.py` | `RigidBodiesDataset` |
+| Dominoes | MultiDominoes | `M` dominoes are placed approximately in line with variable spacing. A probe domino is pushed into the first. | `dominoes.py` | `MultiDominoes` |
+| Support | Tower | A tower is built out of primitive objects and optionally a "cap" target object is placed on top. A ball rolls (optionally down a ramp) into the tower. | `towers.py` | `MultiDominoes` |
+| Link | Linking | A stack of links are put around an (optional) attachment object (e.g. pole or cone) on top of an (optional) base object. The attachment object may be fixed to the base. A ball rolls into the setup. | `linking.py` | `Tower` |
+| Drop | Drop  | A primitive Flex object is dropped onto a target object. | `drop.py` | `MultiDominoes` |
+| Collide | Collision  | A probe object is pushed or flung at various velocities toward a target object. | `collision.py` | `Dominoes` |
+| Contain | Containment  | A target object and several "distractors" are dropped in the vicinity of a container-like object (e.g. a bowl.) | `containment.py` | `Tower` |
+| Roll | RollingSliding  | One object rolls or slides down a ramp toward a target object, optionally with an "obstacle" in the way | `rolling_sliding.py` | `MultiDominoes` |
+| Drape | ClothSagging  | A cloth is draped across several other objects, including a "zone" object. | `cloth_sagging.py` | `FlexDominoes` |
 
 ## Use Cases
 

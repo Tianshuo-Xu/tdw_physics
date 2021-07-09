@@ -53,6 +53,23 @@ def avg_label(label_list):
         return None
 
 #################
+#### DYNAMIC ####
+#################
+
+def get_collisions(d, frame_num=0, env_collisions=False):
+    fkeys = [k for k in d['frames'].keys()]
+    return d['frames'][fkeys[frame_num]]['collisions' if not env_collisions else 'env_collisions']
+
+def find_collisions_frames(d, cdata='contacts', env_collisions=False):
+    n_frames = len([k for k in d['frames'].keys()])
+    collisions = []
+    for n in range(n_frames):
+        contacts = get_collisions(d, n, env_collisions)[cdata]
+        collisions.append(bool(len(contacts)))
+    return np.where(collisions)[0]
+    
+
+#################
 #### IMAGES #####
 #################
 
@@ -277,6 +294,68 @@ def final_target_mask_displacement(d):
     return [_round(c_final[0], c_init[0]),
             _round(c_final[1], c_init[1])]
 
+def model_names(d):
+    return get_static_val(d, 'model_names')
+
+def probe_name(d):
+    obj_ids = get_object_ids(d)
+    probe_id = get_static_val(d, 'probe_id')
+    _p = [i for i,o in enumerate(obj_ids) if o == probe_id][0]
+    model_names = get_static_val(d, 'model_names')
+    probe_name = model_names[_p]
+    return str(probe_name)
+
+def target_name(d):
+    obj_ids = get_object_ids(d)
+    target_id = get_static_val(d, 'target_id')
+    _t = [i for i,o in enumerate(obj_ids) if o == target_id][0]
+    model_names = get_static_val(d, 'model_names')
+    target_name = model_names[_t]
+    return str(target_name)
+
+def probe_segmentation_color(d):
+    obj_ids = get_object_ids(d)
+    probe_id = get_static_val(d, 'probe_id')
+    _p = [i for i,o in enumerate(obj_ids) if o == probe_id][0]
+    seg_colors = get_static_val(d, 'object_segmentation_colors')
+    probe_seg_color = seg_colors[_p]
+    return [int(c) for c in probe_seg_color]
+
+def object_segmentation_color(d, object_key='target_id'):
+    obj_ids = get_object_ids(d)
+    probe_id = get_static_val(d, object_key)
+    _p = [i for i,o in enumerate(obj_ids) if o == probe_id][0]
+    seg_colors = get_static_val(d, 'object_segmentation_colors')
+    probe_seg_color = seg_colors[_p]
+    return [int(c) for c in probe_seg_color]
+
+def target_segmentation_color(d):
+    return object_segmentation_color(d, 'target_id')
+
+def zone_segmentation_color(d):
+    return object_segmentation_color(d, 'zone_id')
+
+def target_id(d):
+    return int(get_static_val(d, 'target_id'))
+
+def zone_id(d):
+    return int(get_static_val(d, 'zone_id'))
+
+def probe_id(d):
+    return int(get_static_val(d, 'probe_id'))
+
+def static_model_names(d):
+    m_names = model_names(d)
+    p_name = probe_name(d)
+    non_p_names = [m for m in m_names if str(m) != str(p_name)]
+    if len(non_p_names) != (len(m_names) - 1):
+        non_p_names += [p_name] * (len(m_names) - len(non_p_names) - 1)
+    return [str(m) for m in non_p_names]
+
+def stimulus_name(d):
+    return str(get_static_val(d, 'stimulus_name'))
+
+
 ########################
 #####INFRASTRUCTURE#####
 ########################
@@ -355,11 +434,12 @@ def get_across_trial_stats_from(paths, funcs, agg_func=avg_label):
 
 if __name__ == '__main__':
 
+    pass
     # filename = '/Users/db/neuroailab/physion/stimuli/scratch/domi_22/0001.hdf5'
-    paths = glob.glob('/Users/db/neuroailab/physion/stimuli/scratch/domi_42/*.hdf5')
-    res = get_across_trial_stats_from(paths, get_all_label_funcs(), avg_label)
-    res_str = json.dumps(res, indent=4)
-    print(res_str)
+    # paths = glob.glob('/Users/db/neuroailab/physion/stimuli/scratch/domi_42/*.hdf5')
+    # res = get_across_trial_stats_from(paths, get_all_label_funcs(), avg_label)
+    # res_str = json.dumps(res, indent=4)
+    # print(res_str)
 
     # fs = [h5py.File(path, mode='r') for path in paths]
     # stats = {func.__name__: avg_label(list(map(func, fs)))

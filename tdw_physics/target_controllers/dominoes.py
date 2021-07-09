@@ -300,7 +300,9 @@ def get_args(dataset_dir: str, parse=True):
         # testing set data drew from a different set of models; needs to be preserved
         # for correct occluder/distractor sampling
         if not (args.training_data_mode or args.readout_data_mode):
+            global PRIMITIVE_NAMES
             PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+            global FULL_NAMES
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
@@ -351,24 +353,24 @@ def get_args(dataset_dir: str, parse=True):
 
         if args.zone is not None:
             zone_list = args.zone.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in zone_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.zone = zone_list
         else:
             args.zone = PRIMITIVE_NAMES
 
         if args.target is not None:
             targ_list = args.target.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in targ_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.target = targ_list
         else:
             args.target = PRIMITIVE_NAMES
 
         if args.probe is not None:
             probe_list = args.probe.split(',')
-            assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
-                "All target object names must be elements of %s" % PRIMITIVE_NAMES
+            # assert all([t in PRIMITIVE_NAMES for t in probe_list]), \
+            #     "All target object names must be elements of %s" % PRIMITIVE_NAMES
             args.probe = probe_list
         else:
             args.probe = PRIMITIVE_NAMES
@@ -455,6 +457,7 @@ def get_args(dataset_dir: str, parse=True):
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
+            args.use_test_mode_colors = False
 
         # produce "readout" training data with red target and yellow zone,
         # but seed is still different from whatever it was in the commandline_args.txt config
@@ -480,6 +483,7 @@ def get_args(dataset_dir: str, parse=True):
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
+            args.use_test_mode_colors = True
 
         # produce the same trials as the testing trials, but with red / yellow;
         # seed MUST be pulled from a config.
@@ -575,6 +579,7 @@ class Dominoes(RigidbodiesDataset):
                  flex_only=False,
                  no_moving_distractors=False,
                  match_probe_and_target_color=False,
+                 probe_horizontal=False,
                  use_test_mode_colors=False,
                  **kwargs):
 
@@ -648,6 +653,7 @@ class Dominoes(RigidbodiesDataset):
         self.probe_rotation_range = probe_rotation_range
         self.probe_mass_range = get_range(probe_mass_range)
         self.probe_material = probe_material
+        self.probe_horizontal = probe_horizontal
         self.match_probe_and_target_color = match_probe_and_target_color
 
         self.middle_scale_range = target_scale_range
@@ -693,6 +699,8 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
 
+        ## target can move
+        self._fixed_target = False
         self.use_test_mode_colors = use_test_mode_colors
 
     def get_types(self,
@@ -701,7 +709,9 @@ class Dominoes(RigidbodiesDataset):
                   categories=None,
                   flex_only=True,
                   aspect_ratio_min=None,
-                  aspect_ratio_max=None):
+                  aspect_ratio_max=None,
+                  size_min=None,
+                  size_max=None):
 
         if isinstance(objlist, str):
             objlist = [objlist]
@@ -721,6 +731,20 @@ class Dominoes(RigidbodiesDataset):
             tlist = [r for r in tlist if self.aspect_ratios(r)[0] > aspect_ratio_min]
         if aspect_ratio_max:
             tlist = [r for r in tlist if self.aspect_ratios(r)[1] < aspect_ratio_max]
+
+        if size_min or size_max:
+            if size_min is None:
+                size_min = 0.0
+            if size_max is None:
+                size_max = 1000.0
+            rlist = []
+            for r in tlist:
+                dims = self.get_record_dimensions(r)
+                dmin, dmax = [min(dims), max(dims)]
+                if (dmax > size_min) and (dmin < size_max):
+                    rlist.append(r)
+
+            tlist = [r for r in rlist]
 
         assert len(tlist), "You're trying to choose objects from an empty list"
         return tlist
@@ -879,6 +903,7 @@ class Dominoes(RigidbodiesDataset):
                 print("applied %s at time step %d" % (self.push_cmd, frame))
             return [self.push_cmd]
         else:
+            print(frame)
             return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -1141,7 +1166,32 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_target_object(self) -> List[dict]:
+    @staticmethod
+    def rescale_record_to_size(record, size_range=1.0, randomize=False):
+
+        dims = Dominoes.get_record_dimensions(record)
+        dmin, dmax = [min(dims), max(dims)]
+
+
+        scale = 1.0
+        if randomize:
+            smin = random.uniform(*get_range(size_range))
+            smax = random.uniform(smin, get_range(size_range)[1])
+        else:
+            smin, smax = get_range(size_range)
+
+        if dmax < smin:
+            scale = smin / dmax
+        elif dmax > smax:
+            scale = smax / dmax
+
+        print("%s rescaled by %.2f" % (record.name, scale))
+        print("dims", dims, "dminmax", dmin, dmax)
+        print("bounds now", [d * scale for d in dims])
+
+        return arr_to_xyz(np.array([scale] * 3))
+
+    def _place_target_object(self, size_range=None) -> List[dict]:
         """
         Place a primitive object at one end of the collision axis.
         """
@@ -1153,6 +1203,11 @@ class Dominoes(RigidbodiesDataset):
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+        if size_range is not None:
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled target", scale)
+
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
@@ -1190,7 +1245,8 @@ class Dominoes(RigidbodiesDataset):
                 bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
-                make_kinematic=False
+                make_kinematic=True if self._fixed_target else False,
+                apply_texture=True if self.target.name in PRIMITIVE_NAMES else False
             ))
 
         # If this scene won't have a target
@@ -1202,7 +1258,7 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self) -> List[dict]:
+    def _place_and_push_probe_object(self, size_range=None) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
@@ -1214,6 +1270,11 @@ class Dominoes(RigidbodiesDataset):
                                              exclude_range=0.25,
                                              add_data=False)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+        if size_range is not None:
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled probe", scale)
+
         self.probe = record
         self.probe_type = data["name"]
         self.probe_scale = scale
@@ -1226,6 +1287,10 @@ class Dominoes(RigidbodiesDataset):
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
+        if self.probe_horizontal:
+            rot["z"] = 90
+            self.probe_initial_position["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
+            self.probe_initial_position["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
@@ -1248,6 +1313,7 @@ class Dominoes(RigidbodiesDataset):
                 o_id=o_id,
                 add_data=True,
                 make_kinematic=False,
+                apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,
                 **probe_physics_info
             ))
 
@@ -1481,6 +1547,7 @@ class Dominoes(RigidbodiesDataset):
 
         a_pos = avatar_position
 
+        ## camera position and ray
         self.camera_position = a_pos
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
@@ -1489,6 +1556,12 @@ class Dominoes(RigidbodiesDataset):
         self.camera_radius = np.linalg.norm(camera_ray)
         camera_ray /= np.linalg.norm(camera_ray)
         self.camera_ray = arr_to_xyz(camera_ray)
+
+        ## unit vector that points opposite the camera
+        opposite = np.array([-self.camera_position['x'], 0., -self.camera_position['z']])
+        opposite /= np.linalg.norm(opposite)
+        opposite = arr_to_xyz(opposite)
+        self.opposite_unit_vector = opposite
 
         if self.PRINT:
             print("camera distance", self.camera_radius)
@@ -1724,9 +1797,9 @@ class Dominoes(RigidbodiesDataset):
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
+            print("distractor record", record.name)
+            print("distractor category", record.wcategory)
             if self.PRINT:
-                print("distractor record", record.name)
-                print("distractor category", record.wcategory)
                 print("distractor position", pos)
                 print("distractor scale", scale)
 
@@ -1797,9 +1870,9 @@ class Dominoes(RigidbodiesDataset):
                      "use_gravity": True}])
 
 
+            print("occluder name", record.name)
+            print("occluder category", record.wcategory)
             if self.PRINT:
-                print("occluder name", record.name)
-                print("occluder category", record.wcategory)
                 print("occluder position", pos)
                 print("occluder pose", rot)
                 print("occluder scale", scale)
