@@ -32,6 +32,7 @@ These arguments are common for every controller.
 | `--save_passes` | `str` | `""` | Which image passes to save _as PNGs or MP4s_. A comma-separated list of items from `["_img", "_id", "_depth", "_normals", "_flow"]`. These passes must also be written to HDF5 if they are to be saved as PNGs or MP4s. | 
 | `--save_movies` | `store_true` | `False` | Saved passes will be convered from PNGs to MP4s and the PNGs will be deleted after generation. |
 | `--save_labels` | `store_true` | `False` | The script will create `metadata.json` and `trial_stats.json` files containing label information about each stimulus and the whole group, respectively. |
+| `--save_meshes` | `store_true` | `False` | Meshes for each of the objects in the scene will be saved in the HDF5s. |
 
 ## Controllers
 
