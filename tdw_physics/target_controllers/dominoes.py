@@ -300,7 +300,9 @@ def get_args(dataset_dir: str, parse=True):
         # testing set data drew from a different set of models; needs to be preserved
         # for correct occluder/distractor sampling
         if not (args.training_data_mode or args.readout_data_mode):
+            global PRIMITIVE_NAMES
             PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
+            global FULL_NAMES
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
@@ -455,6 +457,7 @@ def get_args(dataset_dir: str, parse=True):
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
+            args.use_test_mode_colors = False
 
         # produce "readout" training data with red target and yellow zone,
         # but seed is still different from whatever it was in the commandline_args.txt config
@@ -480,6 +483,7 @@ def get_args(dataset_dir: str, parse=True):
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
+            args.use_test_mode_colors = True
 
         # produce the same trials as the testing trials, but with red / yellow;
         # seed MUST be pulled from a config.

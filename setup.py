@@ -26,7 +26,8 @@ setup(
                       'h5py',
                       'pillow',
                       'weighted-collection',
-                      'tdw',
                       'stopit',
+                      'matplotlib',
+                      'tdw==1.8.14',
                       'trimesh'],
 )

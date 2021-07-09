@@ -22,7 +22,7 @@ from tdw_physics.util import (MODEL_LIBRARIES,
                               none_or_str, none_or_int, int_or_bool)
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes
-from tdw_physics.target_controllers.towers import Tower, get_tower_args
+from tdw_physics.target_controllers.support import Tower, get_tower_args
 from tdw_physics.postprocessing.labels import is_trial_valid
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
@@ -31,37 +31,35 @@ MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
 
-
 '''
-The containment controller generats stims in which the target object is
-    potentially contained inside a base object. A probe object is launched at the base
+The linking controller generats stims in which the target object is
+    linked to, or partially contained within a base object. A probe object is launched at the base
     and *may* displace the target from the base
-This controller pulls heavily from linking and tower controllers
-    renaming all of the features is still a WIP, so ignore some legacy naming conventions
+This controller pulls heavily from dominoes and tower controllers
 The logic is much the same, but with slightly different params
 Key (different) params;
-    "Container" is the base containing object
-    "middle" type of objects bing contained
+    "attachment" is the linking object (what is being linked to)
+    "middle" type of objects bing linked
 '''
 
 '''
 Arguments:
-  Contained objects
-    --middle: 'sphere', 'cube'
-    --mscale: "0.1,0.1,0.1", "0.3,0.3,0.3", "0.5,0.5,0.5"
-    --num_middle_range: "[1,6]"
-    --spacing_jitter: 0.5,1,1.5
-  Contained Container
-    --attachment: None, "bowl", "torus"
+  Linked objects
+    --middle: 'torus'
+    --mscale: "0.5,0.5,0.5", "0.7,0.7,0.7"
+    --num_middle_range: "[1,4]"
+    --spacing_jitter: 0.0,0.1
+  linking Container
+    --attachment: cylinder, "triangular_prism"
     --ascale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9"
   Base Container
-    --base: "bowl", "torus"
-    --bscale: "0.5,0.5,0.5", "0.7,0.7,0.7", "0.9,0.9,0.9", "1.1,1.1,1.1"
+    --base: None,"cylinder"
+    --bscale: "0.5", "0.9"
   Probe
     --fscale: "5.0", "7.0", "9.0"
 '''
 
-def get_containment_args(dataset_dir: str, parse=True):
+def get_linking_args(dataset_dir: str, parse=True):
     """
     Combine Tower-specific args with general Dominoes args
     """
@@ -71,38 +69,37 @@ def get_containment_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--middle",
                         type=none_or_str,
-                        default='sphere',
-                        help="Which type of object to use as the contained objects")
+                        default='torus',
+                        help="Which type of object to use as the links")
     parser.add_argument("--mscale",
                         type=none_or_str,
-                        default="0.4,0.4,0.4",
-                        help="The xyz scale ranges for each contained object")
+                        default="0.5,0.5,0.5",
+                        help="The xyz scale ranges for each link object")
     parser.add_argument("--mmass",
                         type=none_or_str,
                         default="2.0",
-                        help="The mass range of each contained object")
+                        help="The mass range of each link object")
     parser.add_argument("--num_middle_range",
                         type=str,
-                        default="[1,4]",
-                        help="How many contained objects to use")
+                        default="[1,6]",
+                        help="How many links to use")
     parser.add_argument("--spacing_jitter",
                         type=float,
-                        default=0,
+                        default=0.0,
                         help="jitter in how to space middle objects, as a fraction of uniform spacing")
 
-    parser.add_argument("--target_contained_range",
+    parser.add_argument("--target_link_range",
                         type=none_or_str,
                         default=None,
-                        help="Which contained object to use as the target object. None is random, -1 is no target")
+                        help="Which link to use as the target object. None is random, -1 is no target")
 
-#For "attachment" or dual containment
     parser.add_argument("--attachment",
                         type=none_or_str,
-                        default='bowl',
+                        default="cylinder",
                         help="Which type of object to use as the attachment")
     parser.add_argument("--ascale",
                         type=none_or_str,
-                        default="0.6,0.6,0.6",
+                        default="0.2,2.0,0.2",
                         help="Scale range (xyz) for attachment object")
     parser.add_argument("--amass",
                         type=none_or_str,
@@ -123,18 +120,18 @@ def get_containment_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Whether the attachment object will have a fixed cap like the base")
 
-# base (container)
+    # base
     parser.add_argument("--base",
                         type=none_or_str,
-                        default='bowl',
+                        default="cylinder",
                         help="Which type of object to use as the base")
     parser.add_argument("--bscale",
                         type=none_or_str,
-                        default="[0.5,1]",
+                        default="0.5",
                         help="Scale range (xyz) for base object")
     parser.add_argument("--bmass",
                         type=none_or_str,
-                        default="[2.0,3.0]",
+                        default="[3.0,3.0]",
                         help="Mass range for base object")
     parser.add_argument("--bcolor",
                         type=none_or_str,
@@ -150,10 +147,10 @@ def get_containment_args(dataset_dir: str, parse=True):
                         type=int_or_bool,
                         default=0,
                         help="Whether to place the probe object on the top of a ramp")
-    parser.add_argument("--fscale",
-                        type=str,
-                        default="[5.0,10.0]",
-                        help="range of scales to apply to push force")
+    parser.add_argument("--rheight",
+                        type=none_or_str,
+                        default=0.5,
+                        help="Height of the ramp base")
 
     # dominoes
     parser.add_argument("--collision_axis_length",
@@ -163,8 +160,8 @@ def get_containment_args(dataset_dir: str, parse=True):
 
     # camera
     parser.add_argument("--camera_distance",
-                        type=none_or_str,
-                        default="3.0",
+                        type=float,
+                        default=3.0,
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -194,11 +191,14 @@ def get_containment_args(dataset_dir: str, parse=True):
         # parent postprocess
         args = tower_postproc(args)
 
+        # ramp
+        args.rheight = handle_random_transform_args(args.rheight)
+
         # num links
         args.num_middle_range = handle_random_transform_args(args.num_middle_range)
 
         # target
-        args.target_contained_range = handle_random_transform_args(args.target_contained_range)
+        args.target_link_range = handle_random_transform_args(args.target_link_range)
 
         # attachment
         args.ascale = handle_random_transform_args(args.ascale)
@@ -226,7 +226,7 @@ def get_containment_args(dataset_dir: str, parse=True):
 
     return args
 
-class Containment(Tower):
+class Linking(Tower):
 
     STANDARD_BLOCK_SCALE = {"x": 0.5, "y": 0.5, "z": 0.5}
     STANDARD_MASS_FACTOR = 0.25
@@ -234,17 +234,17 @@ class Containment(Tower):
     def __init__(self,
                  port: int = None,
 
-                 # base container
+                 # stand base
                  use_base=False,
-                 base_object='bowl',
+                 base_object='cube',
                  base_scale_range=0.5,
                  base_mass_range=3.0,
                  base_color=[0.8,0.8,0.8],
                  base_material=None,
 
-                 # A Contained container (e.g. bowl stacked on base bowl)
-                 use_attachment=False,
-                 attachment_object='bowl',
+                 # what object the links attach to
+                 use_attachment=True,
+                 attachment_object='cylinder',
                  attachment_scale_range={'x': 0.2, 'y': 2.0, 'z': 0.2},
                  attachment_mass_range=3.0,
                  attachment_fixed_to_base=False,
@@ -252,17 +252,17 @@ class Containment(Tower):
                  attachment_material=None,
                  use_cap=False,
 
-                 # what the contained objects are
-                 contained_objects='sphere',
-                 contained_scale_range=0.5,
-                 contained_scale_gradient=0.0,
-                 contained_rotation_range=[0,0],
+                 # what the links are, how many, and which is the target
+                 link_objects='torus',
+                 link_scale_range=0.5,
+                 link_scale_gradient=0.0,
+                 link_rotation_range=[0,0],
                  link_mass_range=2.0,
-                 num_contained_range=[1,6],
-                 target_contained_range=None,
+                 num_link_range=[1,6],
+                 target_link_range=None,
 
                  # generic
-                 use_ramp=False,
+                 use_ramp=True,
                  **kwargs):
 
         super().__init__(port=port, tower_cap=[], **kwargs)
@@ -274,9 +274,7 @@ class Containment(Tower):
 
         # base
         self.use_base = use_base
-        self._base_types = self.get_types(
-            base_object, libraries=MODEL_LIBRARIES.keys(), flex_only=self.flex_only) \
-            if self.use_base else self._target_types
+        self._base_types = self.get_types(base_object) if self.use_base else self._target_types
         self.base_scale_range = base_scale_range
         self.base_mass_range = base_mass_range
         self.base_color = base_color
@@ -284,9 +282,7 @@ class Containment(Tower):
 
         # attachment
         self.use_attachment = use_attachment
-        self._attachment_types = self.get_types(
-            attachment_object, libraries=MODEL_LIBRARIES.keys(), flex_only=self.flex_only) \
-            if self.use_attachment else self._target_types
+        self._attachment_types = self.get_types(attachment_object) if self.use_attachment else self._target_types
         self.attachment_scale_range = attachment_scale_range
         self.attachment_color = attachment_color or self.middle_color
         self.attachment_mass_range = attachment_mass_range
@@ -297,13 +293,13 @@ class Containment(Tower):
         self.attachment_fixed_to_base = attachment_fixed_to_base
 
         # links are the middle objects
-        self.set_middle_types(contained_objects)
-        self.num_contained_range = num_contained_range
-        self.middle_scale_range = contained_scale_range
+        self.set_middle_types(link_objects)
+        self.num_link_range = num_link_range
+        self.middle_scale_range = link_scale_range
         self.middle_mass_range = link_mass_range
-        self.middle_rotation_range = contained_rotation_range
-        self.middle_scale_gradient = contained_scale_gradient
-        self.target_contained_range = target_contained_range
+        self.middle_rotation_range = link_rotation_range
+        self.middle_scale_gradient = link_scale_gradient
+        self.target_link_range = target_link_range
 
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
@@ -324,12 +320,13 @@ class Containment(Tower):
         static_group.create_dataset("use_attachment", data=self.use_attachment)
         static_group.create_dataset("link_type", data=self.middle_type)
         static_group.create_dataset("num_links", data=self.num_links)
+        static_group.create_dataset("num_middle_objects", data=self.num_links)
         static_group.create_dataset("target_link_idx", data=self.target_link_idx)
         static_group.create_dataset("attachment_fixed", data=self.attachment_fixed_to_base)
         static_group.create_dataset("use_cap", data=self.use_cap)
 
     @staticmethod
-    def get_controller_label_funcs(classname = "Containment"):
+    def get_controller_label_funcs(classname = "Linking"):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
@@ -543,7 +540,7 @@ class Containment(Tower):
         commands = []
 
         # select how many links
-        self.num_links = self.num_blocks = random.choice(range(*self.num_contained_range))
+        self.num_links = self.num_blocks = random.choice(range(*self.num_link_range))
 
         # build a "tower" out of the links
         commands.extend(self._build_stack())
@@ -557,13 +554,13 @@ class Containment(Tower):
 
         commands = []
 
-        if self.target_contained_range is None:
+        if self.target_link_range is None:
             self.target_link_idx = random.choice(range(self.num_links))
-        elif hasattr(self.target_contained_range, '__len__'):
-            self.target_link_idx = int(random.choice(range(*get_range(self.target_contained_range))))
+        elif hasattr(self.target_link_range, '__len__'):
+            self.target_link_idx = int(random.choice(range(*get_range(self.target_link_range))))
             self.target_link_idx = min(self.target_link_idx, self.num_links - 1)
-        elif isinstance(self.target_contained_range, (int, float)):
-            self.target_link_idx = int(self.target_contained_range)
+        elif isinstance(self.target_link_range, (int, float)):
+            self.target_link_idx = int(self.target_link_range)
         else:
             return []
 
@@ -602,7 +599,7 @@ class Containment(Tower):
 
 if __name__ == "__main__":
 
-    args = get_containment_args("containment")
+    args = get_linking_args("linking")
 
     import platform
     if platform.system() == 'Linux':
@@ -612,16 +609,15 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0"
 
 
-    CC = Containment(
-        port=args.port,
-        # contained
-        contained_objects=args.middle,
-        contained_scale_range=args.mscale,
-        contained_scale_gradient=args.mgrad,
-        contained_rotation_range=args.mrot,
+    LC = Linking(
+        # links
+        link_objects=args.middle,
+        link_scale_range=args.mscale,
+        link_scale_gradient=args.mgrad,
+        link_rotation_range=args.mrot,
         link_mass_range=args.mmass,
-        num_contained_range=args.num_middle_range,
-        target_contained_range=args.target_contained_range,
+        num_link_range=args.num_middle_range,
+        target_link_range=args.target_link_range,
         spacing_jitter=args.spacing_jitter,
 
         # base
@@ -691,13 +687,14 @@ if __name__ == "__main__":
         remove_middle=args.remove_middle,
         use_ramp=bool(args.ramp),
         ramp_color=args.rcolor,
+        ramp_base_height_range=args.rheight,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
-        CC.run(num=args.num,
+        LC.run(num=args.num,
                output_dir=args.dir,
                temp_path=args.temp,
                width=args.width,
@@ -710,4 +707,4 @@ if __name__ == "__main__":
                args_dict=vars(args)
         )
     else:
-        CC.communicate({"$type": "terminate"})
+        LC.communicate({"$type": "terminate"})

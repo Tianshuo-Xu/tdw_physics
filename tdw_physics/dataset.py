@@ -231,9 +231,9 @@ class Dataset(Controller, ABC):
         print("save movies", self.save_movies)
         print("save meshes", self.save_meshes)
 
-        if self.save_movies:
-            assert len(self.save_passes),\
-                "You need to pass \'--save_passes [PASSES]\' to save out movies, where [PASSES] is a comma-separated list of items from %s" % PASSES
+        if self.save_movies and len(self.save_passes)==0:
+            self.save_movies = False
+            print('Not saving movies since save_passes has len {}'.format(len(self.save_passes)))
 
         # whether to save a JSON of trial-level labels
         self.save_labels = save_labels
