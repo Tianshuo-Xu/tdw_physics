@@ -221,6 +221,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="number of distractors")
 
     def postprocess(args):
+
+        args = domino_postproc(args)
         args.fupforce = handle_random_transform_args(args.fupforce)
         args.size_min = handle_random_transform_args(args.size_min)
         args.size_max = handle_random_transform_args(args.size_max)
@@ -230,11 +232,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
         return args
 
-    args = parser.parse_args()
-    args = domino_postproc(args)
-    args = postprocess(args)
+    if parse:
+        args = parser.parse_args()
+        args = postprocess(args)
 
-    return args
+        return args
+
+    else:
+        return (parser, postprocess)
 
 class Playroom(Collision):
 
