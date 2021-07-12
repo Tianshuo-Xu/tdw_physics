@@ -138,8 +138,12 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--pscale",
                         type=str,
-                        default="[0.75,1.5]",
+                        default="[1.0,1.75]",
                         help="scale of probe objects")
+    parser.add_argument("--tscale",
+                        type=str,
+                        default="[1.0,1.75]",
+                        help="scale of target objects")    
 
     ## size ranges for objects
     parser.add_argument("--size_min",
@@ -167,11 +171,11 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ## camera
     parser.add_argument("--camera_min_height",
                         type=float,
-                        default=2.0,
+                        default=1.5,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=3.5,
+                        default=2.5,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -183,7 +187,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[0.01,1.5]",
+                        default="[0.5,2.5]",
                         help="radial distance from camera to centerpoint")
 
     ## occluders and distractors
@@ -221,6 +225,8 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="number of distractors")
 
     def postprocess(args):
+
+        args = domino_postproc(args)
         args.fupforce = handle_random_transform_args(args.fupforce)
         args.size_min = handle_random_transform_args(args.size_min)
         args.size_max = handle_random_transform_args(args.size_max)
@@ -230,15 +236,18 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
         return args
 
-    args = parser.parse_args()
-    args = domino_postproc(args)
-    args = postprocess(args)
+    if parse:
+        args = parser.parse_args()
+        args = postprocess(args)
 
-    return args
+        return args
+
+    else:
+        return (parser, postprocess)
 
 class Playroom(Collision):
 
-    PRINT = True
+    PRINT = False
 
     def __init__(self, port=1071,
                  probe_categories=None,
@@ -265,6 +274,14 @@ class Playroom(Collision):
         self._target_types = tlist
         # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
 
+    def set_distractor_types(self, olist):
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=None, flex_only=False)
+        self.distractor_types = tlist
+
+    def set_occluder_types(self, olist):
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=None, flex_only=False)
+        self.occluder_types = tlist
+
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         return TDWUtils.VECTOR3_ZERO
@@ -272,6 +289,28 @@ class Playroom(Collision):
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
         # clear some other stuff
+
+    def update_controller_state(self,
+                               probe=None,
+                               target=None,
+                               distractor=None,
+                               occluder=None,
+                               **kwargs) -> None:
+
+        print("UPDATE CONTROLLER STATE")
+        self.clear_static_data()
+        if probe is not None:
+            self.set_probe_types([probe])
+            print("probe: %s" % probe)
+        if target is not None:
+            self.set_target_types([target])
+            print("target: %s" % target)
+        if distractor is not None:
+            self.set_distractor_types([distractor])
+            print("distractor: %s" % distractor)
+        if occluder is not None:
+            self.set_occluder_types([occluder])
+            print("occluder: %s" % occluder)
 
     def _place_target_object(self) -> List[dict]:
 
@@ -293,7 +332,7 @@ class Playroom(Collision):
 
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        self.flow_thresh = 10.0
+        self.flow_thresh = 1.0
         if frame > 150:
             return True
         elif (not self._is_object_in_view(resp, self.probe_id)):
@@ -310,7 +349,7 @@ class Playroom(Collision):
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = 0.75
         self.distractor_min_size = 0.5
-        self.distractor_max_size = 1.0
+        self.distractor_max_size = 1.5
 
     def _set_occlusion_attributes(self) -> None:
 
@@ -319,7 +358,7 @@ class Playroom(Collision):
         self.occluder_rotation_jitter = 30.
         self.occluder_min_z = 0.75
         self.occluder_min_size = 0.5
-        self.occluder_max_size = 1.0
+        self.occluder_max_size = 1.5
         self.rescale_occluder_height = True
 
 

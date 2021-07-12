@@ -577,6 +577,7 @@ class Dominoes(RigidbodiesDataset):
                  match_probe_and_target_color=False,
                  probe_horizontal=False,
                  use_test_mode_colors=False,
+                 probe_initial_height=0.0,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -644,6 +645,7 @@ class Dominoes(RigidbodiesDataset):
         self.target_material = target_material
         self.target_motion_thresh = target_motion_thresh
 
+        self.probe_initial_height = probe_initial_height
         self.probe_color = probe_color
         self.probe_scale_range = probe_scale_range
         self.probe_rotation_range = probe_rotation_range
@@ -900,7 +902,8 @@ class Dominoes(RigidbodiesDataset):
                 print("applied %s at time step %d" % (self.push_cmd, frame))
             return [self.push_cmd]
         else:
-            print(frame)
+            if self.PRINT:
+                print(frame)
             return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -1182,9 +1185,9 @@ class Dominoes(RigidbodiesDataset):
         elif dmax > smax:
             scale = smax / dmax
 
-        print("%s rescaled by %.2f" % (record.name, scale))
-        print("dims", dims, "dminmax", dmin, dmax)
-        print("bounds now", [d * scale for d in dims])
+        # print("%s rescaled by %.2f" % (record.name, scale))
+        # print("dims", dims, "dminmax", dmin, dmax)
+        # print("bounds now", [d * scale for d in dims])
 
         return arr_to_xyz(np.array([scale] * 3))
 
@@ -1203,7 +1206,7 @@ class Dominoes(RigidbodiesDataset):
 
         if size_range is not None:
             scale = self.rescale_record_to_size(record, size_range)
-            print("rescaled target", scale)
+            # print("rescaled target", scale)
 
         self.target = record
         self.target_type = data["name"]
@@ -1270,7 +1273,7 @@ class Dominoes(RigidbodiesDataset):
 
         if size_range is not None:
             scale = self.rescale_record_to_size(record, size_range)
-            print("rescaled probe", scale)
+            # print("rescaled probe", scale)
 
         self.probe = record
         self.probe_type = data["name"]
@@ -1282,7 +1285,9 @@ class Dominoes(RigidbodiesDataset):
 
         ### better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        self.probe_initial_position = {"x": -0.5*self.collision_axis_length,
+                                       "y": self.probe_initial_height,
+                                       "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
         if self.probe_horizontal:
             rot["z"] = 90
@@ -1794,9 +1799,10 @@ class Dominoes(RigidbodiesDataset):
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
-            print("distractor record", record.name)
-            print("distractor category", record.wcategory)
+
             if self.PRINT:
+                print("distractor record", record.name)
+                print("distractor category", record.wcategory)                
                 print("distractor position", pos)
                 print("distractor scale", scale)
 
@@ -1866,10 +1872,9 @@ class Dominoes(RigidbodiesDataset):
                      "is_kinematic": True,
                      "use_gravity": True}])
 
-
-            print("occluder name", record.name)
-            print("occluder category", record.wcategory)
             if self.PRINT:
+                print("occluder name", record.name)
+                print("occluder category", record.wcategory)                
                 print("occluder position", pos)
                 print("occluder pose", rot)
                 print("occluder scale", scale)

@@ -283,13 +283,21 @@ class Dataset(Controller, ABC):
             print(stats_str)
 
 
+    def update_controller_state(self, **kwargs):
+        """
+        Change the state of the controller based on a set of kwargs.
+        """
+        return
 
     def trial_loop(self,
                    num: int,
                    output_dir: str,
                    temp_path: str,
-                   save_frame: int=None) -> None:
+                   save_frame: int=None,
+                   update_kwargs: List[dict] = {}) -> None:
 
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * num
 
         output_dir = Path(output_dir)
         if not output_dir.exists():
@@ -315,6 +323,9 @@ class Dataset(Controller, ABC):
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+            ## update the controller state
+            self.update_controller_state(**update_kwargs[i])
 
             if not filepath.exists():
 
