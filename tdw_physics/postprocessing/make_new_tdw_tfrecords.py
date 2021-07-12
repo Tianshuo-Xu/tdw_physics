@@ -51,6 +51,18 @@ def get_arguments():
         '-p', '--prefix',
         default="trial", type=str,
         help='Prefix string to each output tfrecord name')
+    parser.add_argument(
+        '--height',
+        default=256, type=int,
+        help='Image height')
+    parser.add_argument(
+        '--width',
+        default=256, type=int,
+        help='Image width')
+    parser.add_argument(
+        '--passes',
+        default="images,depths,normals,objects,flows,categories,albedos",
+        help='Which passes to write')
     return parser.parse_args()
 
 
@@ -60,11 +72,13 @@ IS_DEBUG = False
 BATCH_SIZE = None
 KEEP_EXISTING_FILES = False
 WITH_IMAGES = True
-USE_FLOW = True
-USE_CATEGORY = True
-USE_ALBEDO = True
+USE_FLOW = False
+USE_CATEGORY = False
+USE_ALBEDO = False
+USE_DN = False
 POSTFIX = ''
-IMAGE_NAMES = [nm + POSTFIX for nm in ['images', 'depths', 'normals', 'objects', 'flows', 'categories', 'albedos']]
+# IMAGE_NAMES = [nm + POSTFIX for nm in ['images', 'depths', 'normals', 'objects', 'flows', 'categories', 'albedos']]
+IMAGE_NAMES = [nm + POSTFIX for nm in args.passes.split(',')]
 CAMERA_MATRICES = ['projection_matrix', 'camera_matrix']
 
 # Paths
@@ -85,8 +99,8 @@ NEW_TFRECORD_VAL_PATH = os.path.join(OUT_DIR, 'new_tfvaldata')
 
 # static data
 MAX_N_DYNAMIC_OBJECTS = 3
-HEIGHT = 256
-WIDTH = 256
+HEIGHT = args.height
+WIDTH = args.width
 
 FALSE_INDICATORS = ['is_acting']
 
