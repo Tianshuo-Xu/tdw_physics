@@ -142,6 +142,21 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.75,1.25]",
                         help="scale of distractor")
+    parser.add_argument("--scale_objects_uniformly",
+                        type=int,
+                        default=1,
+                        help="Whether to scale all objects equally along each axis")
+
+    ## Materials
+    parser.add_argument("--cmaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material name for container. If None, samples from material_type")
+    parser.add_argument("--tmaterial",
+                        type=none_or_str,
+                        default=None,
+                        help="Material name for target. If None, samples from material_type")    
+    
 
     ## Camera
     parser.add_argument("--camera_distance",
@@ -273,6 +288,9 @@ class RelationArrangement(Playroom):
                  target_rotation_jitter=30,
                  distractor_scale_range=[1.0,1.5],
                  max_target_scale_ratio=0.8,
+                 scale_objects_uniformly=True,
+                 container_material=None,
+                 target_material=None,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -304,11 +322,12 @@ class RelationArrangement(Playroom):
         self.container_scale_range = container_scale_range
         self.target_scale_range = target_scale_range
         self.distractor_scale_range = distractor_scale_range
+        self.scale_objects_uniformly = scale_objects_uniformly
 
         ## object textures
-        self.container_material = None
-        self.target_material = None
-        self.distractor_material = None
+        self.container_material = container_material
+        self.target_material = target_material
+        self.distractor_material = target_material
 
         ## when to stop trial
         self.flow_thresh = 5.0
@@ -441,7 +460,11 @@ class RelationArrangement(Playroom):
         self.container_id = data["id"]
 
         ## scale the container so it's in the required size range
-        self.container_scale = self.rescale_record_to_size(record, self.container_scale_range, randomize=True)
+        if self.scale_objects_uniformly:
+            self.container_scale = self.rescale_record_to_size(record, self.container_scale_range, randomize=True)
+        else:
+            self.container_scale = get_random_xyz_transform(self.container_scale_range)
+            
         _,cheight,_ = self.get_record_dimensions(self.container)
         self.container_height = cheight * self.container_scale["y"]
 
@@ -557,15 +580,22 @@ class RelationArrangement(Playroom):
                                              add_data=False)
         self.target = record
         self.target_id = data["id"]
+        self.target_color = data["color"]
 
         ## rescale the target; make sure it's not much bigger than the container!
-        _tscale_range = copy.deepcopy(self.target_scale_range)
-        _cscale = self.container_scale
-        _tscale_range = [
-            min(_tscale_range[0], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio,
-            min(_tscale_range[1], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio
-        ]
-        self.target_scale = self.rescale_record_to_size(record, _tscale_range, randomize=True)
+        if self.scale_objects_uniformly:
+            _tscale_range = copy.deepcopy(self.target_scale_range)
+            if hasattr(_tscale_range, 'keys'):
+                _tscale_range = [min([_tscale_range[k][0] for k in XYZ]), max([_tscale_range[k][1] for k in XYZ])]
+
+            _cscale = self.container_scale
+            _tscale_range = [
+                min(_tscale_range[0], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio,
+                min(_tscale_range[1], *[_cscale[k] for k in XYZ]) * self.max_target_scale_ratio
+            ]
+            self.target_scale = self.rescale_record_to_size(record, _tscale_range, randomize=True)
+        else:
+            self.target_scale = get_random_xyz_transform(self.target_scale_range)
 
         ## choose the target position as a function of relation type
         self._choose_target_position()
@@ -584,7 +614,7 @@ class RelationArrangement(Playroom):
             rotation=self.target_rotation,
             scale=self.target_scale,
             material=self.target_material,
-            color=data["color"],
+            color=self.target_color,
             mass=2.0,
             static_friction=1.0,
             dynamic_friction=1.0,
@@ -657,9 +687,13 @@ class RelationArrangement(Playroom):
                                              add_data=False)
         self.distractor = record
         self.distractor_id = data["id"]
+        self.distractor_color = self.target_color
 
         ## scale the distractor
-        self.distractor_scale = self.rescale_record_to_size(record, self.distractor_scale_range, randomize=True)
+        if self.scale_objects_uniformly:
+            self.distractor_scale = self.rescale_record_to_size(record, self.distractor_scale_range, randomize=True)
+        else:
+            self.distractor_scale = get_random_xyz_transform(self.distractor_scale_range)
 
         ## choose its position
         self._choose_distractor_position()
@@ -676,7 +710,7 @@ class RelationArrangement(Playroom):
             rotation=self.distractor_rotation,
             scale=self.distractor_scale,
             material=self.distractor_material,
-            color=data["color"],
+            color=self.distractor_color,
             mass=2.0,
             static_friction=1.0,
             dynamic_friction=1.0,
@@ -804,6 +838,11 @@ if __name__ == '__main__':
         target_scale_range=args.tscale,
         distractor_scale_range=args.dscale,
         max_target_scale_ratio=args.max_target_scale_ratio,
+        scale_objects_uniformly=bool(args.scale_objects_uniformly),
+
+        ## materials
+        container_material=args.cmaterial,
+        target_material=args.tmaterial,
 
         ## camera
         camera_radius=args.camera_distance,

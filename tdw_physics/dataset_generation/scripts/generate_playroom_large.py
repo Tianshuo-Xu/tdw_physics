@@ -7,12 +7,13 @@ from pathlib import Path
 from collections import OrderedDict
 import copy
 import json
+from tqdm import tqdm
 from tdw_physics.util import MODEL_LIBRARIES
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
 
 
 RECORDS = []
-for lib in MODEL_LIBRARIES.values():
+for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
     RECORDS.extend(lib.records)
 MODELS = list(set([r for r in RECORDS if not r.do_not_use]))
 MODEL_NAMES = sorted(list(set([r.name for r in RECORDS if not r.do_not_use])))
@@ -52,6 +53,10 @@ def get_args(dataset_dir: str):
                         type=int,
                         default=-1,
                         help="Which split of the trials to generate")
+    parser.add_argument("--use_all_static_models",
+                        action="store_true",
+                        help="Whether to lump all the static models together for every split")
+                            
                         
 
     args = parser.parse_args()
@@ -119,25 +124,86 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0):
         probe_ind = i // num
         target_ind = i % NM
         dist_ind = occ_ind = i % NS
-        scene = (
-            probes[probe_ind],
-            targets[target_ind],
-            distractors[dist_ind],
-            occluders[occ_ind]
-        )
+        scene = {
+            'probe': probes[probe_ind],
+            'target': targets[target_ind],
+            'distractor': distractors[dist_ind],
+            'occluder': occluders[occ_ind]
+        }
         scenarios.append(scene)
 
-    return scenarios
-    
+    print("num, NM, NS", num, NM, NS)
+    for i,sc in enumerate(scenarios):
+        print(i, sc)
 
-def build_controller(args):
+    return scenarios
+
+def build_controller(args, launch_build=True):
 
     C = Playroom(
+        launch_build=launch_build,
+        port=args.port,
+        room=args.room,
+        randomize=0,
+        seed=args.seed,
+        target_zone=args.zone,
+        zone_location=args.zlocation,
+        zone_scale_range=args.zscale,
+        zone_color=None,
+        zone_material=args.zmaterial,
+        zone_friction=args.zfriction,
+        target_objects=args.target,
+        target_categories=args.target_categories,
+        probe_objects=args.probe,
+        probe_categories=args.probe_categories,
+        target_scale_range=args.tscale,
+        target_rotation_range=args.trot,
+        probe_rotation_range=args.prot,
+        probe_scale_range=args.pscale,
+        probe_mass_range=args.pmass,
+        target_color=args.color,
+        probe_color=args.pcolor,
+        collision_axis_length=args.collision_axis_length,
+        force_scale_range=args.fscale,
+        force_angle_range=args.frot,
+        force_offset=args.foffset,
+        force_offset_jitter=args.fjitter,
+        force_wait=args.fwait,
+        remove_target=bool(args.remove_target),
+        remove_zone=bool(args.remove_zone),
+        zjitter = args.zjitter,
+        fupforce = args.fupforce,
+        ## not scenario-specific
+        camera_radius=args.camera_distance,
+        camera_min_angle=args.camera_min_angle,
+        camera_max_angle=args.camera_max_angle,
+        camera_min_height=args.camera_min_height,
+        camera_max_height=args.camera_max_height,
+        monochrome=args.monochrome,
+        material_types=args.material_types,
+        target_material=args.tmaterial,
+        probe_material=args.pmaterial,
+        distractor_categories=None,
+        num_distractors=1,
+        occluder_categories=None,
+        num_occluders=1,
+        occlusion_scale=args.occlusion_scale,
+        occluder_aspect_ratio=None,
+        distractor_aspect_ratio=None,
+        probe_lift = args.plift,
+        flex_only=False,
+        no_moving_distractors=args.no_moving_distractors,
+        match_probe_and_target_color=args.match_probe_and_target_color,
+        size_min=None,
+        size_max=None,
+        probe_initial_height=0.25
     )
 
     return C
 
 def main(args):
+
+    ## build the model splits
     category_splits = make_category_splits(
         seed=args.category_seed,
         num_per_split=args.models_per_split,
@@ -155,12 +221,106 @@ def main(args):
     for s in static_splits:
         all_static_models.extend(s)
 
-    # print(len(moving_splits[0]), len(static_splits[0]), len(all_static_models))
-    print(moving_splits[args.split], len(moving_splits[args.split]))
+    ## create the scenarios
+    moving_models = moving_splits[args.split]
+    static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
+    
+    scenarios = build_scenarios(moving_models, static_models,
+                                args.num_trials_per_model, seed=args.category_seed)
+
+
+    ## set up the trial loop
+    output_dir = Path(args.dir).joinpath('model_split_' + str(args.split % num_moving_splits))
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
+    temp_path = Path('tmp' + str(args.gpu))
+    if not temp_path.parent.exists():
+        temp_path.parent.mkdir(parents=True)
+    if temp_path.exists():
+        temp_path.unlink()
+
+    ## init the controller
+    Play = build_controller(args)
+    Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
+    Play.command_log = output_dir.joinpath('tdw_commands.json')
+    Play.write_passes = args.write_passes.split(',')
+    Play.save_passes = args.save_passes.split(',')
+    Play.save_movies = args.save_movies
+    Play.save_meshes = False
+    Play.save_labels = False
+
+    init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
+    Play.communicate(init_cmds)
+        
+
+    ## run the trial loop
+    Play.trial_loop(num=len(scenarios),
+                    output_dir=str(output_dir),
+                    temp_path=str(temp_path),
+                    save_frame=SAVE_FRAME,
+                    update_kwargs=scenarios)
+
+    ## terminate build
+    Play.communicate({"$type": "terminate"})
+
+    # pbar = tqdm(total=len(scenarios))
+    # exists_up_to = 0
+    # for f in output_dir.glob("*.hdf5"):
+    #     if int(f.stem) > exists_up_to:
+    #         exists_up_to = int(f.stem)
+
+    # if exists_up_to > 0:
+    #     print('Trials up to %d already exist, skipping those' % exists_up_to)
+    # pbar.update(exists_up_to)
+
+    # ## run the loop
+    # init = False
+    # for i in range(exists_up_to, len(scenarios)):
+
+    #     if not init:
+    #         Play = build_controller(args)
+    #         Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
+    #         Play.command_log = output_dir.joinpath('tdw_commands.json')
+    #         Play.write_passes = args.write_passes.split(',')
+    #         Play.save_passes = args.save_passes.split(',')
+    #         Play.save_movies = True
+    #         Play.save_meshes = False
+    #         Play.save_labels = False
+
+    #         init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
+    #         Play.communicate(init_cmds)
+    #         init = True
+
+    #     scene = scenarios[i]            
+    #     (probe, target, distractor, occluder) = scene
+
+        # print("probe: %s, target: %s, distractor: %s, occluder: %s" %\
+        #       (probe, target, distractor, occluder))
+
+        # # update for this stim
+        # filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")        
+        # Play.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+        # Play.seed += 1
+        # Play.clear_static_data()
+        # Play.set_probe_types([probe])
+        # Play.set_target_types([target])
+        # Play.set_distractor_types([distractor])
+        # Play.set_occluder_types([occluder])
+
+        
+        
 
 if __name__ == '__main__':
 
     args = get_args("playroom_large")
+
+    import platform, os
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+        else:
+            os.environ["DISPLAY"] = ":0"
+            
     main(args)
 
     
