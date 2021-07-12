@@ -35,7 +35,7 @@ def get_args(dataset_dir: str):
                         help="random seed for splitting categores")
     parser.add_argument("--models_per_split",
                         type=int,
-                        default=200,
+                        default=125,
                         help="number of models in each category split")
     parser.add_argument("--num_moving_models",
                         type=int,
@@ -51,7 +51,7 @@ def get_args(dataset_dir: str):
                         help="Number of trials to create per moving model")
     parser.add_argument("--split",
                         type=int,
-                        default=-1,
+                        default=0,
                         help="Which split of the trials to generate")
     parser.add_argument("--use_all_static_models",
                         action="store_true",

@@ -898,12 +898,12 @@ class Dominoes(RigidbodiesDataset):
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
         if (self.force_wait != 0) and frame == self.force_wait:
-            # if self.PRINT:
-            print("applied %s at time step %d" % (self.push_cmd, frame))
+            if self.PRINT:
+                print("applied %s at time step %d" % (self.push_cmd, frame))
             return [self.push_cmd]
         else:
-            # if self.PRINT:
-            print(frame)
+            if self.PRINT:
+                print(frame)
             return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
