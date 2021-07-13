@@ -133,7 +133,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--framerate", type=int, default=30, help="Framerate for rendered movies")
-    parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")    
+    parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")
     parser.add_argument("--seed", type=int, default=-1, help="Random seed with which to initialize scenario")
     parser.add_argument("--random", type=int, default=1, help="Whether to set trials randomly")
     parser.add_argument("--num_views", type=int, default=1, help="How many possible viewpoints to render trial from")
@@ -146,6 +146,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
+    parser.add_argument("--unload_assets_every", type=int, default=10, help="Unload assets after how many trials")
 
     return parser
 

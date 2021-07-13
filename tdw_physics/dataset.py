@@ -294,6 +294,7 @@ class Dataset(Controller, ABC):
                    output_dir: str,
                    temp_path: str,
                    save_frame: int=None,
+                   unload_assets_every: int = 10,
                    update_kwargs: List[dict] = {}) -> None:
 
         if not isinstance(update_kwargs, list):
@@ -339,7 +340,8 @@ class Dataset(Controller, ABC):
                 # Do the trial.
                 self.trial(filepath=filepath,
                            temp_path=temp_path,
-                           trial_num=i)
+                           trial_num=i,
+                           unload_assets_every=unload_assets_every)
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
@@ -353,13 +355,13 @@ class Dataset(Controller, ABC):
                             overwrite=True,
                             remove_pngs=(True if save_frame is None else False),
                             use_parent_dir=False)
-                        
+
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))
                         sv = sorted(frames)[save_frame]
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
-                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True) 
-                        
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                 if self.save_meshes:
                     for o_id in self.object_ids:
@@ -372,7 +374,8 @@ class Dataset(Controller, ABC):
     def trial(self,
               filepath: Path,
               temp_path: Path,
-              trial_num: int) -> None:
+              trial_num: int,
+              unload_assets_every: int=10) -> None:
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
 
@@ -390,7 +393,7 @@ class Dataset(Controller, ABC):
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 10 == 0:
+        if trial_num % unload_assets_every == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
@@ -457,7 +460,7 @@ class Dataset(Controller, ABC):
 
         # Save out the target/zone segmentation mask
         if (self.zone_id in self.object_ids) and (self.target_id in self.object_ids):
-            
+
             _id = f['frames']['0000']['images']['_id']
             #get PIL image
             _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
@@ -728,7 +731,7 @@ class Dataset(Controller, ABC):
         if len(self.object_ids) == 0:
             self.object_segmentation_colors = []
             return
-        
+
         for r in resp:
             if OutputData.get_data_type_id(r) == 'segm':
                 seg = SegmentationColors(r)

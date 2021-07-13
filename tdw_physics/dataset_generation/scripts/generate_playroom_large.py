@@ -28,7 +28,7 @@ def get_args(dataset_dir: str):
 
     playroom_parser, playroom_postproc = get_playroom_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[playroom_parser], conflict_handler='resolve')
-    
+
     parser.add_argument("--category_seed",
                         type=int,
                         default=0,
@@ -56,8 +56,8 @@ def get_args(dataset_dir: str):
     parser.add_argument("--use_all_static_models",
                         action="store_true",
                         help="Whether to lump all the static models together for every split")
-                            
-                        
+
+
 
     args = parser.parse_args()
     args = playroom_postproc(args)
@@ -72,7 +72,7 @@ def make_category_splits(categories=CATEGORIES, num_per_split=200, seed=0):
     split_ind = 0
     while models_left > num_per_split:
         num_now = 0
-        split_now = []        
+        split_now = []
         while (num_now < num_per_split) or (models_left < (num_per_split - num_now)):
             ## choose a category
             cat = categories_left.pop(rng.choice(range(len(categories_left))))
@@ -96,7 +96,7 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     model_splits = OrderedDict()
     cat_split_ind = 0
     for i,num in enumerate(num_models_per_split):
-        models_here = []        
+        models_here = []
         while len(models_here) < num:
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
@@ -116,7 +116,7 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0):
 
     probes = rng.permutation(moving_models)
     targets = rng.permutation(moving_models)
-    distractors = rng.permutation(static_models)    
+    distractors = rng.permutation(static_models)
     occluders = rng.permutation(static_models)
 
     scenarios = []
@@ -224,7 +224,7 @@ def main(args):
     ## create the scenarios
     moving_models = moving_splits[args.split]
     static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
-    
+
     scenarios = build_scenarios(moving_models, static_models,
                                 args.num_trials_per_model, seed=args.category_seed)
 
@@ -251,14 +251,15 @@ def main(args):
 
     init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
     Play.communicate(init_cmds)
-        
+
 
     ## run the trial loop
     Play.trial_loop(num=len(scenarios),
                     output_dir=str(output_dir),
                     temp_path=str(temp_path),
                     save_frame=SAVE_FRAME,
-                    update_kwargs=scenarios)
+                    update_kwargs=scenarios,
+                    unload_assets_every=args.unload_assets_every)
 
     ## terminate build
     Play.communicate({"$type": "terminate"})
@@ -291,14 +292,14 @@ def main(args):
     #         Play.communicate(init_cmds)
     #         init = True
 
-    #     scene = scenarios[i]            
+    #     scene = scenarios[i]
     #     (probe, target, distractor, occluder) = scene
 
         # print("probe: %s, target: %s, distractor: %s, occluder: %s" %\
         #       (probe, target, distractor, occluder))
 
         # # update for this stim
-        # filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")        
+        # filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
         # Play.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
         # Play.seed += 1
         # Play.clear_static_data()
@@ -307,8 +308,8 @@ def main(args):
         # Play.set_distractor_types([distractor])
         # Play.set_occluder_types([occluder])
 
-        
-        
+
+
 
 if __name__ == '__main__':
 
@@ -320,10 +321,5 @@ if __name__ == '__main__':
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
-            
+
     main(args)
-
-    
-
-
-
