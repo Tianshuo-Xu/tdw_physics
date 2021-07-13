@@ -22,6 +22,7 @@ MODELS_PER_CATEGORY = {k: [r for r in MODELS if r.wcategory == k] for k in CATEG
 NUM_MODELS_PER_CATEGORY = {k: len([r for r in MODELS if r.wcategory == k]) for k in CATEGORIES}
 NUM_MOVING_MODELS = 1000
 NUM_STATIC_MODELS = 1000
+NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
 
 def get_args(dataset_dir: str):
@@ -56,7 +57,9 @@ def get_args(dataset_dir: str):
     parser.add_argument("--use_all_static_models",
                         action="store_true",
                         help="Whether to lump all the static models together for every split")
-
+    parser.add_argument("--validation_set",
+                        action="store_true",
+                        help="Create the validation set using the remaining models")    
 
 
     args = parser.parse_args()
@@ -97,7 +100,7 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     cat_split_ind = 0
     for i,num in enumerate(num_models_per_split):
         models_here = []
-        while len(models_here) < num:
+        while (len(models_here) < num) and (cat_split_ind < len(category_splits.keys())):
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
                 models_here.extend(MODELS_PER_CATEGORY[cat])
@@ -213,24 +216,34 @@ def main(args):
     num_moving_splits = args.num_moving_models // mps
     num_static_splits = args.num_static_models // mps
     nums_per_split = [mps] * (num_moving_splits + num_static_splits)
+    nums_per_split += [NUM_TOTAL_MODELS]
     model_splits = split_models(category_splits, nums_per_split,
                                 seed=args.category_seed)
     moving_splits = [model_splits[i] for i in range(num_moving_splits)]
     static_splits = [model_splits[j] for j in range(num_moving_splits, num_moving_splits + num_static_splits)]
+    remaining_splits = [model_splits[k] for k in range(num_moving_splits + num_static_splits, len(model_splits.keys()))]
     all_static_models = []
     for s in static_splits:
         all_static_models.extend(s)
 
     ## create the scenarios
-    moving_models = moving_splits[args.split]
-    static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
+    if not args.validation_set:
+        moving_models = moving_splits[args.split]
+        static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
+    else:
+        print("remaining", remaining_splits)
+        validation_models = []
+        for models in remaining_splits:
+            validation_models.extend(models)
+        moving_models = static_models = validation_models
 
     scenarios = build_scenarios(moving_models, static_models,
                                 args.num_trials_per_model, seed=args.category_seed)
 
 
     ## set up the trial loop
-    output_dir = Path(args.dir).joinpath('model_split_' + str(args.split % num_moving_splits))
+    suffix = str(args.split % num_moving_splits) if not args.validation_set else 'val'
+    output_dir = Path(args.dir).joinpath('model_split_' + suffix)
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
     temp_path = Path('tmp' + str(args.gpu))
@@ -263,53 +276,6 @@ def main(args):
 
     ## terminate build
     Play.communicate({"$type": "terminate"})
-
-    # pbar = tqdm(total=len(scenarios))
-    # exists_up_to = 0
-    # for f in output_dir.glob("*.hdf5"):
-    #     if int(f.stem) > exists_up_to:
-    #         exists_up_to = int(f.stem)
-
-    # if exists_up_to > 0:
-    #     print('Trials up to %d already exist, skipping those' % exists_up_to)
-    # pbar.update(exists_up_to)
-
-    # ## run the loop
-    # init = False
-    # for i in range(exists_up_to, len(scenarios)):
-
-    #     if not init:
-    #         Play = build_controller(args)
-    #         Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
-    #         Play.command_log = output_dir.joinpath('tdw_commands.json')
-    #         Play.write_passes = args.write_passes.split(',')
-    #         Play.save_passes = args.save_passes.split(',')
-    #         Play.save_movies = True
-    #         Play.save_meshes = False
-    #         Play.save_labels = False
-
-    #         init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
-    #         Play.communicate(init_cmds)
-    #         init = True
-
-    #     scene = scenarios[i]
-    #     (probe, target, distractor, occluder) = scene
-
-        # print("probe: %s, target: %s, distractor: %s, occluder: %s" %\
-        #       (probe, target, distractor, occluder))
-
-        # # update for this stim
-        # filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-        # Play.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
-        # Play.seed += 1
-        # Play.clear_static_data()
-        # Play.set_probe_types([probe])
-        # Play.set_target_types([target])
-        # Play.set_distractor_types([distractor])
-        # Play.set_occluder_types([occluder])
-
-
-
 
 if __name__ == '__main__':
 
