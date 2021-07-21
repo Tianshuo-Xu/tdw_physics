@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
     if args.model_category is not None:
         print("=====MODEL CATEGORIES=====")
-        print(MODEL_CATEGORIES)
+        print(MODEL_CATEGORIES, len(MODEL_CATEGORIES))
         assert args.model_category in MODEL_CATEGORIES, "Must pass a valid model category"
 
         print("=====%s MODELS OF CATEGORY %s=====" % \
