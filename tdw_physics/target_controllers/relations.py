@@ -71,11 +71,18 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--no_object",
                         action="store_true",
                         help="Generate scenes with a target object only")
+    parser.add_argument("--container_flippable",
+                        type=int,
+                        default=1,
+                        help="Whether the container can be flipped")    
 
     ## Whether to push the distractor
+    parser.add_argument("--push_distractor",
+                        action="store_true",
+                        help="Apply a force to the distractor")
     parser.add_argument("--fscale",
                         type=str,
-                        default="0.0",
+                        default="5.0",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -83,9 +90,17 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="range of angles in xz plane to apply push force")
     parser.add_argument("--fwait",
                         type=none_or_str,
-                        default="[5,5]",
+                        default="[10,10]",
                         help="How many frames to wait before applying the force")    
-
+    parser.add_argument("--max_frames",
+                        type=int,
+                        default=300,
+                        help="How many frames max per trial")
+    parser.add_argument("--min_frames",
+                        type=int,
+                        default=90,
+                        help="How many frames min per trial")        
+    
     ## scenarios
     parser.add_argument("--start",
                         type=none_or_int,
@@ -123,6 +138,10 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.3,1.0]",
                         help="Position ranges for the target/distractor (offset from container)")
+    parser.add_argument("--dposition",
+                        type=none_or_str,
+                        default=None,
+                        help="Position ranges for the distractor (offset from container)")    
     parser.add_argument("--trotation",
                         type=str,
                         default="[0,180]",
@@ -137,10 +156,22 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0,30]",
                         help="How much to jitter the target position angle relative to container")
+    parser.add_argument("--dangle",
+                        type=none_or_str,
+                        default=None,
+                        help="How much to jitter the distractor position angle relative to container")    
+    parser.add_argument("--tangle_reflections",
+                        type=int,
+                        default=1,
+                        help="Whether to sample random reflections of the target angle")    
     parser.add_argument("--tjitter",
                         type=float,
                         default="0.2",
                         help="How much to jitter the target position")
+    parser.add_argument("--djitter",
+                        type=float,
+                        default=None,
+                        help="How much to jitter the distractor position")    
     parser.add_argument("--trotation_jitter",
                         type=float,
                         default="30",
@@ -260,8 +291,10 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.cposition["y"] = 0.0
 
         args.tposition = handle_random_transform_args(args.tposition)
+        args.dposition = handle_random_transform_args(args.dposition)        
         args.trotation = handle_random_transform_args(args.trotation)
         args.tangle = handle_random_transform_args(args.tangle)
+        args.dangle = handle_random_transform_args(args.dangle)        
 
         args.camera_distance = handle_random_transform_args(args.camera_distance)
 
@@ -313,20 +346,27 @@ class RelationArrangement(Playroom):
 
     def __init__(self, port=1071,
                  relation=list(Relation),
+                 push_distractor=False,
                  single_object=False,
                  no_object=False,
+                 min_frames=90,
+                 max_frames=300,
                  container=PRIMITIVE_NAMES,
                  target=PRIMITIVE_NAMES,
                  distractor=PRIMITIVE_NAMES,
                  container_position_range=[-0.25,0.25],
                  container_scale_range=[1.0,1.5],
                  target_position_range=[0.25,1.0],
+                 distractor_position_range=None,
                  target_rotation_range=[0,180],
                  target_always_horizontal=False,
                  target_always_vertical=False,
                  target_angle_range=[-30,30],
+                 distractor_angle_range=None,
+                 target_angle_reflections=True,
                  target_scale_range=[1.0,1.5],
                  target_position_jitter=0.25,
+                 distractor_position_jitter=None,
                  target_rotation_jitter=30,
                  distractor_scale_range=[1.0,1.5],
                  distractor_mass_range=[2.0,2.0],
@@ -336,6 +376,7 @@ class RelationArrangement(Playroom):
                  scale_objects_uniformly=True,
                  container_material=None,
                  target_material=None,
+                 container_flippable=True,
                  **kwargs):
 
         super().__init__(port=port, **kwargs)
@@ -345,6 +386,10 @@ class RelationArrangement(Playroom):
         print("relation types", [r.name for r in self._relation_types])
         self.single_object = single_object
         self.no_object = no_object
+        self.container_flippable = container_flippable
+
+        ## whether to push the distractor or not
+        self.push_distractor = push_distractor
 
         ## how much larger target can be than the container
         self.max_target_scale_ratio = max_target_scale_ratio
@@ -357,11 +402,15 @@ class RelationArrangement(Playroom):
         ## object positions
         self.container_position_range = container_position_range
         self.target_position_range = target_position_range
+        self.distractor_position_range = distractor_position_range or self.target_position_range
         self.target_rotation_range = target_rotation_range
         self.target_always_horizontal = target_always_horizontal
         self.target_always_vertical = target_always_vertical
         self.target_angle_range = target_angle_range
+        self.distractor_angle_range = distractor_angle_range or self.target_angle_range
+        self.target_angle_reflections = target_angle_reflections
         self.target_position_jitter = target_position_jitter
+        self.distractor_position_jitter = distractor_position_jitter or self.target_position_jitter
         self.target_rotation_jitter = target_rotation_jitter
 
         ## object scales
@@ -380,8 +429,8 @@ class RelationArrangement(Playroom):
 
         ## when to stop trial
         self.flow_thresh = 5.0
-        self.min_frames = 90
-        self.max_frames = 300
+        self.min_frames = min_frames
+        self.max_frames = max_frames
 
         print("sampling containers from", [(r.name, r.wcategory) for r in self._container_types], len(self._container_types))
         print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
@@ -539,7 +588,7 @@ class RelationArrangement(Playroom):
             self._flip_container()
         elif self.relation == Relation.contain:
             self.container_flipped = False
-        else:
+        elif self.container_flippable:
             if random.choice([0,1]):
                 self._flip_container()
 
@@ -552,10 +601,10 @@ class RelationArrangement(Playroom):
             material=self.container_material,
             color=self.container_color,
             mass=self.container_mass,
-            scale_mass=True,
+            scale_mass=False,
             o_id=self.container_id,
             add_data=True,
-            make_kinematic=True,
+            make_kinematic=True if not self.push_distractor else False,
             apply_texture=(True if self.container_material else False)
         )
         commands.extend(add_container_cmds)
@@ -564,7 +613,7 @@ class RelationArrangement(Playroom):
 
     def _choose_target_position(self) -> None:
         self.target_position = self.left_or_right = None
-        theta = random.uniform(*get_range(self.target_angle_range)) * random.choice([-1.,1.])
+        theta = random.uniform(*get_range(self.target_angle_range)) * (random.choice([-1.,1.]) if self.target_angle_reflections else 1.0)
         tx,ty,tz = [self.get_record_dimensions(self.target)[i] * self.target_scale[k] * 0.5
                     for i,k in enumerate(XYZ)]
         offset = max(tx, ty, tz)
@@ -691,20 +740,24 @@ class RelationArrangement(Playroom):
 
     def _choose_distractor_position(self) -> None:
         self.distractor_position = None
-        theta = random.uniform(*get_range(self.target_angle_range)) * random.choice([-1.,1.])
+        
+        ## if relation is null, make sure distractor is on opposite side
+        if self.left_or_right is None:
+            l_or_r = random.choice([-90, 90])
+            self.left_or_right = -l_or_r
+        else:
+            l_or_r = -self.left_or_right
+            
+        theta = random.uniform(*get_range(self.distractor_angle_range)) * (random.choice([-1.,1.]) if self.target_angle_reflections else -np.sign(self.left_or_right))
         dx,dy,dz = [self.get_record_dimensions(self.distractor)[i] * self.distractor_scale[k] * 0.5
                     for i,k in enumerate(XYZ)]
         offset = max(dx, dy, dz)
         try:
-            dpos = random.uniform(*get_range(self.target_position_range)) + offset
+            dpos = random.uniform(*get_range(self.distractor_position_range)) + offset
         except:
-            dpos = random.uniform(*get_range(self.target_position_range['x'])) + offset
+            dpos = random.uniform(*get_range(self.distractor_position_range['x'])) + offset
 
-        ## if relation is null, make sure distractor is on opposite side
-        if self.left_or_right is None:
-            l_or_r = random.choice([-90, 90])
-        else:
-            l_or_r = -self.left_or_right
+
         unit_v = self.rotate_vector_parallel_to_floor(self.opposite_unit_vector, theta + l_or_r)
         self.distractor_position = {
             "x": unit_v["x"] * dpos,
@@ -714,7 +767,7 @@ class RelationArrangement(Playroom):
 
         ## jitter position
         for k in ["x", "z"]:
-            self.distractor_position[k] += random.uniform(-self.target_position_jitter, self.target_position_jitter)
+            self.distractor_position[k] += random.uniform(-self.distractor_position_jitter, self.distractor_position_jitter)
 
     def _choose_distractor_rotation(self) -> None:
 
@@ -786,6 +839,32 @@ class RelationArrangement(Playroom):
 
         return commands
 
+    def _set_push_command(self) -> None:
+
+        if not self.push_distractor:
+            self.force_wait = -10
+            return
+
+        ## get the unit vector direction from the distractor to the container
+        push_vec = xyz_to_arr(self.container_position) - xyz_to_arr(self.distractor_position)
+        push_vec[1] = 0.0 # no y component; assume things are on ground
+        push_vec /= np.sqrt(np.square(push_vec).sum()) # unit vector
+
+        ## scale the force
+        push_vec *= random.uniform(*get_range(self.force_scale_range))
+
+        ## rotate the vector
+        theta = random.uniform(*get_range(self.force_angle_range)) * np.sign(self.left_or_right)
+        push_vec = arr_to_xyz(push_vec)
+        push_vec = self.rotate_vector_parallel_to_floor(push_vec, theta, degrees=True)
+
+        self.push_force = {k:float(v) for k,v in push_vec.items()}
+        self.push_cmd = self._get_push_cmd(o_id=self.distractor_id)
+        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+
+        print("push command")
+        print(self.push_cmd)
+
     def _remove_container_and_distractor(self) -> List[dict]:
 
         commands = [
@@ -845,6 +924,9 @@ class RelationArrangement(Playroom):
         ## place distractor (depends on camera position)
         commands.extend(self._place_distractor())
 
+        ## push distractor [optional]
+        self._set_push_command()
+
         ## if it's a single object trial, remove the other objects
         if self.single_object or self.no_object:
             commands.extend(self._remove_container_and_distractor())
@@ -856,7 +938,10 @@ class RelationArrangement(Playroom):
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
-        return []
+        if (frame == self.force_wait) and self.push_distractor:
+            return [self.push_cmd]
+        else:
+            return []
 
 if __name__ == '__main__':
 
@@ -877,8 +962,12 @@ if __name__ == '__main__':
     RC = RelationArrangement(
         ## relation
         relation=args.relation,
+        push_distractor=args.push_distractor,
         single_object=args.single_object,
         no_object=args.no_object,
+        container_flippable=bool(args.container_flippable),
+        max_frames=args.max_frames,
+        min_frames=args.min_frames,
 
         ## objects
         container=args.container,
@@ -888,10 +977,14 @@ if __name__ == '__main__':
         ## positions
         container_position_range=args.cposition,
         target_position_range=args.tposition,
+        distractor_position_range=args.dposition,
         target_rotation_range=args.trotation,
         target_angle_range=args.tangle,
+        distractor_angle_range=args.dangle,        
+        target_angle_reflections=bool(args.tangle_reflections),
         target_position_jitter=args.tjitter,
         target_rotation_jitter=args.trotation_jitter,
+        distractor_position_jitter=args.djitter,
         target_always_horizontal=args.thorizontal,
         target_always_vertical=args.tvertical,        
 
