@@ -70,7 +70,21 @@ def get_relational_args(dataset_dir: str, parse=True):
                         help="Generate scenes with a target object only")
     parser.add_argument("--no_object",
                         action="store_true",
-                        help="Generate scenes with a target object only")    
+                        help="Generate scenes with a target object only")
+
+    ## Whether to push the distractor
+    parser.add_argument("--fscale",
+                        type=str,
+                        default="0.0",
+                        help="range of scales to apply to push force")
+    parser.add_argument("--frot",
+                        type=str,
+                        default="[0,0]",
+                        help="range of angles in xz plane to apply push force")
+    parser.add_argument("--fwait",
+                        type=none_or_str,
+                        default="[5,5]",
+                        help="How many frames to wait before applying the force")    
 
     ## scenarios
     parser.add_argument("--start",
@@ -116,6 +130,9 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--thorizontal",
                         action="store_true",
                         help="Whether to rotate the target object so that it's horizontal")
+    parser.add_argument("--tvertical",
+                        action="store_true",
+                        help="Whether the target is always upright")    
     parser.add_argument("--tangle",
                         type=str,
                         default="[0,30]",
@@ -124,6 +141,10 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=float,
                         default="0.2",
                         help="How much to jitter the target position")
+    parser.add_argument("--trotation_jitter",
+                        type=float,
+                        default="30",
+                        help="How much to jitter the target rotation")    
 
     ## Object scales
     parser.add_argument("--cscale",
@@ -142,6 +163,18 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0.75,1.25]",
                         help="scale of distractor")
+    parser.add_argument("--cmass",
+                        type=str,
+                        default="5.0",
+                        help="scale of probe objects")            
+    parser.add_argument("--tmass",
+                        type=str,
+                        default="2.0",
+                        help="scale of probe objects")        
+    parser.add_argument("--dmass",
+                        type=str,
+                        default="2.0",
+                        help="scale of probe objects")    
     parser.add_argument("--scale_objects_uniformly",
                         type=int,
                         default=1,
@@ -219,7 +252,10 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.cscale = handle_random_transform_args(args.cscale)
         args.tscale = handle_random_transform_args(args.tscale)
         args.dscale = handle_random_transform_args(args.dscale)
-
+        args.dmass = handle_random_transform_args(args.dmass)
+        args.cmass = handle_random_transform_args(args.cmass)
+        args.tmass = handle_random_transform_args(args.tmass)                        
+        
         args.cposition = handle_random_transform_args(args.cposition)
         args.cposition["y"] = 0.0
 
@@ -228,6 +264,11 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.tangle = handle_random_transform_args(args.tangle)
 
         args.camera_distance = handle_random_transform_args(args.camera_distance)
+
+        ## push applied to distractor
+        args.fscale = handle_random_transform_args(args.fscale)
+        args.frot = handle_random_transform_args(args.frot)
+        args.fwait = handle_random_transform_args(args.fwait)
 
         return args
 
@@ -282,11 +323,15 @@ class RelationArrangement(Playroom):
                  target_position_range=[0.25,1.0],
                  target_rotation_range=[0,180],
                  target_always_horizontal=False,
+                 target_always_vertical=False,
                  target_angle_range=[-30,30],
                  target_scale_range=[1.0,1.5],
                  target_position_jitter=0.25,
                  target_rotation_jitter=30,
                  distractor_scale_range=[1.0,1.5],
+                 distractor_mass_range=[2.0,2.0],
+                 target_mass_range=[2.0,2.0],
+                 container_mass_range=[5.0,5.0],                                  
                  max_target_scale_ratio=0.8,
                  scale_objects_uniformly=True,
                  container_material=None,
@@ -314,6 +359,7 @@ class RelationArrangement(Playroom):
         self.target_position_range = target_position_range
         self.target_rotation_range = target_rotation_range
         self.target_always_horizontal = target_always_horizontal
+        self.target_always_vertical = target_always_vertical
         self.target_angle_range = target_angle_range
         self.target_position_jitter = target_position_jitter
         self.target_rotation_jitter = target_rotation_jitter
@@ -322,6 +368,9 @@ class RelationArrangement(Playroom):
         self.container_scale_range = container_scale_range
         self.target_scale_range = target_scale_range
         self.distractor_scale_range = distractor_scale_range
+        self.target_mass_range = target_mass_range
+        self.container_mass_range = container_mass_range
+        self.distractor_mass_range = distractor_mass_range
         self.scale_objects_uniformly = scale_objects_uniformly
 
         ## object textures
@@ -402,16 +451,24 @@ class RelationArrangement(Playroom):
         try:
             static_group.create_dataset("target_id", data=self.target_id)
             static_group.create_dataset("target_name", data=self.target.name.encode('utf8'))
+            static_group.create_dataset("target_mass", data=self.target_mass)
+            static_group.create_dataset("target_color", data=self.target_color)                        
         except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("container_id", data=self.container_id)
             static_group.create_dataset("container_name", data=self.container.name.encode('utf8'))
+            static_group.create_dataset("container_mass", data=self.container_mass)
+            static_group.create_dataset("container_color", data=self.container_color)
+            
         except (AttributeError,TypeError):
             pass
         try:
             static_group.create_dataset("distractor_id", data=self.distractor_id)
-            static_group.create_dataset("distractor_name", data=self.container.name.encode('utf8'))
+            static_group.create_dataset("distractor_name", data=self.distractor.name.encode('utf8'))
+            static_group.create_dataset("distractor_mass", data=self.distractor_mass)
+            static_group.create_dataset("distractor_color", data=self.distractor_color)
+            
         except (AttributeError,TypeError):
             pass
 
@@ -458,6 +515,8 @@ class RelationArrangement(Playroom):
                                              add_data=False)
         self.container = record
         self.container_id = data["id"]
+        self.container_color = data["color"]
+        self.container_mass = random.uniform(*get_range(self.container_mass_range))        
 
         ## scale the container so it's in the required size range
         if self.scale_objects_uniformly:
@@ -491,8 +550,8 @@ class RelationArrangement(Playroom):
             rotation=self.container_rotation,
             scale=self.container_scale,
             material=self.container_material,
-            color=data["color"],
-            mass=5.0,
+            color=self.container_color,
+            mass=self.container_mass,
             scale_mass=True,
             o_id=self.container_id,
             add_data=True,
@@ -553,7 +612,7 @@ class RelationArrangement(Playroom):
 
         ## whether to make the target horizontal or not
         self.target_horizontal = False
-        if self.target_always_horizontal or bool(random.choice([0,1])):
+        if (self.target_always_horizontal or bool(random.choice([0,1]))) and not self.target_always_vertical:
             self.target_horizontal = True
             sy = self.get_record_dimensions(self.target)[1] * self.target_scale["y"]
             self.target_rotation["z"] = random.choice([-90, 90])
@@ -581,6 +640,7 @@ class RelationArrangement(Playroom):
         self.target = record
         self.target_id = data["id"]
         self.target_color = data["color"]
+        self.target_mass = random.uniform(*get_range(self.target_mass_range))
 
         ## rescale the target; make sure it's not much bigger than the container!
         if self.scale_objects_uniformly:
@@ -615,7 +675,7 @@ class RelationArrangement(Playroom):
             scale=self.target_scale,
             material=self.target_material,
             color=self.target_color,
-            mass=2.0,
+            mass=self.target_mass,
             static_friction=1.0,
             dynamic_friction=1.0,
             bounciness=0.0,
@@ -687,7 +747,8 @@ class RelationArrangement(Playroom):
                                              add_data=False)
         self.distractor = record
         self.distractor_id = data["id"]
-        self.distractor_color = self.target_color
+        self.distractor_color = self.target_color if self.match_probe_and_target_color else data["color"]
+        self.distractor_mass = random.uniform(*get_range(self.distractor_mass_range))
 
         ## scale the distractor
         if self.scale_objects_uniformly:
@@ -711,7 +772,7 @@ class RelationArrangement(Playroom):
             scale=self.distractor_scale,
             material=self.distractor_material,
             color=self.distractor_color,
-            mass=2.0,
+            mass=self.distractor_mass,
             static_friction=1.0,
             dynamic_friction=1.0,
             bounciness=0.0,
@@ -830,15 +891,25 @@ if __name__ == '__main__':
         target_rotation_range=args.trotation,
         target_angle_range=args.tangle,
         target_position_jitter=args.tjitter,
+        target_rotation_jitter=args.trotation_jitter,
         target_always_horizontal=args.thorizontal,
+        target_always_vertical=args.tvertical,        
 
         ## scales
         zone_scale_range=args.zscale,
         container_scale_range=args.cscale,
         target_scale_range=args.tscale,
         distractor_scale_range=args.dscale,
+        distractor_mass_range=args.dmass,
+        target_mass_range=args.tmass,
+        container_mass_range=args.cmass,                
         max_target_scale_ratio=args.max_target_scale_ratio,
         scale_objects_uniformly=bool(args.scale_objects_uniformly),
+
+        ## force
+        force_scale_range=args.fscale,
+        force_angle_range=args.frot,
+        force_wait=args.fwait,        
 
         ## materials
         container_material=args.cmaterial,
@@ -858,7 +929,8 @@ if __name__ == '__main__':
         room=args.room,
         randomize=args.random,
         seed=args.seed,
-        flex_only=False
+        flex_only=False,
+        match_probe_and_target_color=args.match_probe_and_target_color
     )
 
     if bool(args.run):
