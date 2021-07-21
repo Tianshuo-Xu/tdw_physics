@@ -146,9 +146,16 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="[0,180]",
                         help="Pose ranges for the target/distractor")
+    parser.add_argument("--drotation",
+                        type=none_or_str,
+                        default=None,
+                        help="Pose ranges for the distractor")    
     parser.add_argument("--thorizontal",
                         action="store_true",
                         help="Whether to rotate the target object so that it's horizontal")
+    parser.add_argument("--dhorizontal",
+                        action="store_true",
+                        help="Whether to rotate the distractor object so that it's horizontal")    
     parser.add_argument("--tvertical",
                         action="store_true",
                         help="Whether the target is always upright")    
@@ -175,7 +182,11 @@ def get_relational_args(dataset_dir: str, parse=True):
     parser.add_argument("--trotation_jitter",
                         type=float,
                         default="30",
-                        help="How much to jitter the target rotation")    
+                        help="How much to jitter the target rotation")
+    parser.add_argument("--drotation_jitter",
+                        type=float,
+                        default="30",
+                        help="How much to jitter the distractor rotation")        
 
     ## Object scales
     parser.add_argument("--cscale",
@@ -293,6 +304,7 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.tposition = handle_random_transform_args(args.tposition)
         args.dposition = handle_random_transform_args(args.dposition)        
         args.trotation = handle_random_transform_args(args.trotation)
+        args.drotation = handle_random_transform_args(args.drotation)        
         args.tangle = handle_random_transform_args(args.tangle)
         args.dangle = handle_random_transform_args(args.dangle)        
 
@@ -359,8 +371,10 @@ class RelationArrangement(Playroom):
                  target_position_range=[0.25,1.0],
                  distractor_position_range=None,
                  target_rotation_range=[0,180],
+                 distractor_rotation_range=None,
                  target_always_horizontal=False,
                  target_always_vertical=False,
+                 distractor_always_horizontal=False,
                  target_angle_range=[-30,30],
                  distractor_angle_range=None,
                  target_angle_reflections=True,
@@ -368,6 +382,7 @@ class RelationArrangement(Playroom):
                  target_position_jitter=0.25,
                  distractor_position_jitter=None,
                  target_rotation_jitter=30,
+                 distractor_rotation_jitter=None,
                  distractor_scale_range=[1.0,1.5],
                  distractor_mass_range=[2.0,2.0],
                  target_mass_range=[2.0,2.0],
@@ -404,14 +419,17 @@ class RelationArrangement(Playroom):
         self.target_position_range = target_position_range
         self.distractor_position_range = distractor_position_range or self.target_position_range
         self.target_rotation_range = target_rotation_range
+        self.distractor_rotation_range = distractor_rotation_range or self.target_rotation_range
         self.target_always_horizontal = target_always_horizontal
         self.target_always_vertical = target_always_vertical
         self.target_angle_range = target_angle_range
         self.distractor_angle_range = distractor_angle_range or self.target_angle_range
+        self.distractor_always_horizontal = distractor_always_horizontal
         self.target_angle_reflections = target_angle_reflections
         self.target_position_jitter = target_position_jitter
         self.distractor_position_jitter = distractor_position_jitter or self.target_position_jitter
         self.target_rotation_jitter = target_rotation_jitter
+        self.distractor_rotation_jitter = distractor_rotation_jitter or self.target_rotation_jitter
 
         ## object scales
         self.container_scale_range = container_scale_range
@@ -614,6 +632,7 @@ class RelationArrangement(Playroom):
     def _choose_target_position(self) -> None:
         self.target_position = self.left_or_right = None
         theta = random.uniform(*get_range(self.target_angle_range)) * (random.choice([-1.,1.]) if self.target_angle_reflections else 1.0)
+        print("target angle", theta)
         tx,ty,tz = [self.get_record_dimensions(self.target)[i] * self.target_scale[k] * 0.5
                     for i,k in enumerate(XYZ)]
         offset = max(tx, ty, tz)
@@ -772,11 +791,14 @@ class RelationArrangement(Playroom):
     def _choose_distractor_rotation(self) -> None:
 
         ## random pose in xz plane
-        self.distractor_rotation = self.get_y_rotation(self.target_rotation_range)
+        if self.push_force is not None:
+            self.distractor_rotation = self.get_y_rotation(90 - self.push_angle + self.distractor_rotation_range)
+        else:
+            self.distractor_rotation = self.get_y_rotation(self.distractor_rotation_range)
         self.distractor_rotation["y"] += random.choice([0, 180])
 
         ## whether to make the distractor horizontal or not
-        self.distractor_horizontal = bool(random.choice([0,1]))
+        self.distractor_horizontal = bool(random.choice([0,1])) or self.distractor_always_horizontal
         if self.distractor_horizontal:
             dy = self.get_record_dimensions(self.distractor)[1] * self.distractor_scale["y"]
             self.distractor_rotation["z"] = random.choice([-90,90])
@@ -785,7 +807,10 @@ class RelationArrangement(Playroom):
 
             self.distractor_position["y"] += self.get_record_dimensions(self.distractor)[0] * self.distractor_scale["x"] * 0.5
 
-        self.distractor_rotation["z"] += random.uniform(-self.target_rotation_jitter, self.target_rotation_jitter)
+        self.distractor_rotation["z"] += random.uniform(-self.distractor_rotation_jitter, self.distractor_rotation_jitter)
+
+        print("final distractor rotation")
+        print(self.distractor_rotation)
 
     def _place_distractor(self) -> List[dict]:
         '''
@@ -811,6 +836,9 @@ class RelationArrangement(Playroom):
 
         ## choose its position
         self._choose_distractor_position()
+
+        ## choose the force if it's going to be applied
+        self._set_push_command()
 
         ## choose its pose/rotation
         self._choose_distractor_rotation()
@@ -843,6 +871,7 @@ class RelationArrangement(Playroom):
 
         if not self.push_distractor:
             self.force_wait = -10
+            self.push_force = None
             return
 
         ## get the unit vector direction from the distractor to the container
@@ -859,6 +888,7 @@ class RelationArrangement(Playroom):
         push_vec = self.rotate_vector_parallel_to_floor(push_vec, theta, degrees=True)
 
         self.push_force = {k:float(v) for k,v in push_vec.items()}
+        self.push_angle = np.degrees(np.arctan2(self.push_force['z'], self.push_force['x']))
         self.push_cmd = self._get_push_cmd(o_id=self.distractor_id)
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
 
@@ -924,9 +954,6 @@ class RelationArrangement(Playroom):
         ## place distractor (depends on camera position)
         commands.extend(self._place_distractor())
 
-        ## push distractor [optional]
-        self._set_push_command()
-
         ## if it's a single object trial, remove the other objects
         if self.single_object or self.no_object:
             commands.extend(self._remove_container_and_distractor())
@@ -979,14 +1006,17 @@ if __name__ == '__main__':
         target_position_range=args.tposition,
         distractor_position_range=args.dposition,
         target_rotation_range=args.trotation,
+        distractor_rotation_range=args.drotation,
         target_angle_range=args.tangle,
         distractor_angle_range=args.dangle,        
         target_angle_reflections=bool(args.tangle_reflections),
         target_position_jitter=args.tjitter,
         target_rotation_jitter=args.trotation_jitter,
+        distractor_rotation_jitter=args.drotation_jitter,
         distractor_position_jitter=args.djitter,
         target_always_horizontal=args.thorizontal,
-        target_always_vertical=args.tvertical,        
+        target_always_vertical=args.tvertical,
+        distractor_always_horizontal=args.dhorizontal,
 
         ## scales
         zone_scale_range=args.zscale,
