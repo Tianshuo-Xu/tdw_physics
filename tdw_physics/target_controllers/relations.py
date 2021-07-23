@@ -792,7 +792,7 @@ class RelationArrangement(Playroom):
 
         ## random pose in xz plane
         if self.push_force is not None:
-            self.distractor_rotation = self.get_y_rotation(90 - self.push_angle + self.distractor_rotation_range)
+            self.distractor_rotation = self.get_y_rotation(-90 + self.push_angle + self.distractor_rotation_range)
         else:
             self.distractor_rotation = self.get_y_rotation(self.distractor_rotation_range)
         self.distractor_rotation["y"] += random.choice([0, 180])
@@ -886,6 +886,7 @@ class RelationArrangement(Playroom):
         theta = random.uniform(*get_range(self.force_angle_range)) * np.sign(self.left_or_right)
         push_vec = arr_to_xyz(push_vec)
         push_vec = self.rotate_vector_parallel_to_floor(push_vec, theta, degrees=True)
+        push_vec['y'] = -0.25
 
         self.push_force = {k:float(v) for k,v in push_vec.items()}
         self.push_angle = np.degrees(np.arctan2(self.push_force['z'], self.push_force['x']))
