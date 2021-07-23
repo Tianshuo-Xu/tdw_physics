@@ -1156,7 +1156,7 @@ class Dominoes(RigidbodiesDataset):
                 add_data=(not self.remove_zone),
                 make_kinematic=True # zone shouldn't move
             ))
-
+ 
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(

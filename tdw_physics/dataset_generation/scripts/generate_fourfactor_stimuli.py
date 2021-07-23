@@ -66,6 +66,7 @@ def build_controller(params):
         single_object=False,
         no_object=False,
         zone_scale_range=rel.handle_random_transform_args("-1.0"),
+        zone_location={'x':10.0, 'y': 10.0, 'z': 10.0},
         flex_only=False,
         **params)
 

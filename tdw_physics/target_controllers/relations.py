@@ -267,6 +267,10 @@ def get_relational_args(dataset_dir: str, parse=True):
                         type=str,
                         default="-1.0",
                         help="scale of target zone")
+    # parser.add_argument("--zlocation",
+    #                     type=str,
+    #                     default="[10.0,10.0,10.0]",
+    #                     help="scale of target zone")    
     parser.add_argument("--zcolor",
                         type=none_or_str,
                         default=None,
@@ -291,6 +295,7 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.distractor = [nm for nm in args.distractor.split(',') if nm in ALL_NAMES]
 
         args.zscale = handle_random_transform_args(args.zscale)
+        args.zlocation = handle_random_transform_args(args.zlocation)        
         args.cscale = handle_random_transform_args(args.cscale)
         args.tscale = handle_random_transform_args(args.tscale)
         args.dscale = handle_random_transform_args(args.dscale)
@@ -768,6 +773,7 @@ class RelationArrangement(Playroom):
             l_or_r = -self.left_or_right
             
         theta = random.uniform(*get_range(self.distractor_angle_range)) * (random.choice([-1.,1.]) if self.target_angle_reflections else -np.sign(self.left_or_right))
+        self.distractor_angle = theta
         dx,dy,dz = [self.get_record_dimensions(self.distractor)[i] * self.distractor_scale[k] * 0.5
                     for i,k in enumerate(XYZ)]
         offset = max(dx, dy, dz)
@@ -792,7 +798,9 @@ class RelationArrangement(Playroom):
 
         ## random pose in xz plane
         if self.push_force is not None:
-            self.distractor_rotation = self.get_y_rotation(-90 + self.push_angle + self.distractor_rotation_range)
+            # self.distractor_rotation = self.get_y_rotation(-90 + self.push_angle + self.distractor_rotation_range)
+            print(self.push_angle)
+            self.distractor_rotation = self.get_y_rotation(self.distractor_angle * np.sign(self.left_or_right))
         else:
             self.distractor_rotation = self.get_y_rotation(self.distractor_rotation_range)
         self.distractor_rotation["y"] += random.choice([0, 180])
