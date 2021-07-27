@@ -35,6 +35,11 @@ def get_args(dataset_dir: str, parse=True):
     common = get_parser(dataset_dir, get_help=False)
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
+    parser.add_argument("--room_center",
+                        type=str,
+                        default="[0.0,0.0,0.0]",
+                        help="Ranges for the center of the room")
+
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=3,
@@ -191,6 +196,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.0,
                         help="max height of camera")
+    parser.add_argument("--camera_aim_height",
+                        type=float,
+                        default=0.5,
+                        help="Height to aim camera at (offset to room center)")    
     parser.add_argument("--camera_min_angle",
                         type=float,
                         default=45,
@@ -305,6 +314,7 @@ def get_args(dataset_dir: str, parse=True):
 
         # choose a valid room
         assert args.room in (['box', 'tdw', 'house'] + ROOMS), (args.room, ROOMS)
+        args.room_center = handle_random_transform_args(args.room_center)
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -522,6 +532,7 @@ class Dominoes(RigidbodiesDataset):
     def __init__(self,
                  port: int = None,
                  room='box',
+                 room_center_range=TDWUtils.VECTOR3_ZERO,
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
@@ -551,6 +562,7 @@ class Dominoes(RigidbodiesDataset):
                  camera_left_right_reflections=False,
                  camera_min_height=1./3,
                  camera_max_height=2./3,
+                 camera_aim_height=0.5,
                  material_types=MATERIAL_TYPES,
                  target_material=None,
                  probe_material=None,
@@ -590,6 +602,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## which room to use
         self.room = room
+        self.room_center_range = room_center_range
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
@@ -671,7 +684,9 @@ class Dominoes(RigidbodiesDataset):
         self.camera_left_right_reflections = camera_left_right_reflections
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
-        self.camera_aim = {"x": 0., "y": 0.5, "z": 0.} # fixed aim
+        self.camera_aim = {"x": 0.,
+                           "y": camera_aim_height,
+                           "z": 0.} # fixed aim
 
         ## distractors and occluders
         self.num_distractors = num_distractors
@@ -846,6 +861,9 @@ class Dominoes(RigidbodiesDataset):
         else:
             self.trial_seed = -1 # not used
 
+        ## choose the room center
+        self.room_center = get_random_xyz_transform(self.room_center_range)            
+
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
 
@@ -863,13 +881,14 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position based on the drop height.
+
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
-                                                center=TDWUtils.VECTOR3_ZERO,
+                                                center=self.room_center,
                                                 reflections=self.camera_left_right_reflections)
 
         # Set the camera parameters
@@ -877,11 +896,11 @@ class Dominoes(RigidbodiesDataset):
 
         commands.extend([
             {"$type": "teleport_avatar_to",
-             "position": self.camera_position},
+             "position": a_pos},
             {"$type": "look_at_position",
              "position": self.camera_aim},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+             "focus_distance": TDWUtils.get_distance(self.camera_position, self.camera_aim)}
         ])
 
 
@@ -1144,7 +1163,7 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=(self.zone_location or self._get_zone_location(scale)),
+                position=self.add_room_center((self.zone_location or self._get_zone_location(scale))),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 scale=scale,
                 material=self.zone_material,
@@ -1550,12 +1569,13 @@ class Dominoes(RigidbodiesDataset):
     def _set_avatar_attributes(self, avatar_position) -> None:
 
         a_pos = avatar_position
+        self.absolute_camera_position = a_pos
 
         ## camera position and ray
-        self.camera_position = a_pos
-        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
-        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
-        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+        self.camera_position = {k: a_pos[k] - self.room_center[k] for k in a_pos.keys()}
+        self.camera_rotation = np.degrees(np.arctan2(self.camera_position['z'], self.camera_position['x']))
+        dist = TDWUtils.get_distance(self.camera_position, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((self.camera_position['y'] - self.camera_aim['y'])/dist))
         camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
         self.camera_radius = np.linalg.norm(camera_ray)
         camera_ray /= np.linalg.norm(camera_ray)

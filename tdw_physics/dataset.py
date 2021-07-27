@@ -543,7 +543,7 @@ class Dataset(Controller, ABC):
         if reflections:
             theta2 = random.uniform(angle_min+180, angle_max+180)
             theta = random.choice([theta, theta2])
-        a_y = random.uniform(y_min, y_max)
+        a_y = random.uniform(y_min, y_max) + center["y"]
         a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
         a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
         a_x = a_x_new
@@ -702,6 +702,9 @@ class Dataset(Controller, ABC):
     def _get_next_object_id(self) -> int:
         self._increment_object_id()
         return int(self._object_id_counter)
+
+    def add_room_center(self, vector):
+        return {k: vector[k] + self.room_center[k] for k in vector.keys()}
 
     def get_material_name(self, material):
 

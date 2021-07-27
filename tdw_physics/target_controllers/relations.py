@@ -322,6 +322,7 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.fwait = handle_random_transform_args(args.fwait)
 
         assert args.room in ['box', 'tdw'] + ROOMS, (args.room, ROOMS)
+        args.room_center = handle_random_transform_args(args.room_center)
 
         return args
 
@@ -549,22 +550,23 @@ class RelationArrangement(Playroom):
 
     def _place_camera(self) -> List[dict]:
         commands = []
+
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
-                                                center=TDWUtils.VECTOR3_ZERO,
+                                                center=self.room_center,
                                                 reflections=self.camera_left_right_reflections)
         self._set_avatar_attributes(a_pos)
         commands.extend([
             {"$type": "teleport_avatar_to",
-             "position": self.camera_position},
+             "position": a_pos},
             {"$type": "look_at_position",
-             "position": self.camera_aim},
+             "position": self.add_room_center(self.camera_aim)},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+             "focus_distance": TDWUtils.get_distance(self.camera_position, self.camera_aim)}
         ])
 
         return commands
@@ -603,7 +605,8 @@ class RelationArrangement(Playroom):
         self.container_height = cheight * self.container_scale["y"]
 
         ## jitter the xz position of the container
-        self.container_position = get_random_xyz_transform(self.container_position_range)
+        self.container_position = self.add_room_center(
+            get_random_xyz_transform(self.container_position_range))
 
         ## rotate the container in the xz plane
         self.container_rotation = self.get_y_rotation([0, 360])
@@ -679,6 +682,8 @@ class RelationArrangement(Playroom):
         ## jitter position
         for k in ["x", "z"]:
             self.target_position[k] += random.uniform(-self.target_position_jitter, self.target_position_jitter)
+
+        self.target_position = self.add_room_center(self.target_position)
 
     def _choose_target_rotation(self) -> None:
 
@@ -797,6 +802,8 @@ class RelationArrangement(Playroom):
         for k in ["x", "z"]:
             self.distractor_position[k] += random.uniform(-self.distractor_position_jitter, self.distractor_position_jitter)
 
+        self.distractor_position = self.add_room_center(self.distractor_position)
+
     def _choose_distractor_rotation(self) -> None:
 
         ## random pose in xz plane
@@ -804,8 +811,8 @@ class RelationArrangement(Playroom):
             d_rot_y = self.distractor_rotation_range - self.d_to_c_angle - self.push_angle
             self.distractor_rotation = self.get_y_rotation(d_rot_y)
             # print("d_to_c", self.d_to_c_angle)
-            # print("camera position", self.camera_ray)
-            # print("camera rotation", self.camera_rotation)
+            print("camera position", self.camera_ray)
+            print("camera rotation", self.camera_rotation)
             # print("push angle", self.push_angle)
             # print("push angle complement", 90 - self.push_angle)
             # print("sign", np.sign(self.left_or_right))
@@ -962,6 +969,8 @@ class RelationArrangement(Playroom):
         print("CONTROLLER SEED: %d" % self.seed)
         print("TRIAL SEED: %d" % self.trial_seed)
 
+        ## choose the center of the room
+        self.room_center = get_random_xyz_transform(self.room_center_range)
 
         ## place "zone" (i.e. a mat on the floor)
         commands.extend(self._place_target_zone())
@@ -985,6 +994,13 @@ class RelationArrangement(Playroom):
         if self.no_object:
             commands.extend(self._remove_target())
 
+
+        print("camera", self.absolute_camera_position)
+        print("container", self.container_position)
+        print("target", self.target_position)
+        print("distractor", self.distractor_position)
+        print("camer aim", self.camera_aim)
+            
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
@@ -1068,12 +1084,14 @@ if __name__ == '__main__':
         camera_max_angle=args.camera_max_angle,
         camera_min_height=args.camera_min_height,
         camera_max_height=args.camera_max_height,
+        camera_aim_height=args.camera_aim_height,
         camera_left_right_reflections=args.camera_left_right_reflections,
 
         ## common
         launch_build=launch_build,
         port=args.port,
         room=args.room,
+        room_center_range=args.room_center,
         randomize=args.random,
         seed=args.seed,
         flex_only=False,
