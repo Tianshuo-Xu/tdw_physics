@@ -19,7 +19,7 @@ set_a_params = {
     "target_rotation_jitter": 0.0,
     "target_mass_range": "1.5",            
     "distractor_scale_range": "0.5",
-    "distractor_position_range": "[1.0,1.5]",
+    "distractor_position_range": "[1.25,1.75]",
     "distractor_rotation_range": "[0,0]",
     "distractor_rotation_jitter": 0.0,
     "distractor_mass_range": "2.0",                
@@ -37,8 +37,8 @@ set_b_params = {
     "target_rotation_jitter": 0.0,
     "target_mass_range": "1.5",        
     "distractor_scale_range": "0.5",
-    "distractor_position_range": "[1.0,1.5]",
-    "distractor_rotation_range": "[0,0]",
+    "distractor_position_range": "[1.25,1.75]",
+    "distractor_rotation_range": "[-90,-90]",
     "distractor_rotation_jitter": 0.0,
     "distractor_mass_range": "1.5",
     "distractor_always_horizontal": True,
@@ -79,8 +79,8 @@ common_params = {
     "max_frames": 300,
     "camera_min_height": 0.5,
     "camera_max_height": 1.5,
-    "camera_radius": [2.0,3.0],
+    "camera_radius": [2.25,3.25],
     "camera_left_right_reflections": False,
     "camera_min_angle": 0,
-    "camera_max_angle": 0
+    "camera_max_angle": 360
 }

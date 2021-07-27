@@ -798,18 +798,26 @@ class RelationArrangement(Playroom):
 
         ## random pose in xz plane
         if self.push_force is not None:
-            # self.distractor_rotation = self.get_y_rotation(-90 + self.push_angle + self.distractor_rotation_range)
-            print(self.push_angle)
-            self.distractor_rotation = self.get_y_rotation(self.distractor_angle * np.sign(self.left_or_right))
+            d_rot_y = self.distractor_rotation_range - self.d_to_c_angle - self.push_angle
+            self.distractor_rotation = self.get_y_rotation(d_rot_y)
+            # print("d_to_c", self.d_to_c_angle)
+            # print("camera position", self.camera_ray)
+            # print("camera rotation", self.camera_rotation)
+            # print("push angle", self.push_angle)
+            # print("push angle complement", 90 - self.push_angle)
+            # print("sign", np.sign(self.left_or_right))
+            # print("offset", self.distractor_angle * np.sign(self.left_or_right))
+            # print("distractor rotation", self.distractor_rotation)
         else:
             self.distractor_rotation = self.get_y_rotation(self.distractor_rotation_range)
-        self.distractor_rotation["y"] += random.choice([0, 180])
+        # self.distractor_rotation["y"] += random.choice([0, 180])
 
         ## whether to make the distractor horizontal or not
         self.distractor_horizontal = bool(random.choice([0,1])) or self.distractor_always_horizontal
         if self.distractor_horizontal:
             dy = self.get_record_dimensions(self.distractor)[1] * self.distractor_scale["y"]
-            self.distractor_rotation["z"] = random.choice([-90,90])
+            # self.distractor_rotation["z"] = random.choice([-90,90])
+            self.distractor_rotation["z"] = 90           
             self.distractor_position["z"] += -np.sin(np.radians(self.distractor_rotation["y"])) * 0.5 * dy * np.sign(self.distractor_rotation["z"])
             self.distractor_position["x"] += np.cos(np.radians(self.distractor_rotation["y"])) * 0.5 * dy * np.sign(self.distractor_rotation["z"])
 
@@ -887,17 +895,21 @@ class RelationArrangement(Playroom):
         push_vec[1] = 0.0 # no y component; assume things are on ground
         push_vec /= np.sqrt(np.square(push_vec).sum()) # unit vector
 
+
         ## scale the force
         push_vec *= random.uniform(*get_range(self.force_scale_range))
 
         ## rotate the vector
         theta = random.uniform(*get_range(self.force_angle_range)) * np.sign(self.left_or_right)
         push_vec = arr_to_xyz(push_vec)
+        self.push_angle = theta        
+        self.d_to_c_angle = np.degrees(np.arctan2(push_vec['z'], push_vec['x']))
+        self.c_to_d_angle = np.degrees(np.arctan2(push_vec['z'], push_vec['x'])) + 180        
         push_vec = self.rotate_vector_parallel_to_floor(push_vec, theta, degrees=True)
         push_vec['y'] = -0.25
 
         self.push_force = {k:float(v) for k,v in push_vec.items()}
-        self.push_angle = np.degrees(np.arctan2(self.push_force['z'], self.push_force['x']))
+        # self.push_angle = np.degrees(np.arctan2(self.push_force['z'], self.push_force['x']))
         self.push_cmd = self._get_push_cmd(o_id=self.distractor_id)
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
 
