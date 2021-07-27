@@ -12,6 +12,7 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_range,
                                              handle_random_transform_args)
 from tdw_physics.util import (MODEL_LIBRARIES,
+                              ROOMS,
                               get_parser,
                               xyz_to_arr,
                               arr_to_xyz,
@@ -319,6 +320,8 @@ def get_relational_args(dataset_dir: str, parse=True):
         args.fscale = handle_random_transform_args(args.fscale)
         args.frot = handle_random_transform_args(args.frot)
         args.fwait = handle_random_transform_args(args.fwait)
+
+        assert args.room in ['box', 'tdw'] + ROOMS, (args.room, ROOMS)
 
         return args
 

@@ -18,7 +18,7 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_range,
                                              handle_random_transform_args)
 from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
-                              MATERIAL_TYPES, MATERIAL_NAMES,
+                              MATERIAL_TYPES, MATERIAL_NAMES, ROOMS,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
@@ -304,7 +304,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in ['box', 'tdw', 'house'], args.room
+        assert args.room in (['box', 'tdw', 'house'] + ROOMS), (args.room, ROOMS)
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -824,6 +824,8 @@ class Dominoes(RigidbodiesDataset):
             add_scene = self.get_add_scene(scene_name="tdw_room")
         elif self.room == 'house':
             add_scene = self.get_add_scene(scene_name='archviz_house')
+        else:
+            add_scene = self.get_add_scene(scene_name=self.room)
         return [add_scene,
                 {"$type": "set_aperture",
                  "aperture": 8.0},
