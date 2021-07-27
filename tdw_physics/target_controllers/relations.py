@@ -999,7 +999,7 @@ class RelationArrangement(Playroom):
         print("container", self.container_position)
         print("target", self.target_position)
         print("distractor", self.distractor_position)
-        print("camer aim", self.camera_aim)
+        print("camer aim", self.add_room_center(self.camera_aim))
             
         return commands
 
