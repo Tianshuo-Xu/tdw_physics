@@ -70,15 +70,13 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
-
+    '''
     def communicate(self, commands) -> list:
-        '''
-        Save a log of the commands so that they can be rerun
-        '''
+        #Save a log of the commands so that they can be rerun
         with open(str(self.command_log), "at") as f:
             f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
         return super().communicate(commands)
-
+    '''
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
         self.model_names = []
