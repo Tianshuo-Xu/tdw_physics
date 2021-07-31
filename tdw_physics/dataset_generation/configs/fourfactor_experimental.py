@@ -65,6 +65,22 @@ miss_params = {
     "distractor_angle_range": "45"
 }
 
+tdwroom_params = {
+    'room': 'tdw',
+    'room_center_range': "[0.0,0.0,0.0]"
+}
+
+suburb1_params = {
+    'room': 'suburb_scene_2018',
+    'room_center_range': "[-25.0,0.0,2.0]"
+}
+
+suburb2_params = {
+    'room': 'suburb_scene_2018',
+    'room_center_range': "[-35.0,0.0,2.0]"
+}
+
+
 common_params = {
     "container_position_range": "[[-0.1,0.1],0.0,[-0.1,0.1]]",
     "target_always_vertical": True,

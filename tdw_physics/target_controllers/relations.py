@@ -665,6 +665,7 @@ class RelationArrangement(Playroom):
                 "y": self.container_height,
                 "z": unit_v["z"] * tpos
             }
+            self.target_position = self.add_room_center(self.target_position)            
 
         ## elif null, put it to one side of the container
         elif self.relation == Relation.null:
@@ -675,6 +676,7 @@ class RelationArrangement(Playroom):
                 "y": self.container_height,
                 "z": unit_v["z"] * tpos
             }
+            self.target_position = self.add_room_center(self.target_position)                        
 
         else:
             raise NotImplementedError("You need to institute a rule for this relation type")
@@ -682,8 +684,6 @@ class RelationArrangement(Playroom):
         ## jitter position
         for k in ["x", "z"]:
             self.target_position[k] += random.uniform(-self.target_position_jitter, self.target_position_jitter)
-
-        self.target_position = self.add_room_center(self.target_position)
 
     def _choose_target_rotation(self) -> None:
 

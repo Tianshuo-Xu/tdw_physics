@@ -13,6 +13,7 @@ import tdw_physics.target_controllers.relations as rel
 from tdw_physics.dataset_generation.configs.fourfactor_experimental import \
     (set_a_params, set_b_params,
      contain_params, occlude_params, collide_params, miss_params,
+     tdwroom_params, suburb1_params, suburb2_params,
      common_params)
 
 SAVE_FRAME = 90
@@ -29,12 +30,13 @@ def build_scenarios():
 
     scenarios = OrderedDict()
     
-    for room in ["tdw", "box"]:
+    for r, rooms in enumerate([tdwroom_params, suburb1_params, suburb2_params]):
         params = dict()
         params.update(copy.deepcopy(common_params))
-        params['room'] = room
+        room_params = copy.deepcopy(params)
+        room_params.update(copy.deepcopy(rooms))
         for objs in [set_a_params, set_b_params]:
-            obj_params = copy.deepcopy(params)
+            obj_params = copy.deepcopy(room_params)
             obj_params.update(copy.deepcopy(objs))
             for i, con in enumerate([collide_params, occlude_params]):
                 con_params = copy.deepcopy(obj_params)
@@ -48,7 +50,7 @@ def build_scenarios():
                             coll_params[k] = rel.handle_random_transform_args(v)
                             
                     name = build_scenario_name(
-                        room=room,
+                        room=coll_params['room'].split('_')[0] + str(r),
                         relation=coll_params['relation'].name,
                         collide=(not bool(j)),
                         probe=coll_params['distractor']
@@ -58,7 +60,7 @@ def build_scenarios():
     return scenarios
 
 def build_controller(params):
-
+    
     c = rel.RelationArrangement(
         launch_build=True,
         port=None,
