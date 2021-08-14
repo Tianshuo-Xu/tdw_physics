@@ -9,7 +9,7 @@ from collections import OrderedDict
 import copy
 import json
 from tqdm import tqdm
-from tdw_physics.util import MODEL_LIBRARIES
+from tdw_physics.util import MODEL_LIBRARIES, none_or_str, none_or_int
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
 
 
@@ -78,6 +78,14 @@ def get_args(dataset_dir: str):
                         type=str,
                         default="[0,1,2,3]",
                         help="Permutation of [probes, targets, distractors, occluders] to use in scenarios")
+    parser.add_argument("--start",
+                        type=int,
+                        default=0,
+                        help="Which scenario to start with")
+    parser.add_argument("--end",
+                        type=int,
+                        default=None,
+                        help="Which scenario to end with")
 
 
     args = parser.parse_args()
@@ -271,6 +279,7 @@ def main(args):
                                 args.num_trials_per_model, seed=args.category_seed,
                                 group_order=args.group_order)
 
+    start, end = args.start, (args.end or len(scenarios))
 
     ## set up the trial loop
     def _get_suffix(split, group_order):
