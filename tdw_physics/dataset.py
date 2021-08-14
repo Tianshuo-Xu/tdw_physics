@@ -327,11 +327,9 @@ class Dataset(Controller, ABC):
             ## update the controller state
             self.update_controller_state(**update_kwargs[i])
 
-            if do_log:
-                logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
-
             if not filepath.exists():
-
+                if do_log:
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))                
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
@@ -370,11 +368,10 @@ class Dataset(Controller, ABC):
                         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
                         vertices, faces = self.object_meshes[o_id]
                         save_obj(vertices, faces, obj_filename)
-            pbar.update(1)
 
-            if do_log:
-                logging.info("Finished trial << %d >> with trial seed = %d" % (i, self.trial_seed))
-            
+                if do_log:
+                    logging.info("Finished trial << %d >> with trial seed = %d" % (i, self.trial_seed))
+            pbar.update(1)
         pbar.close()
 
     def trial(self,

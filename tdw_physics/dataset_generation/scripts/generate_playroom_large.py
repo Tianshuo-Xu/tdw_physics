@@ -73,11 +73,19 @@ def get_args(dataset_dir: str):
                         help="Whether to lump all the static models together for every split")
     parser.add_argument("--validation_set",
                         action="store_true",
-                        help="Create the validation set using the remaining models")    
+                        help="Create the validation set using the remaining models")
+    parser.add_argument("--group_order",
+                        type=str,
+                        default="[0,1,2,3]",
+                        help="Permutation of [probes, targets, distractors, occluders] to use in scenarios")
 
 
     args = parser.parse_args()
     args = playroom_postproc(args)
+    if args.group_order is not None:
+        args.group_order = json.loads(args.group_order)
+    else:
+        args.group_order = range(4)
     return args
 
 def make_category_splits(categories=CATEGORIES, num_per_split=200, seed=0):
@@ -124,9 +132,12 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0):
+def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, group_order=None):
 
-    rng = np.random.RandomState(seed=seed)
+    if group_order is None:
+        group_order = range(4)
+    
+    rng = np.random.RandomState(seed=(seed + group_order[0]))
     num = num_trials_per_model
     NM = len(moving_models)
     NS = len(static_models)
@@ -135,6 +146,10 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0):
     targets = rng.permutation(moving_models)
     distractors = rng.permutation(static_models)
     occluders = rng.permutation(static_models)
+    groups = [probes, targets, distractors, occluders]
+
+    print("group order", group_order)
+    probes, targets, disctractors, occluders = [groups[g] for g in group_order]
 
     scenarios = []
     for i in range(num * NM):
@@ -253,11 +268,20 @@ def main(args):
         moving_models = static_models = validation_models
 
     scenarios = build_scenarios(moving_models, static_models,
-                                args.num_trials_per_model, seed=args.category_seed)
+                                args.num_trials_per_model, seed=args.category_seed,
+                                group_order=args.group_order)
 
 
     ## set up the trial loop
-    suffix = str(args.split % num_moving_splits) if not args.validation_set else 'val'
+    def _get_suffix(split, group_order):
+        ns = num_moving_splits
+        if group_order is None:
+            group_order = range(4)
+        suffix = split + ns * group_order[0]
+        suffix = str(suffix % (ns * len(group_order)))
+        return suffix
+        
+    suffix = _get_suffix(args.split, args.group_order) if not args.validation_set else 'val'
     output_dir = Path(args.dir).joinpath('model_split_' + suffix)
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
@@ -269,12 +293,13 @@ def main(args):
         
     # log
     setup_logging(output_dir)
-    logging.info("Generating split %d / %d with category seed %d" % \
-                 (args.split, (num_moving_splits + num_static_splits)-1, args.category_seed))
+    logging.info("Generating split %s / %d with category seed %d" % \
+                 (suffix, 2*(num_moving_splits + num_static_splits)-1, args.category_seed))
+    logging.info("Using group order %s" % [['probes', 'targets', 'distractors', 'occluders'][g] for g in args.group_order])    
 
     ## init the controller
     if (args.seed == -1) or (args.seed is None):
-        args.seed = int(args.split)
+        args.seed = int(args.split) + num_moving_splits * args.group_order[0]
     Play = build_controller(args)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
     Play.command_log = output_dir.joinpath('tdw_commands.json')
