@@ -92,10 +92,10 @@ common_params = {
     "target_material": "parquet_wood_red_cedar",
     "container_material": "parquet_wood_red_cedar",
     "min_frames": 150,
-    "max_frames": 300,
+    "max_frames": 450,
     "camera_min_height": 1.0,
     "camera_max_height": 2.0,
-    "camera_radius": [3.25,4.25],
+    "camera_radius": [3.0,3.75],
     "camera_left_right_reflections": False,
     "camera_min_angle": 0,
     "camera_max_angle": 360

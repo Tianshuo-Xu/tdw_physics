@@ -455,7 +455,7 @@ class RelationArrangement(Playroom):
         self.distractor_material = target_material
 
         ## when to stop trial
-        self.flow_thresh = 5.0
+        self.flow_thresh = 1.0
         self.min_frames = min_frames
         self.max_frames = max_frames
 

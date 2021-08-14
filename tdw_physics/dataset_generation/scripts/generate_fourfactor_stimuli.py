@@ -10,7 +10,7 @@ from collections import OrderedDict
 import stopit
 
 import tdw_physics.target_controllers.relations as rel
-from tdw_physics.dataset_generation.configs.fourfactor_experimental import \
+from tdw_physics.dataset_generation.configs.fourfactor_experimental_prt import \
     (set_a_params, set_b_params,
      contain_params, occlude_params, collide_params, miss_params,
      tdwroom_params, suburb1_params, suburb2_params,
