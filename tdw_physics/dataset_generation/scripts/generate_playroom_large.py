@@ -149,7 +149,7 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, 
     groups = [probes, targets, distractors, occluders]
 
     print("group order", group_order)
-    probes, targets, disctractors, occluders = [groups[g] for g in group_order]
+    probes, targets, distractors, occluders = [groups[g] for g in group_order]
 
     scenarios = []
     for i in range(num * NM):
