@@ -1,4 +1,4 @@
-import sys, os, copy, subprocess, glob, logging
+import sys, os, copy, subprocess, glob, logging, time
 import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
@@ -329,7 +329,8 @@ class Dataset(Controller, ABC):
 
             if not filepath.exists():
                 if do_log:
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))                
+                    start = time.time()
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
@@ -370,7 +371,8 @@ class Dataset(Controller, ABC):
                         save_obj(vertices, faces, obj_filename)
 
                 if do_log:
-                    logging.info("Finished trial << %d >> with trial seed = %d" % (i, self.trial_seed))
+                    end = time.time()
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
             pbar.update(1)
         pbar.close()
 
@@ -432,11 +434,10 @@ class Dataset(Controller, ABC):
 
             # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
-            if ('imag' not in r_ids) or ('tran' not in r_ids):
-                print("retrying frame %d, response only had %s" % (frame, r_ids))
-                frame -= 1
-                continue
-
+            # if ('imag' not in r_ids) or ('tran' not in r_ids):
+            #     print("retrying frame %d, response only had %s" % (frame, r_ids))
+            #     frame -= 1
+            #     continue
             frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
 
             # Write whether this frame completed the trial and any other trial-level data
