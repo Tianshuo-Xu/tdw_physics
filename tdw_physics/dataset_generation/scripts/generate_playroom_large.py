@@ -1,4 +1,5 @@
 import time
+import logging
 import os, sys
 import random
 import numpy as np
@@ -24,6 +25,19 @@ NUM_MOVING_MODELS = 1000
 NUM_STATIC_MODELS = 1000
 NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
+
+def setup_logging(logdir):
+
+    logdir = Path(logdir)
+    if not logdir.exists():
+        logdir.parent.mkdir(parents=True)
+        
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s --- %(message)s',
+                        handlers=[
+                            logging.FileHandler(os.path.join(str(logdir), "generation.log")),
+                            logging.StreamHandler()
+                        ])
 
 def get_args(dataset_dir: str):
 
@@ -252,8 +266,15 @@ def main(args):
         temp_path.parent.mkdir(parents=True)
     if temp_path.exists():
         temp_path.unlink()
+        
+    # log
+    setup_logging(output_dir)
+    logging.info("Generating split %d / %d with category seed %d" % \
+                 (args.split, (num_moving_splits + num_static_splits)-1, args.category_seed))
 
     ## init the controller
+    if (args.seed == -1) or (args.seed is None):
+        args.seed = int(args.split)
     Play = build_controller(args)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
     Play.command_log = output_dir.joinpath('tdw_commands.json')
@@ -265,7 +286,7 @@ def main(args):
 
     init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
     Play.communicate(init_cmds)
-
+    logging.info("Initialized Controller with random seed %d" % args.seed)
 
     ## run the trial loop
     Play.trial_loop(num=len(scenarios),
@@ -273,7 +294,9 @@ def main(args):
                     temp_path=str(temp_path),
                     save_frame=SAVE_FRAME,
                     update_kwargs=scenarios,
-                    unload_assets_every=args.unload_assets_every)
+                    unload_assets_every=args.unload_assets_every,
+                    do_log=True)
+
 
     ## terminate build
     Play.communicate({"$type": "terminate"})

@@ -1,4 +1,4 @@
-import sys, os, copy, subprocess, glob
+import sys, os, copy, subprocess, glob, logging
 import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
@@ -293,7 +293,8 @@ class Dataset(Controller, ABC):
                    temp_path: str,
                    save_frame: int=None,
                    unload_assets_every: int = 10,
-                   update_kwargs: List[dict] = {}) -> None:
+                   update_kwargs: List[dict] = {},
+                   do_log: bool = False) -> None:
 
         if not isinstance(update_kwargs, list):
             update_kwargs = [update_kwargs] * num
@@ -325,6 +326,9 @@ class Dataset(Controller, ABC):
 
             ## update the controller state
             self.update_controller_state(**update_kwargs[i])
+
+            if do_log:
+                logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
 
             if not filepath.exists():
 
@@ -367,6 +371,10 @@ class Dataset(Controller, ABC):
                         vertices, faces = self.object_meshes[o_id]
                         save_obj(vertices, faces, obj_filename)
             pbar.update(1)
+
+            if do_log:
+                logging.info("Finished trial << %d >> with trial seed = %d" % (i, self.trial_seed))
+            
         pbar.close()
 
     def trial(self,
