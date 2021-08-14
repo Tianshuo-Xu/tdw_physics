@@ -969,8 +969,11 @@ class RelationArrangement(Playroom):
         print("CONTROLLER SEED: %d" % self.seed)
         print("TRIAL SEED: %d" % self.trial_seed)
 
-        ## choose the center of the room
-        self.room_center = get_random_xyz_transform(self.room_center_range)
+        ## choose the room center
+        if self.room_center_range is not None:
+            self.room_center = get_random_xyz_transform(self.room_center_range)
+        else:
+            self._set_room_center()
 
         ## place "zone" (i.e. a mat on the floor)
         commands.extend(self._place_target_zone())

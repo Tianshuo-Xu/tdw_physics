@@ -36,10 +36,9 @@ def get_args(dataset_dir: str, parse=True):
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
     parser.add_argument("--room_center",
-                        type=str,
-                        default="[0.0,0.0,0.0]",
+                        type=none_or_str,
+                        default=None,
                         help="Ranges for the center of the room")
-
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=3,
@@ -532,7 +531,7 @@ class Dominoes(RigidbodiesDataset):
     def __init__(self,
                  port: int = None,
                  room='box',
-                 room_center_range=TDWUtils.VECTOR3_ZERO,
+                 room_center_range=None,
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
@@ -851,6 +850,9 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5}]
 
+    def _set_room_center(self) -> None:
+        self.room_center = TDWUtils.VECTOR3_ZERO
+
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
@@ -862,7 +864,10 @@ class Dominoes(RigidbodiesDataset):
             self.trial_seed = -1 # not used
 
         ## choose the room center
-        self.room_center = get_random_xyz_transform(self.room_center_range)            
+        if self.room_center_range is not None:
+            self.room_center = get_random_xyz_transform(self.room_center_range)
+        else:
+            self._set_room_center()        
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())

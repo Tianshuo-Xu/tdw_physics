@@ -182,6 +182,12 @@ class Collision(Dominoes):
         else:
             self.trial_seed = -1 # not used
 
+        ## choose the room center
+        if self.room_center_range is not None:
+            self.room_center = get_random_xyz_transform(self.room_center_range)
+        else:
+            self._set_room_center()
+
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
 

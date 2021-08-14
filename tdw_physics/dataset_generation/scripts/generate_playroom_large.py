@@ -147,6 +147,7 @@ def build_controller(args, launch_build=True):
         launch_build=launch_build,
         port=args.port,
         room=args.room,
+        room_center_range=args.room_center,
         randomize=0,
         seed=args.seed,
         target_zone=args.zone,
