@@ -31,7 +31,7 @@ def setup_logging(logdir):
     logdir = Path(logdir)
     if not logdir.exists():
         logdir.parent.mkdir(parents=True)
-        
+
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s --- %(message)s',
                         handlers=[
@@ -78,6 +78,9 @@ def get_args(dataset_dir: str):
                         type=str,
                         default="[0,1,2,3]",
                         help="Permutation of [probes, targets, distractors, occluders] to use in scenarios")
+    parser.add_argument("--launch_build",
+                        action="store_true",
+                        help="Whether to launch the build")
 
 
     args = parser.parse_args()
@@ -136,7 +139,7 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, 
 
     if group_order is None:
         group_order = range(4)
-    
+
     rng = np.random.RandomState(seed=(seed + group_order[0]))
     num = num_trials_per_model
     NM = len(moving_models)
@@ -173,7 +176,7 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, 
 def build_controller(args, launch_build=True):
 
     C = Playroom(
-        launch_build=launch_build,
+        launch_build=args.launch_build,
         port=args.port,
         room=args.room,
         room_center_range=args.room_center,
@@ -280,7 +283,7 @@ def main(args):
         suffix = split + ns * group_order[0]
         suffix = str(suffix % (ns * len(group_order)))
         return suffix
-        
+
     suffix = _get_suffix(args.split, args.group_order) if not args.validation_set else 'val'
     output_dir = Path(args.dir).joinpath('model_split_' + suffix)
     if not output_dir.exists():
@@ -290,12 +293,12 @@ def main(args):
         temp_path.parent.mkdir(parents=True)
     if temp_path.exists():
         temp_path.unlink()
-        
+
     # log
     setup_logging(output_dir)
     logging.info("Generating split %s / %d with category seed %d" % \
                  (suffix, 2*(num_moving_splits + num_static_splits)-1, args.category_seed))
-    logging.info("Using group order %s" % [['probes', 'targets', 'distractors', 'occluders'][g] for g in args.group_order])    
+    logging.info("Using group order %s" % [['probes', 'targets', 'distractors', 'occluders'][g] for g in args.group_order])
 
     ## init the controller
     if (args.seed == -1) or (args.seed is None):
@@ -309,8 +312,10 @@ def main(args):
     Play.save_meshes = False
     Play.save_labels = False
 
+    log_cmds = [{"$type": "set_network_logging", "value": True}]
+    # log_cmds = []
     init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
-    Play.communicate(init_cmds)
+    Play.communicate(log_cmds + init_cmds)
     logging.info("Initialized Controller with random seed %d" % args.seed)
 
     ## run the trial loop
