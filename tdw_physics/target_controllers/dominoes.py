@@ -322,9 +322,9 @@ def get_args(dataset_dir: str, parse=True):
             libs = []
             for lib in args.model_libraries:
                 if 'models_' not in lib:
-                    libs.append('models_' + lib)
+                    libs.append('models_' + lib + '.json')
                 else:
-                    libs.append(lib)
+                    libs.append(lib + '.json')
             args.model_libraries = libs
 
         # whether to set all objects same color
@@ -430,7 +430,7 @@ def get_args(dataset_dir: str, parse=True):
             args.distractor = PRIMITIVE_NAMES
         else:
             d_names = args.distractor.split(',')
-            args.distractor = [r for r in FULL_NAMES if any((nm in r for nm in d_names))]
+            args.distractor = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in d_names))]
 
         if args.occluder is None or args.occluder == 'full':
             args.occluder = FULL_NAMES
@@ -440,7 +440,7 @@ def get_args(dataset_dir: str, parse=True):
             args.occluder = PRIMITIVE_NAMES
         else:
             o_names = args.occluder.split(',')
-            args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
+            args.occluder = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in o_names))]
 
         # produce training data
         if args.training_data_mode:
@@ -710,6 +710,7 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
+        self.distractor_material = self.occluder_material = self.target_material
 
         ## target can move
         self._fixed_target = False
@@ -1799,7 +1800,7 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.target_material)))
+                        record, o_id, self.get_material_name(self.distractor_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1876,12 +1877,11 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.target_material)))
+                        record, o_id, self.get_material_name(self.occluder_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
-
 
             commands.extend([
                 {"$type": "scale_object",

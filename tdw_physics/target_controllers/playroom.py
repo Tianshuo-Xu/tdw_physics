@@ -223,6 +223,14 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         type=none_or_int,
                         default=1,
                         help="number of distractors")
+    parser.add_argument("--dmaterial",
+                        type=none_or_str,
+                        default="parquet_wood_red_cedar",
+                        help="Material name for distractor. If None, samples from material_type")
+    parser.add_argument("--omaterial",
+                        type=none_or_str,
+                        default="parquet_wood_red_cedar",
+                        help="Material name for occluder. If None, samples from material_type")        
 
     def postprocess(args):
 
@@ -254,6 +262,8 @@ class Playroom(Collision):
                  target_categories=None,
                  size_min=0.05,
                  size_max=4.0,
+                 distractor_material=None,
+                 occluder_material=None,
                  **kwargs):
 
         self.probe_categories = probe_categories
@@ -261,8 +271,9 @@ class Playroom(Collision):
         self.size_min = size_min
         self.size_max = size_max
         super().__init__(port=port, **kwargs)
-        # print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
-        # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))        
+
+        self.distractor_material = distractor_material
+        self.occluder_material = occluder_material
 
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
@@ -291,11 +302,11 @@ class Playroom(Collision):
         # clear some other stuff
 
     def update_controller_state(self,
-                               probe=None,
-                               target=None,
-                               distractor=None,
-                               occluder=None,
-                               **kwargs) -> None:
+                                probe=None, probe_material=None, probe_color=None,
+                                target=None, target_material=None, target_color=None,
+                                distractor=None, distractor_material=None, distractor_color=None,
+                                occluder=None, occluder_material=None, occluder_color=None,
+                                **kwargs) -> None:
 
         print("UPDATE CONTROLLER STATE")
         self.clear_static_data()
@@ -311,6 +322,12 @@ class Playroom(Collision):
         if occluder is not None:
             self.set_occluder_types([occluder])
             print("occluder: %s" % occluder)
+
+        print("MATERIALS")
+        print("probe %s" % self.probe_material)
+        print("target %s" % self.target_material)
+        print("distractor %s" % self.distractor_material)
+        print("occluder %s" % self.occluder_material)                        
 
     def _place_target_object(self) -> List[dict]:
 
@@ -435,7 +452,10 @@ if __name__ == "__main__":
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
         size_min=args.size_min,
-        size_max=args.size_max
+        size_max=args.size_max,
+        distractor_material=args.dmaterial,
+        occluder_material=args.omaterial,
+        model_libraries=args.model_libraries
     )
 
     if bool(args.run):
