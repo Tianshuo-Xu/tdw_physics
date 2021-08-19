@@ -589,6 +589,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_horizontal=False,
                  use_test_mode_colors=False,
                  probe_initial_height=0.0,
+                 randomize_object_size=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -715,6 +716,8 @@ class Dominoes(RigidbodiesDataset):
         ## target can move
         self._fixed_target = False
         self.use_test_mode_colors = use_test_mode_colors
+
+        self.randomize_object_size = randomize_object_size
 
     def get_types(self,
                   objlist,
@@ -1199,8 +1202,16 @@ class Dominoes(RigidbodiesDataset):
         dims = Dominoes.get_record_dimensions(record)
         dmin, dmax = [min(dims), max(dims)]
 
-
         scale = 1.0
+
+        if hasattr(size_range, 'keys'):
+            assert set(size_range.keys()) == {'x','y','z'}, size_range
+            scale = {}
+            scale['x'] = Dominoes.rescale_record_to_size(record, size_range['x'], randomize)['x']
+            scale['y'] = Dominoes.rescale_record_to_size(record, size_range['y'], randomize)['y']
+            scale['z'] = Dominoes.rescale_record_to_size(record, size_range['z'], randomize)['z']
+            return scale
+            
         if randomize:
             smin = random.uniform(*get_range(size_range))
             smax = random.uniform(smin, get_range(size_range)[1])
@@ -1232,8 +1243,7 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range)
-            # print("rescaled target", scale)
+            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
 
         self.target = record
         self.target_type = data["name"]
@@ -1299,7 +1309,7 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range)
+            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
             # print("rescaled probe", scale)
 
         self.probe = record

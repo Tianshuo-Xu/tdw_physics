@@ -153,7 +153,10 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--size_max",
                         type=none_or_str,
                         default="4.0",
-                        help="Maximum size for probe and target objects")    
+                        help="Maximum size for probe and target objects")
+    parser.add_argument("--randomize_object_size",
+                        action="store_true",
+                        help="Whether to randomly scale objects")        
 
 
     ### layout
@@ -455,7 +458,8 @@ if __name__ == "__main__":
         size_max=args.size_max,
         distractor_material=args.dmaterial,
         occluder_material=args.omaterial,
-        model_libraries=args.model_libraries
+        model_libraries=args.model_libraries,
+        randomize_object_size=args.randomize_object_size
     )
 
     if bool(args.run):
