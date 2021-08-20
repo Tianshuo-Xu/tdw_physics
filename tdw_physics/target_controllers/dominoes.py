@@ -322,9 +322,9 @@ def get_args(dataset_dir: str, parse=True):
             libs = []
             for lib in args.model_libraries:
                 if 'models_' not in lib:
-                    libs.append('models_' + lib)
+                    libs.append('models_' + lib + '.json')
                 else:
-                    libs.append(lib)
+                    libs.append(lib + '.json')
             args.model_libraries = libs
 
         # whether to set all objects same color
@@ -430,7 +430,7 @@ def get_args(dataset_dir: str, parse=True):
             args.distractor = PRIMITIVE_NAMES
         else:
             d_names = args.distractor.split(',')
-            args.distractor = [r for r in FULL_NAMES if any((nm in r for nm in d_names))]
+            args.distractor = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in d_names))]
 
         if args.occluder is None or args.occluder == 'full':
             args.occluder = FULL_NAMES
@@ -440,7 +440,7 @@ def get_args(dataset_dir: str, parse=True):
             args.occluder = PRIMITIVE_NAMES
         else:
             o_names = args.occluder.split(',')
-            args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
+            args.occluder = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in o_names))]
 
         # produce training data
         if args.training_data_mode:
@@ -589,6 +589,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_horizontal=False,
                  use_test_mode_colors=False,
                  probe_initial_height=0.0,
+                 randomize_object_size=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -710,10 +711,13 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
+        self.distractor_material = self.occluder_material = self.target_material
 
         ## target can move
         self._fixed_target = False
         self.use_test_mode_colors = use_test_mode_colors
+
+        self.randomize_object_size = randomize_object_size
 
     def get_types(self,
                   objlist,
@@ -1165,6 +1169,7 @@ class Dominoes(RigidbodiesDataset):
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
+
         commands.extend(
             self.add_primitive(
                 record=record,
@@ -1198,8 +1203,16 @@ class Dominoes(RigidbodiesDataset):
         dims = Dominoes.get_record_dimensions(record)
         dmin, dmax = [min(dims), max(dims)]
 
-
         scale = 1.0
+
+        if hasattr(size_range, 'keys'):
+            assert set(size_range.keys()) == {'x','y','z'}, size_range
+            scale = {}
+            scale['x'] = Dominoes.rescale_record_to_size(record, size_range['x'], randomize)['x']
+            scale['y'] = Dominoes.rescale_record_to_size(record, size_range['y'], randomize)['y']
+            scale['z'] = Dominoes.rescale_record_to_size(record, size_range['z'], randomize)['z']
+            return scale
+            
         if randomize:
             smin = random.uniform(*get_range(size_range))
             smax = random.uniform(smin, get_range(size_range)[1])
@@ -1231,8 +1244,7 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range)
-            # print("rescaled target", scale)
+            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
 
         self.target = record
         self.target_type = data["name"]
@@ -1298,7 +1310,7 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range)
+            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
             # print("rescaled probe", scale)
 
         self.probe = record
@@ -1799,7 +1811,7 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.target_material)))
+                        record, o_id, self.get_material_name(self.distractor_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1876,12 +1888,11 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.target_material)))
+                        record, o_id, self.get_material_name(self.occluder_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
-
 
             commands.extend([
                 {"$type": "scale_object",

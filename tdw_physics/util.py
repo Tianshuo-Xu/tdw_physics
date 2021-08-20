@@ -190,11 +190,12 @@ if __name__ == '__main__':
 
     if args.material_type is not None:
         print("=====MATERIAL TYPES=====")
-        print(MATERIAL_TYPES)
+        print(MATERIAL_TYPES, len(MATERIAL_TYPES), "total materials = %d" % sum([len(MATERIAL_NAMES[mtype]) for mtype in MATERIAL_TYPES]))
         assert args.material_type in MATERIAL_TYPES, "Must pass a valid material type"
 
+
         print("=====MATERIAL NAMES OF TYPE %s======" % args.material_type)
-        print(MATERIAL_NAMES[args.material_type])
+        print(MATERIAL_NAMES[args.material_type], len(MATERIAL_NAMES[args.material_type]))
 
     if args.model_category is not None:
         print("=====MODEL CATEGORIES=====")
