@@ -309,6 +309,7 @@ class Playroom(Collision):
                                 target=None, target_material=None, target_color=None,
                                 distractor=None, distractor_material=None, distractor_color=None,
                                 occluder=None, occluder_material=None, occluder_color=None,
+                                zone_material=None,
                                 **kwargs) -> None:
 
         print("UPDATE CONTROLLER STATE")
@@ -327,11 +328,23 @@ class Playroom(Collision):
             print("occluder: %s" % occluder)
 
         print("MATERIALS")
-        print("probe %s" % self.probe_material)
-        print("target %s" % self.target_material)
-        print("distractor %s" % self.distractor_material)
-        print("occluder %s" % self.occluder_material)                        
+        if probe_material is not None:
+            self.probe_material = probe_material
+            print("probe %s" % self.probe_material)
+        if target_material is not None:
+            self.target_material = target_material
+            print("target %s" % self.target_material)
+        if distractor_material is not None:
+            self.distractor_material = distractor_material
+            print("distractor %s" % self.distractor_material)
+        if occluder_material is not None:
+            self.occluder_material = occluder_material
+            print("occluder %s" % self.occluder_material)                        
+        if zone_material is not None:
+            self.zone_material = zone_material
+            print("zone %s" % self.zone_material)                        
 
+            
     def _place_target_object(self) -> List[dict]:
 
         self._fixed_target = True

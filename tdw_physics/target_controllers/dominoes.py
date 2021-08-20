@@ -1169,6 +1169,7 @@ class Dominoes(RigidbodiesDataset):
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
+
         commands.extend(
             self.add_primitive(
                 record=record,
