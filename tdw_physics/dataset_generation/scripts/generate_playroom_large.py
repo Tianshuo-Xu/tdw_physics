@@ -313,7 +313,6 @@ def main(args):
     Play.save_labels = False
 
     log_cmds = [{"$type": "set_network_logging", "value": True}]
-    # log_cmds = []
     init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
     Play.communicate(log_cmds + init_cmds)
     logging.info("Initialized Controller with random seed %d" % args.seed)
