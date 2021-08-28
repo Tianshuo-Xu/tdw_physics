@@ -105,7 +105,8 @@ class Squishing(FlexDataset):
                  "z": random.uniform(-0.2, 0.2)}
         solid_id = self.get_unique_id()
         # Add the soft-body (squishable) object.
-        solid_record = random.choice(self.records)
+        import ipdb; ipdb.set_trace()
+        solid_record = random.choice([f for f in self.records if f.name=="cube"])
         commands = self.add_solid_object(record=solid_record,
                                          o_id=solid_id,
                                          position=o_pos,
@@ -296,6 +297,7 @@ class Squishing(FlexDataset):
                                               position=position,
                                               rotation=rotation,
                                               scale={"x": 1, "y": 1, "z": 1},
+<<<<<<< HEAD
                                               stretch_stiffness=1,
                                               bend_stiffness=1,
                                               draw_particles = False,
@@ -307,6 +309,40 @@ class Squishing(FlexDataset):
         commands.extend(
             self.get_object_material_commands(
                 record, soft_id, self.get_material_name(None)))
+=======
+                                              stretch_stiffness=0.5,
+                                              bend_stiffness=0.5,
+                                              pressure=random.uniform(pressures[0], pressures[1])))
+
+        # commands.extend(self.add_soft_object(record=record,
+        #                                       o_id=soft_id,
+        #                                       position=position,
+        #                                       rotation=rotation,
+        #                                       cluster_stiffness = 0.5,
+        #                                       scale={"x": 1, "y": 1, "z": 1},
+        #                                       link_stiffness=0.5,
+        #                                       particle_spacing = 0.035,
+        #                                       #bend_stiffness=1,
+        #                                       #pressure=random.uniform(pressures[0], pressures[1])
+        #                                       ))
+
+        # def add_soft_object(self, record: ModelRecord, position: Dict[str, float], rotation: Dict[str, float],
+        #                     scale: Dict[str, float] = None, volume_sampling: float = 2, surface_sampling: float = 0,
+        #                     cluster_spacing: float = 0.2, cluster_radius: float = 0.2, cluster_stiffness: float = 0.2,
+        #                     link_radius: float = 0.1, link_stiffness: float = 0.5, particle_spacing: float = 0.02,
+        #                     mass_scale: float = 1, o_id: Optional[int] = None) -> List[dict]:
+
+        #     commands.extend(self.add_flex_soft_object(
+        #                           record = self.objrec1,
+        #                           position = self.objrec1_position,
+        #                           rotation = self.objrec1_rotation,
+        #                           mesh_expansion = 0.0,
+        #                           particle_spacing = 0.035,
+        #                           mass = self.objrec1_mass,
+        #                           scale = self.objrec1_scale,
+        #                           o_id = self.objrec1_id,
+        #                           ))
+>>>>>>> 4d6bd0b4e3cbef3ec30ab283464792c2eeb295dd
 
         commands.append({"$type": "set_color",
                          "color": {"r": random.random(), "g": random.random(), "b": random.random(), "a": 1.0},
