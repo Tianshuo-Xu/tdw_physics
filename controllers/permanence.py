@@ -27,6 +27,8 @@ class Permanence(RigidbodiesDataset):
         self._ball_id = 0
         self._occ_id = 1
         self.material_librarian = MaterialLibrarian()
+        self.zone_id = 0
+        self.target_id = 0
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         return [{"$type": "focus_on_object",

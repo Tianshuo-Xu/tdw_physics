@@ -24,7 +24,8 @@ class Squishing(FlexDataset):
         self.model_librarian = ModelLibrarian("models_flex.json")
 
         # A list of functions that will return commands to initialize a trial.
-        self.scenarios = [self.drop_onto_floor, self.drop_onto_object, self.throw_into_wall, self.push_into_other]
+        self.scenarios = [self.drop_onto_object]
+        #self.scenarios = [self.drop_onto_floor, self.drop_onto_object, self.throw_into_wall, self.push_into_other]
 
         # Size of the room bounds (used for placing objects near walls).
         self.env_bounds = {"x": 4, "y": 0, "z": 2}
@@ -33,7 +34,9 @@ class Squishing(FlexDataset):
         self.pressures = loads(Path("squish_pressures.json").read_text())
         # Only use records in the pressures dictionary.
         self.records = [r for r in self.model_librarian.records if r.name in self.pressures]
-
+        self.zone_id = 0
+        self.target_id = 0
+        self.material_types = ['Fabric', 'Glass', 'Leather', 'Metal'] #, 'Rubber']
     def get_scene_initialization_commands(self) -> List[dict]:
         return [self.get_add_scene(scene_name="box_room_2018"),
                 {"$type": "set_aperture",
@@ -201,6 +204,8 @@ class Squishing(FlexDataset):
                                                                       "z": 0})
         commands.extend(second_object_commands)
 
+
+
         # Set the avatar.
         # Get the midpoint between the objects and use this to place the avatar.
         p_med = TDWUtils.array_to_vector3(np.array([(p0["x"] + p1["x"]) / 2, 0, (p0["z"] + p1["z"]) / 2]))
@@ -293,7 +298,16 @@ class Squishing(FlexDataset):
                                               scale={"x": 1, "y": 1, "z": 1},
                                               stretch_stiffness=1,
                                               bend_stiffness=1,
+                                              draw_particles = False,
                                               pressure=random.uniform(pressures[0], pressures[1])))
+
+        # set material and color
+        # ['Ceramic', 'Concrete', 'Fabric', 'Glass', 'Leather', 'Metal', 'Organic', 'Paper', 'Plastic, 'Rubber','Stone', 'Wood']
+        material = self.get_material_name(None, print_info=True)
+        commands.extend(
+            self.get_object_material_commands(
+                record, soft_id, self.get_material_name(None)))
+
         commands.append({"$type": "set_color",
                          "color": {"r": random.random(), "g": random.random(), "b": random.random(), "a": 1.0},
                          "id": soft_id})

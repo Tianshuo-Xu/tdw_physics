@@ -185,8 +185,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         while any([np.abs(exclude[i] - rgb[i]) < exclude_range for i in range(3)]):
             rgb = [rng.random(), rng.random(), rng.random()]
 
-        return rgb        
-        
+        return rgb
+
 
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
@@ -528,10 +528,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         ## size and colors
         static_group.create_dataset("color", data=self.colors)
-        static_group.create_dataset("scale", data=np.stack([xyz_to_arr(_s) for _s in self.scales], 0))
-        static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
-        static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
-        static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
+        if len(self.scales) > 0:
+          static_group.create_dataset("scale", data=np.stack([xyz_to_arr(_s) for _s in self.scales], 0))
+          static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
+          static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
+          static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
 
         if self.save_meshes:
             mesh_group = static_group.create_group("mesh")

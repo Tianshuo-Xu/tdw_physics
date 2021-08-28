@@ -56,6 +56,7 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
+        self.command_log = None
 
         super().__init__(port=port,
                          check_version=check_version,
@@ -75,8 +76,10 @@ class Dataset(Controller, ABC):
         '''
         Save a log of the commands so that they can be rerun
         '''
-        with open(str(self.command_log), "at") as f:
-            f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+
+        if self.command_log is not None:
+            with open(str(self.command_log), "at") as f:
+                f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
         return super().communicate(commands)
 
     def clear_static_data(self) -> None:
@@ -677,7 +680,7 @@ class Dataset(Controller, ABC):
         self._increment_object_id()
         return int(self._object_id_counter)
 
-    def get_material_name(self, material):
+    def get_material_name(self, material, print_info=False):
 
         if material is not None:
             if material in MATERIAL_TYPES:
@@ -689,6 +692,8 @@ class Dataset(Controller, ABC):
         else:
             mtype = random.choice(self.material_types)
             mat = random.choice(MATERIAL_NAMES[mtype])
+            if print_info:
+                print(mtype, mat)
 
         return mat
 

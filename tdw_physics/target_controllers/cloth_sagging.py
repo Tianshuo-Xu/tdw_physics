@@ -558,11 +558,11 @@ if __name__ == '__main__':
     args = get_flex_args("flex_dominoes")
 
     import platform
-    if platform.system() == 'Linux':
-        if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
-        else:
-            os.environ["DISPLAY"] = ":0"
+    # if platform.system() == 'Linux':
+    #     if args.gpu is not None:
+    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
+    #     else:
+    #         os.environ["DISPLAY"] = ":0"
 
     C = ClothSagging(
         port=args.port,

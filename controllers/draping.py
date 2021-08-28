@@ -10,6 +10,10 @@ class Draping(ClothDataset):
     20% of the time, no object is selected.
     """
 
+    def __init__(self, port: int = 1071):
+        super().__init__(port=port)
+        self.zone_id= 0
+        self.target_id =0
     def get_scene_initialization_commands(self) -> List[dict]:
         return [self.get_add_scene(scene_name="tdw_room"),
                 {"$type": "set_aperture",
