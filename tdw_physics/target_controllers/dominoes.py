@@ -198,7 +198,7 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--camera_aim_height",
                         type=float,
                         default=0.5,
-                        help="Height to aim camera at (offset to room center)")    
+                        help="Height to aim camera at (offset to room center)")
     parser.add_argument("--camera_min_angle",
                         type=float,
                         default=45,
@@ -460,7 +460,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            # args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -485,7 +485,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            # args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -871,7 +871,7 @@ class Dominoes(RigidbodiesDataset):
         if self.room_center_range is not None:
             self.room_center = get_random_xyz_transform(self.room_center_range)
         else:
-            self._set_room_center()        
+            self._set_room_center()
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
@@ -1187,7 +1187,7 @@ class Dominoes(RigidbodiesDataset):
                 add_data=(not self.remove_zone),
                 make_kinematic=True # zone shouldn't move
             ))
- 
+
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(
@@ -1212,7 +1212,7 @@ class Dominoes(RigidbodiesDataset):
             scale['y'] = Dominoes.rescale_record_to_size(record, size_range['y'], randomize)['y']
             scale['z'] = Dominoes.rescale_record_to_size(record, size_range['z'], randomize)['z']
             return scale
-            
+
         if randomize:
             smin = random.uniform(*get_range(size_range))
             smax = random.uniform(smin, get_range(size_range)[1])
@@ -1841,7 +1841,7 @@ class Dominoes(RigidbodiesDataset):
 
             if self.PRINT:
                 print("distractor record", record.name)
-                print("distractor category", record.wcategory)                
+                print("distractor category", record.wcategory)
                 print("distractor position", pos)
                 print("distractor scale", scale)
 
@@ -1912,7 +1912,7 @@ class Dominoes(RigidbodiesDataset):
 
             if self.PRINT:
                 print("occluder name", record.name)
-                print("occluder category", record.wcategory)                
+                print("occluder category", record.wcategory)
                 print("occluder position", pos)
                 print("occluder pose", rot)
                 print("occluder scale", scale)
