@@ -326,11 +326,11 @@ def main(args):
     logging.info("Initialized Controller with random seed %d" % args.seed)
 
     ## run the trial loop
-    Play.trial_loop(num=len(scenarios),
+    Play.trial_loop(num=(end - start),
                     output_dir=str(output_dir),
                     temp_path=str(temp_path),
                     save_frame=SAVE_FRAME,
-                    update_kwargs=scenarios,
+                    update_kwargs=scenarios[start:end],
                     unload_assets_every=args.unload_assets_every,
                     do_log=True)
 

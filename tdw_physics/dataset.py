@@ -165,7 +165,10 @@ class Dataset(Controller, ABC):
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
                          {"$type": "send_images",
-                          "frequency": "always"}])
+                          "frequency": "always"},
+                         {"$type": "set_anti_aliasing",
+                          "mode": "subpixel"}
+                         ])
         return commands
 
     def run(self,
