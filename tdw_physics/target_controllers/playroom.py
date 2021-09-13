@@ -242,7 +242,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
         args.size_max = handle_random_transform_args(args.size_max)
 
         ## don't let background objects move
-        args.no_moving_distractors = True
+        args.no_moving_distractors = False
 
         return args
 
@@ -308,7 +308,7 @@ class Playroom(Collision):
                                 target=None, target_material=None, target_color=None,
                                 distractor=None, distractor_material=None, distractor_color=None,
                                 occluder=None, occluder_material=None, occluder_color=None,
-                                zone_material=None,
+                                zone_material=None, apply_force_to='probe',
                                 **kwargs) -> None:
 
         print("UPDATE CONTROLLER STATE")
@@ -343,6 +343,13 @@ class Playroom(Collision):
             self.zone_material = zone_material
             print("zone %s" % self.zone_material)
 
+        self.apply_force_to = apply_force_to
+        if self.apply_force_to == 'target':
+            self._fixed_target = False
+        else:
+            self._fixed_target = True
+        print("applying force to ---> %s" % self.apply_force_to)
+
 
     def _place_target_object(self) -> List[dict]:
 
@@ -354,6 +361,64 @@ class Playroom(Collision):
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
+
+    def get_trial_initialization_commands(self) -> List[dict]:
+
+        commands = super().get_trial_initialization_commands()
+        self.distractor_id = int(self.object_ids[-2])
+        self.occluder_id = int(self.object_ids[-1])
+
+        obj_ids_dict = {
+            'probe': self.probe_id,
+            'target': self.target_id,
+            'distractor': self.distractor_id,
+            'occluder': self.occluder_id}
+
+        obj_indices_dict = {k: [idx for idx in range(len(self.object_ids))
+                                if self.object_ids[idx] == o_id][0]
+                            for k, o_id in obj_ids_dict.items()}
+        
+        obj_initial_positions_dict = {
+            k: self.initial_positions[idx] for k,idx in obj_indices_dict.items()}
+
+        print("obj_ids", obj_ids_dict)
+        print("obj_indices", obj_indices_dict)
+        print("obj_positions", obj_initial_positions_dict)
+
+        if self.apply_force_to != 'probe':
+            assert self.force_wait > 0, self.force_wait
+            
+            ## overwrite self.push_cmd
+            pos = obj_initial_positions_dict[self.apply_force_to]
+            angle = np.degrees(np.arctan2(pos['z'], pos['x'])) + 180
+
+            ## lift the object to be pushed a bit
+            pos['y'] = 0.25
+            new_probe_pos = obj_initial_positions_dict['probe']
+            new_probe_pos['y'] = 0.0
+
+            ## teleport the relevant objects
+            commands.extend([
+                {"$type": "teleport_object", "position": pos, "id": obj_ids_dict[self.apply_force_to]},
+                {"$type": "teleport_object", "position": new_probe_pos, "id": self.probe_id}])
+            self.initial_positions[obj_indices_dict[self.apply_force_to]] = pos
+            self.initial_positions[obj_indices_dict['probe']] = new_probe_pos
+
+            self.push_force = self.get_push_force(
+                scale_range=self.probe_mass * np.array(self.force_scale_range),
+                angle_range=self.force_angle_range,
+                angle_offset=angle)
+            self.push_position = pos
+            self.push_position = {
+                k: v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                for k,v in self.push_position.items()}
+            self.push_cmd = self._get_push_cmd(obj_ids_dict[self.apply_force_to], self.push_position)
+
+        ## which object was moving
+        self.moving_name = self.model_names[obj_indices_dict[self.apply_force_to]]
+        self.moving_id = obj_ids_dict[self.apply_force_to]
+
+        return commands
 
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):

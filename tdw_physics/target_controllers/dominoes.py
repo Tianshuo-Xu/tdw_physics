@@ -716,8 +716,9 @@ class Dominoes(RigidbodiesDataset):
         ## target can move
         self._fixed_target = False
         self.use_test_mode_colors = use_test_mode_colors
-
         self.randomize_object_size = randomize_object_size
+
+        self.apply_force_to = 'probe'
 
     def get_types(self,
                   objlist,
@@ -1021,6 +1022,24 @@ class Dominoes(RigidbodiesDataset):
         except (AttributeError,TypeError):
             pass
 
+        ## which object was pushed
+        try:
+            static_group.create_dataset("apply_force_to", data=self.apply_force_to.encode('utf8'))
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("moving_name", data=self.moving_name.encode('utf8'))
+        except (AttributeError,TypeError):
+            pass        
+
+        try:
+            static_group.create_dataset("moving_id", data=int(self.moving_id))
+        except (AttributeError,TypeError):
+            pass        
+                
+        
+
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
@@ -1111,11 +1130,11 @@ class Dominoes(RigidbodiesDataset):
                     "y": random.uniform(*get_range(rot_range)),
                     "z": 0.}
 
-    def get_push_force(self, scale_range, angle_range, yforce = [0,0]):
+    def get_push_force(self, scale_range, angle_range, yforce = [0,0], angle_offset=0):
         #sample y force component
         yforce = random.uniform(*yforce)
         # rotate a unit vector initially pointing in positive-x direction
-        theta = np.radians(random.uniform(*get_range(angle_range)))
+        theta = np.radians(random.uniform(*get_range(angle_range)) + angle_offset)
         push = np.array([np.cos(theta), yforce, np.sin(theta)])
 
         # scale it
@@ -1283,7 +1302,7 @@ class Dominoes(RigidbodiesDataset):
                 bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
-                make_kinematic=True if self._fixed_target else False,
+                make_kinematic=True if (self._fixed_target and (self.apply_force_to != 'target')) else False,
                 apply_texture=True if self.target.name in PRIMITIVE_NAMES else False
             ))
 
@@ -1352,7 +1371,7 @@ class Dominoes(RigidbodiesDataset):
                 scale_mass=False,
                 o_id=o_id,
                 add_data=True,
-                make_kinematic=False,
+                make_kinematic=(False if self.apply_force_to == 'probe' else True),
                 apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,
                 **probe_physics_info
             ))
@@ -1824,7 +1843,7 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
-            if self.no_moving_distractors:
+            if self.no_moving_distractors or (self.apply_force_to != 'distractor'):
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "discrete",
@@ -1900,7 +1919,7 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
-            if self.no_moving_distractors:
+            if self.no_moving_distractors or (self.apply_force_to != 'occluder'):
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "discrete",

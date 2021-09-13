@@ -74,6 +74,9 @@ def get_args(dataset_dir: str):
     parser.add_argument("--validation_set",
                         action="store_true",
                         help="Create the validation set using the remaining models")
+    parser.add_argument("--randomize_moving_object",
+                        action="store_true",
+                        help="Randomize which object gets pushed")    
     parser.add_argument("--group_order",
                         type=str,
                         default="[0,1,2,3]",
@@ -142,7 +145,13 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, group_order=None):
+def build_scenarios(moving_models,
+                    static_models,
+                    num_trials_per_model,
+                    seed=0,
+                    group_order=None,
+                    randomize_moving_object=False
+                    ):
 
     if group_order is None:
         group_order = range(4)
@@ -172,11 +181,15 @@ def build_scenarios(moving_models, static_models, num_trials_per_model, seed=0, 
             'distractor': distractors[dist_ind],
             'occluder': occluders[occ_ind]
         }
+        if randomize_moving_object:
+            scene['apply_force_to'] = ['probe', 'target', 'distractor', 'occluder'][i % 4]
+        else:
+            scene['apply_force_to'] = 'probe'
+            
         scenarios.append(scene)
 
     print("num, NM, NS", num, NM, NS)
-    for i,sc in enumerate(scenarios):
-        print(i, sc)
+
 
     return scenarios
 
@@ -279,9 +292,14 @@ def main(args):
 
     scenarios = build_scenarios(moving_models, static_models,
                                 args.num_trials_per_model, seed=args.category_seed,
-                                group_order=args.group_order)
+                                group_order=args.group_order,
+                                randomize_moving_object=args.randomize_moving_object
+                                )
 
     start, end = args.start, (args.end or len(scenarios))
+
+    for i,sc in enumerate(scenarios[start:end]):
+        print(i, sc)    
 
     ## set up the trial loop
     def _get_suffix(split, group_order):
