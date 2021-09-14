@@ -377,17 +377,13 @@ class Playroom(Collision):
         obj_indices_dict = {k: [idx for idx in range(len(self.object_ids))
                                 if self.object_ids[idx] == o_id][0]
                             for k, o_id in obj_ids_dict.items()}
-        
+
         obj_initial_positions_dict = {
             k: self.initial_positions[idx] for k,idx in obj_indices_dict.items()}
 
-        print("obj_ids", obj_ids_dict)
-        print("obj_indices", obj_indices_dict)
-        print("obj_positions", obj_initial_positions_dict)
-
         if self.apply_force_to != 'probe':
             assert self.force_wait > 0, self.force_wait
-            
+
             ## overwrite self.push_cmd
             pos = obj_initial_positions_dict[self.apply_force_to]
             angle = np.degrees(np.arctan2(pos['z'], pos['x'])) + 180
