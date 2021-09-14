@@ -1023,20 +1023,20 @@ class Dominoes(RigidbodiesDataset):
             pass
 
         ## which object was pushed
-        try:
-            static_group.create_dataset("apply_force_to", data=self.apply_force_to.encode('utf8'))
-        except (AttributeError,TypeError):
-            pass
+        # try:
+        #     static_group.create_dataset("apply_force_to", data=self.apply_force_to.encode('utf8'))
+        # except (AttributeError,TypeError):
+        #     pass
 
-        try:
-            static_group.create_dataset("moving_name", data=self.moving_name.encode('utf8'))
-        except (AttributeError,TypeError):
-            pass        
+        # try:
+        #     static_group.create_dataset("moving_name", data=self.moving_name.encode('utf8'))
+        # except (AttributeError,TypeError):
+        #     pass        
 
-        try:
-            static_group.create_dataset("moving_id", data=int(self.moving_id))
-        except (AttributeError,TypeError):
-            pass        
+        # try:
+        #     static_group.create_dataset("moving_id", data=int(self.moving_id))
+        # except (AttributeError,TypeError):
+        #     pass        
                 
         
 

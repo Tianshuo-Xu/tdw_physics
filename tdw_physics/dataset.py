@@ -166,8 +166,8 @@ class Dataset(Controller, ABC):
                           "field_of_view": self.get_field_of_view()},
                          {"$type": "send_images",
                           "frequency": "always"},
-                         {"$type": "set_anti_aliasing",
-                          "mode": "subpixel"}
+                         # {"$type": "set_anti_aliasing",
+                         #  "mode": "subpixel"}
                          ])
         return commands
 
