@@ -86,7 +86,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ### force
     parser.add_argument("--fscale",
                         type=str,
-                        default="[10.0,10.0]",
+                        default="[2.5,2.5]",
                         help="range of scales to apply to push force")
     parser.add_argument("--fwait",
                         type=none_or_str,

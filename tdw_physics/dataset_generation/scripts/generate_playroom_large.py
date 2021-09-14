@@ -85,7 +85,7 @@ def get_args(dataset_dir: str):
                         help="Create the validation set using the remaining models")
     parser.add_argument("--randomize_moving_object",
                         action="store_true",
-                        help="Randomize which object gets pushed")    
+                        help="Randomize which object gets pushed")
     parser.add_argument("--group_order",
                         type=str,
                         default="[0,1,2,3]",
@@ -203,12 +203,12 @@ def build_scenarios(moving_models,
         #         scene[k] = ok_objects[k][i*7 % len(ok_objects[k])]
         #         print("Substituted <<%s>> for <<%s>> as the %s object in trial %d" % \
         #                      (scene[k], nm, k, i))
-        
+
         if randomize_moving_object:
             scene['apply_force_to'] = ['probe', 'target', 'distractor', 'occluder'][i % 4]
         else:
             scene['apply_force_to'] = 'probe'
-            
+
         scenarios.append(scene)
 
     print("num, NM, NS", num, NM, NS)
@@ -322,7 +322,7 @@ def main(args):
     start, end = args.start, (args.end or len(scenarios))
 
     for i,sc in enumerate(scenarios[start:end]):
-        print(i, sc)    
+        print(i, sc)
 
     ## set up the trial loop
     def _get_suffix(split, group_order):
@@ -390,10 +390,10 @@ if __name__ == '__main__':
         else:
             os.environ["DISPLAY"] = ":0"
 
+    print("PUSHING WITH FORCE %.2f" % args.fscale[0])
     main(args)
-    
+
     # for nm in MODEL_NAMES:
     #     ok = _record_usable(nm)
     #     if not ok:
     #         print("%s has a bad non-composite sibling" % nm)
-            
