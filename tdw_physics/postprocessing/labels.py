@@ -22,6 +22,9 @@ def get_static_val(d, key='object_ids'):
     except KeyError:
         return None
 
+def trial_num(d):
+    return int(get_static_val(d, 'trial_num'))
+
 def get_object_ids(d):
     return list(d['static']['object_ids'])
 
@@ -318,6 +321,39 @@ def occluder_name(d):
 
 def distractor_name(d):
     return str(get_static_val(d, 'model_names')[-2])
+
+def force_applied_to(d):
+    pushed = get_static_val(d, 'apply_force_to')
+    if pushed is None:
+        trial_num = int(get_static_val(d, 'trial_num'))
+        pushed = ['probe', 'target', 'distractor', 'occluder'][trial_num % 4]
+    return pushed
+
+def moving_name(d):
+
+    name = get_static_val(d, 'moving_name')
+    if name is None:
+        pushed = force_applied_to(d)
+        name = {
+            'probe': probe_name(d),
+            'target': target_name(d),
+            'distractor': distractor_name(d),
+            'occluder': occluder_name(d)
+        }[pushed]
+    return name
+
+def moving_segmentation_color(d):
+    pushed = get_static_val(d, 'apply_force_to')
+    if pushed is None:
+        pushed = force_applied_to(d)
+
+    colors = {
+        'probe': probe_segmentation_color(d),
+        'target': target_segmentation_color(d),
+        'distractor': distractor_segmentation_color(d),
+        'occluder': occluder_segmentation_color(d)
+    }
+    return colors[pushed]
 
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)
