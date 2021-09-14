@@ -230,3 +230,9 @@ if __name__ == '__main__':
                 models = _models.records
                 print([r.name for r in models \
                        if args.model_name in r.name])
+
+    print("DO NOT USE")
+    for lib, _models in MODEL_LIBRARIES.items():
+        models = _models.records
+        print([r.name for r in models \
+               if r.do_not_use])

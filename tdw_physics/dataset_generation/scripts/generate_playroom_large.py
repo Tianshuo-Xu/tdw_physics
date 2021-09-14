@@ -26,6 +26,15 @@ NUM_STATIC_MODELS = 1000
 NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
 
+def _record_usable(record_name):
+    if 'composite' in record_name:
+        non_composite_name = record_name.split('_composite')[0]
+        non_composite_records = [r for r in RECORDS if r.name == non_composite_name]
+        not_usable = any([r.do_not_use for r in non_composite_records])
+        if not_usable:
+            return False
+    return True
+
 def setup_logging(logdir):
 
     logdir = Path(logdir)
@@ -170,6 +179,13 @@ def build_scenarios(moving_models,
     print("group order", group_order)
     probes, targets, distractors, occluders = [groups[g] for g in group_order]
 
+    # ok_objects = {
+    #     'probe': [nm for nm in probes if _record_usable(nm)],
+    #     'target': [nm for nm in targets if _record_usable(nm)],
+    #     'distractor': [nm for nm in distractors if _record_usable(nm)],
+    #     'occluder': [nm for nm in occluders if _record_usable(nm)]
+    # }
+
     scenarios = []
     for i in range(num * NM):
         probe_ind = i // num
@@ -181,6 +197,13 @@ def build_scenarios(moving_models,
             'distractor': distractors[dist_ind],
             'occluder': occluders[occ_ind]
         }
+        # for k in scene:
+        #     if not _record_usable(scene[k]):
+        #         nm = scene[k] + ''
+        #         scene[k] = ok_objects[k][i*7 % len(ok_objects[k])]
+        #         print("Substituted <<%s>> for <<%s>> as the %s object in trial %d" % \
+        #                      (scene[k], nm, k, i))
+        
         if randomize_moving_object:
             scene['apply_force_to'] = ['probe', 'target', 'distractor', 'occluder'][i % 4]
         else:
@@ -368,3 +391,9 @@ if __name__ == '__main__':
             os.environ["DISPLAY"] = ":0"
 
     main(args)
+    
+    # for nm in MODEL_NAMES:
+    #     ok = _record_usable(nm)
+    #     if not ok:
+    #         print("%s has a bad non-composite sibling" % nm)
+            
