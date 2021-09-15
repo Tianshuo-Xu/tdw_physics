@@ -12,6 +12,8 @@ from tdw_physics.util import arr_to_xyz
 def round_float(x, places=3):
     return round(float(x), places)
 
+def strip(s): return s[2:-1]
+
 #################
 #### STATIC #####
 #################
@@ -327,6 +329,8 @@ def force_applied_to(d):
     if pushed is None:
         trial_num = int(get_static_val(d, 'trial_num'))
         pushed = ['probe', 'target', 'distractor', 'occluder'][trial_num % 4]
+    else:
+        pushed = strip(str(pushed))
     return pushed
 
 def moving_name(d):
@@ -340,12 +344,16 @@ def moving_name(d):
             'distractor': distractor_name(d),
             'occluder': occluder_name(d)
         }[pushed]
+    else:
+        name = str(name)
     return name
 
 def moving_segmentation_color(d):
     pushed = get_static_val(d, 'apply_force_to')
     if pushed is None:
         pushed = force_applied_to(d)
+    else:
+        pushed = strip(str(pushed))
 
     colors = {
         'probe': probe_segmentation_color(d),
@@ -353,7 +361,11 @@ def moving_segmentation_color(d):
         'distractor': distractor_segmentation_color(d),
         'occluder': occluder_segmentation_color(d)
     }
-    return colors[pushed]
+    try:
+        return colors[pushed]
+    except:
+        print(colors, pushed)
+        raise TypeError()
 
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)
