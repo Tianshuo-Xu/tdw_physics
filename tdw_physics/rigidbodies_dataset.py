@@ -324,6 +324,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                       scale_mass: Optional[bool] = True,
                       make_kinematic: Optional[bool] = False,
                       obj_list: Optional[list] = [],
+                      apply_texture: Optional[bool] = True
                       ) -> List[dict]:
 
         cmds = []
@@ -354,15 +355,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
              "id": o_id})
 
         # set the material and color
-        cmds.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(material)))
+        if apply_texture:
+            cmds.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(material)))
 
-        color = color if color is not None else self.random_color(exclude=exclude_color)
-        cmds.append(
-            {"$type": "set_color",
-             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
-             "id": o_id})
+            color = color if color is not None else self.random_color(exclude=exclude_color)
+            cmds.append(
+                {"$type": "set_color",
+                 "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+                 "id": o_id})
 
         if make_kinematic:
             cmds.extend([

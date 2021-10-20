@@ -26,11 +26,11 @@ MODEL_CATEGORIES = list(set(MODEL_CATEGORIES))
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
-                  for mtype in MATERIAL_TYPES}        
-    
+                  for mtype in MATERIAL_TYPES}
+
 
 # The names of the image passes
-PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]    
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
 
 def str_to_xyz(s: str, to_json=False):
     xyz = s.split(',')
@@ -146,7 +146,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
-    
+
     return parser
 
 def get_args(dataset_dir: str):
@@ -188,7 +188,7 @@ if __name__ == '__main__':
         print("=====MATERIAL TYPES=====")
         print(MATERIAL_TYPES)
         assert args.material_type in MATERIAL_TYPES, "Must pass a valid material type"
-        
+
         print("=====MATERIAL NAMES OF TYPE %s======" % args.material_type)
         print(MATERIAL_NAMES[args.material_type])
 
@@ -196,7 +196,7 @@ if __name__ == '__main__':
         print("=====MODEL CATEGORIES=====")
         print(MODEL_CATEGORIES)
         assert args.model_category in MODEL_CATEGORIES, "Must pass a valid model category"
-        
+
         print("=====%s MODELS OF CATEGORY %s=====" % \
               ("FLEX" if args.flex else "ALL", args.model_category))
         if args.flex:
