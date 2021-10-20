@@ -56,7 +56,7 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
-
+        self.command_log = None
         super().__init__(port=port,
                          check_version=check_version,
                          launch_build=launch_build)
@@ -70,12 +70,14 @@ class Dataset(Controller, ABC):
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
 
+
     def communicate(self, commands) -> list:
         '''
         Save a log of the commands so that they can be rerun
         '''
-        with open(str(self.command_log), "at") as f:
-            f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+        if self.command_log is not None:
+            with open(str(self.command_log), "at") as f:
+                f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
         return super().communicate(commands)        
 
     def clear_static_data(self) -> None:
@@ -567,9 +569,9 @@ class Dataset(Controller, ABC):
         :param static_group: The static data group.
         """
         # git commit and args
-        res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
-        self.commit = res.stdout.strip()
-        static_group.create_dataset("git_commit", data=self.commit)
+        #res = subprocess.run('git rev-parse HEAD', shell=True, capture_output=True, text=True)
+        #self.commit = res.stdout.strip()
+        #static_group.create_dataset("git_commit", data=self.commit)
 
         # stimulus name
         static_group.create_dataset("stimulus_name", data=self.stimulus_name)
