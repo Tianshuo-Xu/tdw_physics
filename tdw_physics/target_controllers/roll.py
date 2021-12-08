@@ -317,6 +317,7 @@ class RollingSliding(MultiDominoes):
                 position=self.probe_initial_position,
                 rotation=rot,
                 mass=self.probe_mass,
+                scale_mass=False,
                 material=self.target_material,
                 color=rgb,
                 scale=scale,
