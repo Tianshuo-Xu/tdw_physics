@@ -28,6 +28,5 @@ setup(
                       'weighted-collection',
                       'stopit',
                       'matplotlib',
-                      'tdw==1.8.14',
                       'trimesh'],
 )
