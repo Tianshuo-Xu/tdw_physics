@@ -100,7 +100,8 @@ def get_flex_args(dataset_dir: str, parse=True):
 class ClothSagging(Dominoes, FlexDataset):
     FLEX_RECORDS = ModelLibrarian(os.path.join(os.path.dirname(__file__), 'flex.json')).records
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
-    SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
+    SOFT_RECORD_CUBE = MODEL_LIBRARIES["models_flex.json"].get_record("cube")
+    SOFT_RECORD_BALL = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
     RECEPTACLE_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("fluid_receptacle1x1")
     FLUID_TYPES = FluidTypes()
 
@@ -291,24 +292,21 @@ class ClothSagging(Dominoes, FlexDataset):
 
     def drop_cloth(self) -> List[dict]:
 
-        self.cloth = self.CLOTH_RECORD
+        self.cloth = self.SOFT_RECORD_CUBE
         self.cloth_id = self._get_next_object_id()
-        self.cloth_position = {"x": random.uniform(-0.2,0.2), "y": random.uniform(1.3,1.5), "z":random.uniform(-0.6,-0.4)}
+        self.cloth_position = {"x": random.uniform(-0.2,0.2), "y": random.uniform(0.3,0.3), "z":random.uniform(-0.6,-0.4)}
         self.cloth_color = self.target_color if self.target_color is not None else self.random_color()
-        self.cloth_scale = {'x': 1.0, 'y': 1.0, 'z': 1.0}
-        self.cloth_mass = 0.5
+        self.cloth_scale = {'x': 0.5, 'y': 0.1, 'z': 0.6}
+        self.cloth_mass = 500
         self.cloth_data = {"name": self.cloth.name, "color": self.cloth_color, "scale": self.cloth_scale, "id": self.cloth_id}
 
-        commands = self.add_cloth_object(
+        commands = self.add_soft_object(
             record = self.cloth,
             position = self.cloth_position,
             rotation = {k:0 for k in ['x','y','z']},
             scale=self.cloth_scale,
             mass_scale = 1,
-            mesh_tesselation = 1,
-            tether_stiffness = random.uniform(self.tether_stiffness_range[0], self.tether_stiffness_range[1]), # doesn't do much visually!
-            bend_stiffness = random.uniform(self.bend_stiffness_range[0], self.bend_stiffness_range[1]), #changing this will lead to visible changes in cloth deformability
-            stretch_stiffness = random.uniform(self.stretch_stiffness_range[0], self.stretch_stiffness_range[1]), # doesn't do much visually!
+
             o_id = self.cloth_id)
 
         # replace the target w the cloth
