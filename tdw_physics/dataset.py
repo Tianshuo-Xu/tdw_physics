@@ -391,6 +391,9 @@ class Dataset(Controller, ABC):
         # Add commands to request output data.
         commands.extend(self._get_send_data_commands())
 
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes"})
+
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
