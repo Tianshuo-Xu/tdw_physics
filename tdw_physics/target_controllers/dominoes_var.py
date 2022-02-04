@@ -1,10 +1,15 @@
 from argparse import ArgumentParser
 import sys
+import subprocess
 import h5py
 import json
 import copy
 import importlib
+from PIL import Image
+import io
+from tqdm import tqdm
 import numpy as np
+from pathlib import Path
 from enum import Enum
 import random
 from typing import List, Dict, Tuple
@@ -22,11 +27,16 @@ from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
-
-from tdw_physics.postprocessing.labels import get_all_label_funcs
-
+from tdw_physics.postprocessing.stimuli import pngs_to_mp4
+from tdw_physics.postprocessing.labels import (get_all_label_funcs,
+                                               get_labels_from)
+from tdw_physics.util_geom import save_obj
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
 FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
+
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -36,6 +46,10 @@ def get_args(dataset_dir: str, parse=True):
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
     parser.add_argument("--num_middle_objects",
+                        type=int,
+                        default=3,
+                        help="The number of middle objects to place")
+    parser.add_argument("--num_distinct_objects",
                         type=int,
                         default=3,
                         help="The number of middle objects to place")
@@ -700,6 +714,234 @@ class Dominoes(RigidbodiesDataset):
 
         self.use_test_mode_colors = use_test_mode_colors
 
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str) -> None:
+
+
+        output_dir = Path(output_dir)
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True)
+        temp_path = Path(temp_path)
+        if not temp_path.parent.exists():
+            temp_path.parent.mkdir(parents=True)
+        # Remove an incomplete temp path.
+        if temp_path.exists():
+            temp_path.unlink()
+
+        pbar = tqdm(total=num)
+        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+        exists_up_to = 0
+        for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+        self.num_interactions = 2
+
+
+        pbar.update(exists_up_to)
+        for i in range(exists_up_to, num):
+            object_info = None
+            # see if the last iteraction is there, otherwise re-generate the trials
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + "_" + TDWUtils.zero_padding(self.num_interactions - 1, 3) + ".hdf5")
+            if not filepath.exists():
+                for interact_id in range(self.num_interactions):
+                    filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + "_" + TDWUtils.zero_padding(interact_id, 3) + ".hdf5")
+                    self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+                    # Save out images
+                    self.png_dir = None
+                    if any([pa in PASSES for pa in self.save_passes]):
+                        self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4)+ "_" + TDWUtils.zero_padding(interact_id, 3))
+                        if not self.png_dir.exists():
+                            self.png_dir.mkdir(parents=True)
+
+                    # Do the trial.
+                    if interact_id > 0:
+                        object_info = 1
+                    object_info = self.trial(filepath=filepath,
+                               temp_path=temp_path,
+                               trial_num=i * self.num_interactions + interact_id,
+                               object_info=object_info)
+
+                    # Save an MP4 of the stimulus
+                    if self.save_movies:
+
+                        for pass_mask in self.save_passes:
+                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                            cmd, stdout, stderr = pngs_to_mp4(
+                                filename=mp4_filename,
+                                image_stem=pass_mask[1:]+'_',
+                                png_dir=self.png_dir,
+                                size=[self._height, self._width],
+                                overwrite=True,
+                                remove_pngs=True,
+                                use_parent_dir=False)
+
+                        rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+
+
+                    if self.save_meshes:
+                        for o_id in self.object_ids:
+                            obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                            vertices, faces = self.object_meshes[o_id]
+                            save_obj(vertices, faces, obj_filename)
+            pbar.update(1)
+        pbar.close()
+
+    def trial(self,
+              filepath: Path,
+              temp_path: Path,
+              object_info,
+              trial_num: int) -> None:
+        # generate a batch of trials instead of one
+        """
+        Run a trial. Write static and per-frame data to disk until the trial is done.
+
+        :param filepath: The path to this trial's hdf5 file.
+        :param temp_path: The path to the temporary file.
+        :param trial_num: The number of the current trial.
+        """
+        # Clear the object IDs and other static data
+        from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
+        if object_info == None:
+            self.repeat_trial = False
+            # sample distinct objects
+            self.candidate_dict = dict()
+            colors = [[0.01844594, 0.77508636, 0.12749255],#pink
+                      [0.17443318, 0.22064707, 0.39867442],#black
+                      [0.9774568,  0.87879388, 0.40082996],#orange
+                      [0.75136046, 0.06584012, 0.22674323],#red
+                      [0.47, 0.38,   0.901],#purple
+                       ]
+            distinct_masses = [0.1, 2.0, 10.0]
+
+            random.shuffle(colors)
+            random.shuffle(distinct_masses)
+            for distinct_id in range(self.num_distinct_objects):
+                self.candidate_dict[distinct_id] = dict()
+                self.candidate_dict[distinct_id]["type"] = random.choice(self._middle_types)
+                self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.middle_scale_range)
+                self.candidate_dict[distinct_id]["color"] = colors[distinct_id] #np.array(self.random_color(None, 0.25))
+                self.candidate_dict[distinct_id]["mass"] = distinct_masses[distinct_id]
+
+        else:
+            self.repeat_trial = True
+
+        self.trial_num_middle_objects = random.choice(range(self.num_middle_objects + 1))
+        self.trial_collision_axis_length = self.spacing * (self.trial_num_middle_objects + 1)
+
+
+        self.clear_static_data()
+
+        self._trial_num = trial_num
+
+        # Create the .hdf5 file.
+        f = h5py.File(str(temp_path.resolve()), "a")
+
+        commands = []
+        # Remove asset bundles (to prevent a memory leak).
+        if trial_num % 100 == 0:
+            commands.append({"$type": "unload_asset_bundles"})
+
+        # Add commands to start the trial.
+        commands.extend(self.get_trial_initialization_commands())
+        # Add commands to request output data.
+        commands.extend(self._get_send_data_commands())
+
+        # Send the commands and start the trial.
+        r_types = ['']
+        count = 0
+        resp = self.communicate(commands)
+
+        self._set_segmentation_colors(resp)
+
+        self._get_object_meshes(resp)
+        frame = 0
+        # Write static data to disk.
+        static_group = f.create_group("static")
+        self._write_static_data(static_group)
+
+        # Add the first frame.
+        done = False
+        frames_grp = f.create_group("frames")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        self._write_frame_labels(frame_grp, resp, -1, False)
+
+        # Continue the trial. Send commands, and parse output data.
+        while not done:
+            frame += 1
+            # print('frame %d' % frame)
+            resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
+            # Sometimes the build freezes and has to reopen the socket.
+            # This prevents such errors from throwing off the frame numbering
+            if ('imag' not in r_ids) or ('tran' not in r_ids):
+                print("retrying frame %d, response only had %s" % (frame, r_ids))
+                frame -= 1
+                continue
+
+            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            # Write whether this frame completed the trial and any other trial-level data
+            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+        # Cleanup.
+        commands = []
+        for o_id in self.object_ids:
+            commands.append({"$type": self._get_destroy_object_command_name(o_id),
+                             "id": int(o_id)})
+        self.communicate(commands)
+
+        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        if self.save_labels:
+            meta = OrderedDict()
+            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            self.trial_metadata.append(meta)
+
+            # Save the trial-level metadata
+            json_str =json.dumps(self.trial_metadata, indent=4)
+            self.meta_file.write_text(json_str, encoding='utf-8')
+            print("TRIAL %d LABELS" % self._trial_num)
+            print(json.dumps(self.trial_metadata[-1], indent=4))
+
+        # Save out the target/zone segmentation mask
+        _id = f['frames']['0000']['images']['_id']
+        #get PIL image
+        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #get colors
+        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        #get individual maps
+        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        #colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        #as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        #save image
+        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+
+        # Close the file.
+        f.close()
+        # Move the file.
+        try:
+            temp_path.replace(filepath)
+        except OSError:
+            shutil.move(temp_path, filepath)
+
+
     def get_types(self,
                   objlist,
                   libraries=["models_flex.json"],
@@ -746,9 +988,11 @@ class Dominoes(RigidbodiesDataset):
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
-        ## randomize colors
-        if self._random_zone_color:
-            self.zone_color = None
+        ## set randomize colors
+        if not self.repeat_trial:
+            # don't change the target
+            if self._random_zone_color:
+                self.zone_color = None
         if self._random_target_color:
             self.target_color = None
         if self._random_probe_color:
@@ -831,6 +1075,11 @@ class Dominoes(RigidbodiesDataset):
 
         # Choose and place a target object.
         commands.extend(self._place_target_object())
+
+
+        #self.model_names.append(record.name)
+        #self.scales.append(data['scale'])
+        #self.colors
 
         # Set the probe color
         if self.probe_color is None:
@@ -1090,34 +1339,53 @@ class Dominoes(RigidbodiesDataset):
 
     def _get_zone_location(self, scale):
         return {
-            "x": 0.5 * self.collision_axis_length + scale["x"] + 0.1,
+            "x": 0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
 
-
+    def element_wise_equal(self, x, y):
+        for ele in x:
+            if x[ele] != y[ele]:
+                return False
+        return True
     def _place_target_zone(self) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
+        if not self.repeat_trial: # sample from scratch
 
-        record, data = self.random_primitive(self._zone_types,
-                                             scale=self.zone_scale_range,
-                                             color=self.zone_color,
-                                             add_data=False
-        )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.zone = record
-        self.zone_type = data["name"]
-        self.zone_color = rgb
-        self.zone_id = o_id
-        self.zone_scale = scale
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale=self.zone_scale_range,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
+        else:
+            # dry pass to get the obj id counter correct
+            record, data = self.random_primitive([self.zone],
+                                                 scale=self.zone_scale,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            assert(record == self.zone)
+            assert(o_id == self.zone_id)
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(np.array_equal(rgb, self.zone_color))
+
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
             self.scales = self.scales[:-1]
             self.colors = self.colors[:-1]
             self.model_names = self.model_names[:-1]
-
+        self.distinct_ids = np.append(self.distinct_ids, -1)
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
         commands.extend(
@@ -1151,19 +1419,43 @@ class Dominoes(RigidbodiesDataset):
         """
         Place a primitive object at one end of the collision axis.
         """
-
+        distinct_id = random.choice(range(self.num_distinct_objects))
+        self.distinct_ids = np.append(self.distinct_ids, distinct_id)
         # create a target object
-        record, data = self.random_primitive(self._target_types,
-                                             scale=self.target_scale_range,
-                                             color=self.target_color,
+        #if not self.repeat_trial: # sample from scratch
+        target_type = self.candidate_dict[distinct_id]["type"]
+        target_scale = self.candidate_dict[distinct_id]["scale"]
+        target_mass = self.candidate_dict[distinct_id]["mass"]
+        target_color = self.candidate_dict[distinct_id]["color"]
+
+
+        # select an object
+        # record, data = self.random_primitive(self._target_types,
+        #                                      scale=self.target_scale_range,
+        #                                      color=self.target_color,
+        #                                      add_data=False
+        # )
+
+        record, data = self.random_primitive([target_type],
+                                             scale=target_scale,
+                                             color=target_color,
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
         self.target_scale = self.middle_scale = scale
         self.target_id = o_id
+        # else:
+        #     # object properties don't change
+        #     record = self.target
+        #     scale = self.target_scale
+        #     o_id = self.target_id
+        #     rgb = self.target_color
+
 
         if any((s <= 0 for s in scale.values())):
             self.remove_target = True
@@ -1174,7 +1466,7 @@ class Dominoes(RigidbodiesDataset):
 
         if self.target_position is None:
             self.target_position = {
-                "x": 0.5 * self.collision_axis_length,
+                "x": 0.5 * self.trial_collision_axis_length,
                 "y": 0. if not self.remove_target else 10.0,
                 "z": 0. if not self.remove_target else 10.0
             }
@@ -1189,7 +1481,7 @@ class Dominoes(RigidbodiesDataset):
                 scale=scale,
                 material=self.target_material,
                 color=rgb,
-                mass=2.0,
+                mass=target_mass, #2.0,
                 scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
@@ -1213,9 +1505,20 @@ class Dominoes(RigidbodiesDataset):
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
         exclude = not (self.monochrome and self.match_probe_and_target_color)
-        record, data = self.random_primitive(self._probe_types,
-                                             scale=self.probe_scale_range,
-                                             color=self.probe_color,
+
+        distinct_id = random.choice([x for x in range(self.num_distinct_objects) if x not in self.distinct_ids])
+
+        self.distinct_ids = np.append(self.distinct_ids, distinct_id)
+        # create a target object
+        #if not self.repeat_trial: # sample from scratch
+        probe_type = self.candidate_dict[distinct_id]["type"]
+        probe_scale = self.candidate_dict[distinct_id]["scale"]
+        probe_mass = self.candidate_dict[distinct_id]["mass"]
+        probe_color = self.candidate_dict[distinct_id]["color"]
+
+        record, data = self.random_primitive([probe_type],
+                                             scale=probe_scale,
+                                             color=probe_color,
                                              exclude_color=(self.target_color if exclude else None),
                                              exclude_range=0.25,
                                              add_data=False)
@@ -1224,13 +1527,14 @@ class Dominoes(RigidbodiesDataset):
         self.probe_type = data["name"]
         self.probe_scale = scale
         self.probe_id = o_id
+        self.probe_mass = probe_mass
 
         # Add the object with random physics values
         commands = []
 
         ### better sampling of random physics values
-        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        #self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
+        self.probe_initial_position = {"x": -0.5*self.trial_collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
 
         if self.use_ramp:
@@ -1239,7 +1543,9 @@ class Dominoes(RigidbodiesDataset):
         if self.probe_has_friction:
             probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
         else:
-            probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+            probe_physics_info = {'dynamic_friction': 0.5, 'static_friction': 0.5, 'bounciness': 0}
+
+            #probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
         commands.extend(
             self.add_primitive(
@@ -1249,7 +1555,7 @@ class Dominoes(RigidbodiesDataset):
                 scale=scale,
                 material=self.probe_material,
                 color=rgb,
-                mass=self.probe_mass,
+                mass=probe_mass,
                 scale_mass=False,
                 o_id=o_id,
                 add_data=True,
@@ -1324,7 +1630,6 @@ class Dominoes(RigidbodiesDataset):
 
         # optionally add base
         cmds.extend(self._add_ramp_base_to_ramp(color=rgb))
-        #self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
 
         # add the ramp
         cmds.extend(
@@ -1824,6 +2129,7 @@ class MultiDominoes(Dominoes):
                  port: int = None,
                  middle_objects=None,
                  num_middle_objects=1,
+                 num_distinct_objects=3,
                  middle_color=None,
                  middle_scale_range=None,
                  middle_rotation_range=None,
@@ -1849,6 +2155,7 @@ class MultiDominoes(Dominoes):
         self.middle_material = self.get_material_name(middle_material)
         self.horizontal = horizontal
         self.remove_middle = remove_middle
+        self.num_distinct_objects = num_distinct_objects
 
         # How many middle objects and their spacing
         self.num_middle_objects = num_middle_objects
@@ -1869,6 +2176,7 @@ class MultiDominoes(Dominoes):
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
+        self.distinct_ids = np.empty(dtype=np.int32, shape=0)
         self.middle_type = None
         self.distractors = OrderedDict()
         self.occluders = OrderedDict()
@@ -1878,10 +2186,22 @@ class MultiDominoes(Dominoes):
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
+        static_group.create_dataset("distinct_ids", data=self.distinct_ids)
+
+        # about the distinct_objects
+        distinct_group = static_group.create_group("distinct_objects")
+        colors = np.stack([self.candidate_dict[id_]["color"] for id_ in range(self.num_distinct_objects)], axis=0)
+
+        distinct_scales = [self.candidate_dict[id_]["scale"] for id_ in range(self.num_distinct_objects)]
+        scales = np.stack([xyz_to_arr(_s) for _s in distinct_scales])
+        distinct_group.create_dataset("scales", data=scales)
+        distinct_group.create_dataset("colors", data=colors)
+        distinct_group.create_dataset("masses", data=[self.candidate_dict[id_]["mass"] for id_ in range(self.num_distinct_objects)])
+
 
         static_group.create_dataset("remove_middle", data=self.remove_middle)
         if self.middle_type is not None:
-            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])
             static_group.create_dataset("middle_type", data=self.middle_type)
 
     @staticmethod
@@ -1908,13 +2228,13 @@ class MultiDominoes(Dominoes):
         if self.monochrome:
             self.middle_color = self.random_color(exclude=self.target_color)
 
-        return self._place_middle_objects() if bool(self.num_middle_objects) else []
+        return self._place_middle_objects() if bool(self.trial_num_middle_objects) else []
 
     def _place_middle_objects(self) -> List[dict]:
 
-        offset = -0.5 * self.collision_axis_length
+        offset = -0.5 * self.trial_collision_axis_length
         min_offset = offset + self.target_scale["x"]
-        max_offset = 0.5 * self.collision_axis_length - self.target_scale["x"]
+        max_offset = 0.5 * self.trial_collision_axis_length - self.target_scale["x"]
 
         commands = []
 
@@ -1923,7 +2243,7 @@ class MultiDominoes(Dominoes):
         else:
             rm_idx = -1
 
-        for m in range(self.num_middle_objects):
+        for m in range(self.trial_num_middle_objects):
             offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
             if offset >= max_offset:
@@ -1934,9 +2254,19 @@ class MultiDominoes(Dominoes):
             if m == rm_idx:
                 continue
 
-            record, data = self.random_primitive(self._middle_types,
-                                                 scale=self.middle_scale_range,
-                                                 color=self.middle_color,
+            distinct_id = random.choice(range(self.num_distinct_objects))
+            self.distinct_ids = np.append(self.distinct_ids, distinct_id)
+            # create a target object
+            #if not self.repeat_trial: # sample from scratch
+            middle_type = self.candidate_dict[distinct_id]["type"]
+            middle_scale = self.candidate_dict[distinct_id]["scale"]
+            middle_mass = self.candidate_dict[distinct_id]["mass"]
+            middle_color = self.candidate_dict[distinct_id]["color"]
+
+
+            record, data = self.random_primitive([middle_type],
+                                                 scale=middle_scale,
+                                                 color=middle_color,
                                                  exclude_color=self.target_color
             )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
@@ -1955,7 +2285,7 @@ class MultiDominoes(Dominoes):
                     record=record,
                     position=pos,
                     rotation=rot,
-                    mass=random.uniform(*get_range(self.middle_mass_range)),
+                    mass=middle_mass,
                     dynamic_friction=0.5,
                     static_friction=0.5,
                     bounciness=0.,
@@ -1995,6 +2325,7 @@ if __name__ == "__main__":
         room=args.room,
         model_libraries=args.model_libraries,
         num_middle_objects=args.num_middle_objects,
+        num_distinct_objects=args.num_distinct_objects,
         randomize=args.random,
         seed=args.seed,
         target_zone=args.zone,
