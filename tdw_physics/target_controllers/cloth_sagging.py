@@ -16,7 +16,9 @@ from tdw_physics.util import MODEL_LIBRARIES, get_parser, none_or_str
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
 # fluid
-from tdw.flex.fluid_types import FluidTypes
+#from tdw.flex.fluid_types import FluidTypes
+from tdw.flex_data.fluid_type import FLUID_TYPES
+#FluidTypes = FLUID_TYPES
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records]
 MODEL_CORE = [r.name for r in MODEL_LIBRARIES['models_core.json'].records]
@@ -103,7 +105,7 @@ class ClothSagging(Dominoes, FlexDataset):
     CLOTH_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("cloth_square")
     SOFT_RECORD = MODEL_LIBRARIES["models_flex.json"].get_record("sphere")
     RECEPTACLE_RECORD = MODEL_LIBRARIES["models_special.json"].get_record("fluid_receptacle1x1")
-    FLUID_TYPES = FluidTypes()
+    #FLUID_TYPES = FluidTypes()
 
     def __init__(self, port: int = 1071,
                  all_flex_objects=True,
@@ -335,7 +337,7 @@ class ClothSagging(Dominoes, FlexDataset):
         return commands
 
     def _place_ramp_under_probe(self) -> List[dict]:
-
+id
         cmds = Dominoes._place_ramp_under_probe(self)
         self.non_flex_objects.append(self.ramp_id)
         if self.ramp_base_height >= 0.01:

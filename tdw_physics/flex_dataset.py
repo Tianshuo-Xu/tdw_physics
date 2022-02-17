@@ -178,7 +178,7 @@ class FlexDataset(TransformsDataset, ABC):
         # Cache the static data.
         self._solid_actors.append(_SolidActor(o_id=o_id, mass_scale=mass_scale, mesh_expansion=mesh_expansion,
                                               particle_spacing=particle_spacing))
-        
+
         return [add_object,
                 {"$type": "scale_object",
                  "scale_factor": scale,
@@ -355,9 +355,10 @@ class FlexDataset(TransformsDataset, ABC):
                  "id": o_id,
                  "container_id": 0,
                  "fluid_container": True,
-                 "fluid_type": fluid_type},
-                {"$type": "step_physics",
-                 "frames": 500}]
+                 "fluid_type": fluid_type}]
+                #,
+                #{"$type": "step_physics",
+                # "frames": 500}]
 
     @abstractmethod
     def get_trial_initialization_commands(self) -> List[dict]:

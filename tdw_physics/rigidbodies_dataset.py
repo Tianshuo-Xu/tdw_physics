@@ -388,7 +388,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
 
     def add_ramp(self,
-                 record: ModelRecord,
+                 record: ModelRecord = None,
                  position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
                  rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
                  scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
@@ -405,22 +405,24 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # get a named ramp or choose a random one
         ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records \
                         if 'ramp' in r.name}
-        if record.name not in ramp_records.keys():
+        if record is None: #record.name not in ramp_records.keys():
             record = ramp_records[random.choice(sorted(ramp_records.keys()))]
 
         cmds = []
 
         # add the ramp
-        info = PHYSICS_INFO[record.name]
+        info = None
+        if record.name in PHYSICS_INFO:
+            info = PHYSICS_INFO[record.name]
         cmds.extend(
             self.add_physics_object(
                 record = record,
                 position = position,
                 rotation = rotation,
                 mass = mass or info.mass,
-                dynamic_friction = dynamic_friction or info.dynamic_friction,
-                static_friction = static_friction or info.static_friction,
-                bounciness = bounciness or info.bounciness,
+                dynamic_friction = dynamic_friction if dynamic_friction is not None else info.dynamic_friction,
+                static_friction = static_friction if static_friction is not None else info.static_friction,
+                bounciness = bounciness if bounciness is not None else info.bounciness,
                 o_id = o_id,
                 add_data = add_data))
 
