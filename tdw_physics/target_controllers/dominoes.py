@@ -453,7 +453,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            args.write_passes = ""#"_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -479,7 +479,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            args.write_passes = ""#"_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -496,8 +496,8 @@ def get_args(dataset_dir: str, parse=True):
             # red and yellow target and zone
             args.use_test_mode_colors = True
 
-            args.write_passes = "_img,_id,_depth,_normals,_flow"
-            args.save_passes = "_img,_id"
+            args.write_passes = ""#"_img,_id,_depth,_normals,_flow"
+            args.save_passes = ""#_img,_id"
             args.save_movies = True
             args.save_meshes = True
         else:

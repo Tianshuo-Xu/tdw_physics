@@ -23,7 +23,8 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 from tdw_physics.util_geom import save_obj
 import shutil
 
-PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
+# PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
+PASSES = []
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
@@ -164,12 +165,13 @@ class Dataset(Controller, ABC):
                           "id": "a"},
                          {"$type": "set_target_framerate",
                           "framerate": self._framerate},
-                         {"$type": "set_pass_masks",
-                          "pass_masks": self.write_passes},
+#                          {"$type": "set_pass_masks",
+#                           "pass_masks": self.write_passes},
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
-                         {"$type": "send_images",
-                          "frequency": "always"}])
+#                          {"$type": "send_images",
+#                           "frequency": "always"}
+                        ])
         return commands
 
     def run(self,
@@ -422,10 +424,10 @@ class Dataset(Controller, ABC):
 
             # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
-            if ('imag' not in r_ids) or ('tran' not in r_ids):
-                print("retrying frame %d, response only had %s" % (frame, r_ids))
-                frame -= 1
-                continue
+#             if ('imag' not in r_ids) or ('tran' not in r_ids):
+#                 print("retrying frame %d, response only had %s" % (frame, r_ids))
+#                 frame -= 1
+#                 continue
 
             frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
 
@@ -451,29 +453,29 @@ class Dataset(Controller, ABC):
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
-        # Save out the target/zone segmentation mask
-        _id = f['frames']['0000']['images']['_id']
-        #get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        #get colors
-        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        #get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        #as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        #save image
-        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+#         # Save out the target/zone segmentation mask
+#         _id = f['frames']['0000']['images']['_id']
+#         #get PIL image
+#         _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+#         #get colors
+#         zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+#         zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+#         target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+#         target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+#         #get individual maps
+#         zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+#         target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+#         #colorize
+#         zone_map = zone_map * ZONE_COLOR
+#         target_map = target_map * TARGET_COLOR
+#         joint_map = zone_map + target_map
+#         # add alpha
+#         alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+#         joint_map = np.dstack((joint_map, alpha))
+#         #as image
+#         map_img = Image.fromarray(np.uint8(joint_map))
+#         #save image
+#         map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()
