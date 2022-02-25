@@ -277,8 +277,12 @@ class Dataset(Controller, ABC):
         # Save the across-trial stats
         if self.save_labels:
             hdf5_paths = glob.glob(str(output_dir) + '/*.hdf5')
+
+            # print("***********got stats*************")
+
             stats = get_across_trial_stats_from(
                 hdf5_paths, funcs=self.get_controller_label_funcs(classname=type(self).__name__))
+
             stats["num_trials"] = int(len(hdf5_paths))
             stats_str = json.dumps(stats, indent=4)
             stats_file = Path(output_dir).joinpath('trial_stats.json')
@@ -356,11 +360,11 @@ class Dataset(Controller, ABC):
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
 
-                if self.save_meshes:
-                    for o_id in self.object_ids:
-                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                        vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
+                # if self.save_meshes:
+                #     for o_id in self.object_ids:
+                #         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                #         vertices, faces = self.object_meshes[o_id]
+                #         save_obj(vertices, faces, obj_filename)
             pbar.update(1)
         pbar.close()
 
@@ -480,6 +484,7 @@ class Dataset(Controller, ABC):
         # Close the file.
         f.close()
         # Move the file.
+        print("filepath", filepath)
         try:
             temp_path.replace(filepath)
         except OSError:
@@ -715,6 +720,8 @@ class Dataset(Controller, ABC):
         commands = TDWUtils.set_visual_material(
             self, record.substructure, object_id, material, quality="high")
         return commands
+
+
 
 
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
