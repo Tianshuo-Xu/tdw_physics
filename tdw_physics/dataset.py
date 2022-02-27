@@ -454,8 +454,8 @@ class Dataset(Controller, ABC):
             # Save the trial-level metadata
             json_str =json.dumps(self.trial_metadata, indent=4)
             self.meta_file.write_text(json_str, encoding='utf-8')
-            print("TRIAL %d LABELS" % self._trial_num)
-            print(json.dumps(self.trial_metadata[-1], indent=4))
+            # print("TRIAL %d LABELS" % self._trial_num)
+            # print(json.dumps(self.trial_metadata[-1], indent=4))
 
 #         # Save out the target/zone segmentation mask
 #         _id = f['frames']['0000']['images']['_id']
@@ -484,7 +484,7 @@ class Dataset(Controller, ABC):
         # Close the file.
         f.close()
         # Move the file.
-        print("filepath", filepath)
+        # print("filepath", filepath)
         try:
             temp_path.replace(filepath)
         except OSError:
