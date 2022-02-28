@@ -303,7 +303,7 @@ class Bouncy(Dominoes, FlexDataset):
         if not self.all_flex_objects:
             return Dominoes._get_push_cmd(self, o_id, position_or_particle)
         cmd = {"$type": "apply_force_to_flex_object",
-               "force": self.push_force,
+               "force": random.uniform(2.0, 3.0),
                "id": o_id,
                "particle": -1}
         print("PUSH CMD FLEX")
@@ -315,7 +315,7 @@ class Bouncy(Dominoes, FlexDataset):
         self.cloth = self.SOFT_RECORD_BALL
         self.cloth_id = self._get_next_object_id()
         self.cloth_position = {
-            "x": 1.8, "y": random.uniform(1.5, 1.8), "z": random.uniform(-0.2, 0.2)}
+            "x": 1.9, "y": random.uniform(1.5, 1.8), "z": random.uniform(-0.2, 0.2)}
         self.cloth_color = self.target_color if self.target_color is not None else self.random_color()
         self.cloth_scale = {'x': 0.1, 'y': 0.1, 'z': 0.1}
         self.cloth_mass = 2
@@ -339,6 +339,11 @@ class Bouncy(Dominoes, FlexDataset):
                          "mass": self.cloth_mass,
                          "id": self.cloth_id})
 
+        # set force
+        commands.append({"$type": "apply_force_to_flex_object",
+                         "force": {"x": random.uniform(-1.5, -2.5), "y": 0.0, "z": 0.0},
+                         "id": self.cloth_id,
+                         "particle": -1})
         # color cloth
         commands.append(
             {"$type": "set_color",
@@ -376,7 +381,7 @@ class Bouncy(Dominoes, FlexDataset):
         }
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame >= 200
+        return frame >= 250
 
     def _build_intermediate_structure(self) -> List[dict]:
 
@@ -390,13 +395,13 @@ class Bouncy(Dominoes, FlexDataset):
         self.objrec1 = MODEL_LIBRARIES["models_flex.json"].get_record(
             random.choice(["cube"]))
         self.objrec1_id = self._get_next_object_id()
-        self.objrec1_position = {'x': 1.85, 'y': 1.0, 'z': 0.0}
+        self.objrec1_position = {'x': 1.85, 'y': 1.2, 'z': 0.0}
         # {'x': 0, 'y': 0, 'z': 0},
         self.objrec1_rotation = {k: 0 for k in ['x', 'y', 'z']}
         # self.objrec1_scale = {'x': random.uniform(
         #     0.1, 0.3), 'y': self.anchor_height+random.uniform(-self.height_jitter, self.height_jitter), 'z': random.uniform(0.2, 0.5)}
         self.objrec1_scale = {'x': 0.9, 'y': 0.8, 'z': 1}
-        self.objrec1_mass = 49.0
+        self.objrec1_mass = 1000.0
         commands.extend(self.add_flex_solid_object(
             record=self.objrec1,
             position=self.objrec1_position,
@@ -412,10 +417,10 @@ class Bouncy(Dominoes, FlexDataset):
         self.objrec2 = MODEL_LIBRARIES["models_flex.json"].get_record(
             random.choice(["cube"]))
         self.objrec2_id = self._get_next_object_id()
-        self.objrec2_position = {'x': 0.85, 'y': 1.0, 'z': 0.0}
+        self.objrec2_position = {'x': 0.85, 'y': 1.2, 'z': 0.0}
         # {'x': 0, 'y': 0, 'z': 0},
         self.objrec2_rotation = {k: 0 for k in ['x', 'y', 'z']}
-        self.objrec2_scale = {'x': 0.9, 'y': 0.8, 'z': 1}
+        self.objrec2_scale = {'x': 0.85, 'y': 0.8, 'z': 1}
         self.objrec2_mass = 49.0
         commands.extend(self.add_flex_solid_object(
             record=self.objrec2,
@@ -435,7 +440,7 @@ class Bouncy(Dominoes, FlexDataset):
         self.objrec3_position = {'x': 0.1, 'y': 0.3, 'z': 0.0}
         # {'x': 0, 'y': 0, 'z': 0},
         self.objrec3_rotation = {k: 0 for k in ['x', 'y', 'z']}
-        self.objrec3_scale = {'x': 0.4, 'y': 0.1, 'z': 1.0}
+        self.objrec3_scale = {'x': 0.38, 'y': 0.1, 'z': 1.0}
         self.objrec3_mass = 99.0
         commands.extend(self.add_flex_solid_object(
             record=self.objrec3,
