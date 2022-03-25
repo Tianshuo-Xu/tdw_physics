@@ -58,7 +58,7 @@ def get_bouncy_args(dataset_dir: str, parse=True):
     # force
     parser.add_argument("--fscale",
                         type=str,
-                        default="[1.8,1.8]",
+                        default="[1.4,1.4]",
                         help="range of scales to apply to push force")
 
     parser.add_argument("--frot",
@@ -575,13 +575,16 @@ class Bouncy(MultiDominoes):
 
         return cmds
 
+    def is_done(self, resp: List[bytes], frame: int) -> bool:
+        return frame >= 450
+
     def _place_box_piles(self) -> List[dict]:
         """Places the box_piles on a location on the axis and fixes it in place"""
         assert self.use_box_piles, "need to use box_piles"
         commands = []
 
         # add box #1 (closest to yellow zone)
-        self.random_color(exclude=self.target_color)
+        color_var = self.random_color(exclude=self.target_color)
         record, data = self.random_primitive(
             object_types=self.get_types(self.box_piles),
             scale=self.box_piles_scale,
@@ -610,12 +613,12 @@ class Bouncy(MultiDominoes):
         # Set the middle object material
         commands.extend(
             self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.box_piles_material)))
+                record, o_id, self.get_material_name(self.zone_material)))
 
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
@@ -635,9 +638,9 @@ class Bouncy(MultiDominoes):
         record, data = self.random_primitive(
             object_types=self.get_types(self.box_piles),
             scale={"x": 0.8, "y": 0.2, "z": 2.0},
-            color=self.random_color(exclude=self.target_color),
+            color=color_var,
         )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        o_id, scale, rgb_var = [data[k] for k in ["id", "scale", "color"]]
 
         pos = {
             "x": 1.0 * self.box_piles_position * self.bouncy_axis_length - 0.5,
@@ -652,20 +655,21 @@ class Bouncy(MultiDominoes):
             mass=1000,
             dynamic_friction=0.0,
             static_friction=0.0,
-            bounciness=0.8,
+            bounciness=0.2,
             o_id=o_id,
             add_data=True)
         )
 
+        bounce_material = self.get_material_name(self.box_piles_material)
         # Set the middle object material
         commands.extend(
             self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.box_piles_material)))
+                record, o_id, bounce_material))
 
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                "color": {"r": rgb_var[0], "g": rgb_var[1], "b": rgb_var[2], "a": 1.},
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
@@ -681,7 +685,7 @@ class Bouncy(MultiDominoes):
              "is_kinematic": True,
              "use_gravity": True}])
 
-        # add box #2 (second closest to yellow zone)
+        # add box #3 (third closest to yellow zone)
         record, data = self.random_primitive(
             object_types=self.get_types(self.box_piles),
             scale={"x": 1.0, "y": 1.0, "z": 2.0},
@@ -710,12 +714,12 @@ class Bouncy(MultiDominoes):
         # Set the middle object material
         commands.extend(
             self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.box_piles_material)))
+                record, o_id, self.get_material_name(self.zone_material)))
 
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
@@ -736,12 +740,12 @@ class Bouncy(MultiDominoes):
         record, data = self.random_primitive(
             object_types=self.get_types(self.box_piles),
             scale={"x": 1.0, "y": 1.0, "z": 2.0},
-            color=self.random_color(exclude=self.target_color),
+            color=color_var,
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         pos = {
-            "x": 1.0 * self.box_piles_position * self.bouncy_axis_length - 2.6,
+            "x": 1.0 * self.box_piles_position * self.bouncy_axis_length - 2.51,
             "y": 0,
             "z": 0
         }
@@ -753,7 +757,7 @@ class Bouncy(MultiDominoes):
             mass=1000,
             dynamic_friction=0.0,
             static_friction=0.0,
-            bounciness=0.6,
+            bounciness=0.2,
             o_id=o_id,
             add_data=True)
         )
@@ -761,12 +765,12 @@ class Bouncy(MultiDominoes):
         # Set the middle object material
         commands.extend(
             self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.box_piles_material)))
+                record, o_id, bounce_material))
 
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+                "color": {"r": rgb_var[0], "g": rgb_var[1], "b": rgb_var[2], "a": 1.},
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
