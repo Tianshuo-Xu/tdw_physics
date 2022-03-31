@@ -204,25 +204,28 @@ class Collision(Dominoes):
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
 
-        # Teleport the avatar to a reasonable position 
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
-                                                radius_max=self.camera_radius_range[1],
-                                                angle_min=self.camera_min_angle,
-                                                angle_max=self.camera_max_angle,
-                                                y_min=self.camera_min_height,
-                                                y_max=self.camera_max_height,
-                                                center=TDWUtils.VECTOR3_ZERO)
+        # Teleport the avatar to a reasonable position
 
+
+        # a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+        #                                         radius_max=self.camera_radius_range[1],
+        #                                         angle_min=self.camera_min_angle,
+        #                                         angle_max=self.camera_max_angle,
+        #                                         y_min=self.camera_min_height,
+        #                                         y_max=self.camera_max_height,
+        #                                         center=TDWUtils.VECTOR3_ZERO)
+
+        a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
+                                                  radius=self.camera_radius_range[1] * 1.5,
+                                                  angle=(2 * np.pi / self.num_views) * 0,
+                                                  height=self.camera_max_height)
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
 
         commands.extend([
-            {"$type": "teleport_avatar_to",
-             "position": a_pos},
-            {"$type": "look_at_position",
-             "position": self.camera_aim},
-            {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+            {"$type": "teleport_avatar_to", "position": a_pos},
+            {"$type": "look_at_position", "position": self.camera_aim},
+            {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim),}
         ])
 
         self.camera_position = a_pos

@@ -1,6 +1,6 @@
 import sys, os, copy, subprocess, glob, logging, time
 import platform
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
@@ -51,6 +51,7 @@ class Dataset(Controller, ABC):
                  randomize: int=0,
                  seed: int=0,
                  save_args=True,
+                 num_views=1,
                  **kwargs
     ):
         # save the command-line args
@@ -64,12 +65,17 @@ class Dataset(Controller, ABC):
         # set random state
         self.randomize = randomize
         self.seed = seed
+        self.num_views = num_views
+
         if not bool(self.randomize):
             random.seed(self.seed)
             print("SET RANDOM SEED: %d" % self.seed)
+            print("NUMBER OF VIEWS: %d" % self.num_views)
+
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
+
     '''
     def communicate(self, commands) -> list:
         #Save a log of the commands so that they can be rerun
@@ -155,20 +161,16 @@ class Dataset(Controller, ABC):
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
-        commands.extend([{"$type": "create_avatar",
-                          "type": "A_Img_Caps_Kinematic",
-                          "id": "a"},
-                         {"$type": "set_target_framerate",
-                          "framerate": self._framerate},
-                         {"$type": "set_pass_masks",
-                          "pass_masks": self.write_passes},
-                         {"$type": "set_field_of_view",
-                          "field_of_view": self.get_field_of_view()},
-                         {"$type": "send_images",
-                          "frequency": "always"},
-                         {"$type": "set_anti_aliasing",
-                          "mode": "subpixel"}
-                         ])
+
+        commands.extend([
+             {"$type": "create_avatar", "type": "A_Img_Caps_Kinematic"},
+             {"$type": "set_target_framerate", "framerate": self._framerate},
+             {"$type": "set_pass_masks", "pass_masks": self.write_passes},
+             {"$type": "set_field_of_view", "field_of_view": self.get_field_of_view()},
+             {"$type": "send_images", "frequency": "always"},
+             {"$type": "set_anti_aliasing", "mode": "subpixel"}
+        ])
+
         return commands
 
     def run(self,
@@ -425,13 +427,13 @@ class Dataset(Controller, ABC):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-        self._write_frame_labels(frame_grp, resp, -1, False)
+        _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        self._write_frame_labels(frames_grp, resp, -1, False)
 
         # Continue the trial. Send commands, and parse output data.
         while not done:
             frame += 1
-            # print('frame %d' % frame)
+            print('frame %d' % frame)
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
@@ -441,10 +443,42 @@ class Dataset(Controller, ABC):
             #     print("retrying frame %d, response only had %s" % (frame, r_ids))
             #     frame -= 1
             #     continue
-            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
 
-            # Write whether this frame completed the trial and any other trial-level data
-            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+            if frame == 5:
+
+                camera_matrix_dict = {}
+                for view_id in range(self.num_views):
+                    print('Process view: ', view_id)
+                    commands = []
+                    a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
+                                                              radius=self.camera_radius_range[1] * 1.5,
+                                                              angle=(2 * np.pi / self.num_views) * view_id,
+                                                              height=self.camera_max_height)
+                    # Set the camera parameters
+                    self._set_avatar_attributes(a_pos)
+                    print('a_pos', a_pos)
+
+                    commands.extend([
+                        {"$type": "teleport_avatar_to", "position": a_pos},
+                        {"$type": "look_at_position", "position": self.camera_aim},
+                        {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim), }
+                    ])
+
+                    resp = self.communicate(commands)
+
+                    _, objs_grp, tr_dict, done, camera_matrix = self._write_frame(
+                        frames_grp=frames_grp, resp=resp, frame_num=frame, zone_id=self.zone_id, view_id=view_id)
+
+                    camera_matrix_dict[f'view_{view_id}'] = camera_matrix.tolist()
+                    print('Camera matrix in dataset: ', camera_matrix)
+
+                with open('./tmp/camera_matrix.json', 'w') as fp:
+                    json.dump(camera_matrix_dict, fp, sort_keys=True, indent=4)
+
+                # Write whether this frame completed the trial and any other trial-level data
+                labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
+
+                break
 
         # Cleanup.
         commands = []
@@ -465,6 +499,8 @@ class Dataset(Controller, ABC):
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
+        '''
+        
         # Save out the target/zone segmentation mask
         if (self.zone_id in self.object_ids) and (self.target_id in self.object_ids):
 
@@ -490,6 +526,7 @@ class Dataset(Controller, ABC):
             map_img = Image.fromarray(np.uint8(joint_map))
             #save image
             map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+        '''
 
         # Close the file.
         f.close()
@@ -558,6 +595,14 @@ class Dataset(Controller, ABC):
 
         return {"x": a_x, "y": a_y, "z": a_z}
 
+    def get_rotating_camera_position(self, center, radius, angle, height):
+
+        a_x = center["x"] + radius * np.sin(angle)
+        a_z = center["z"] + radius * np.cos(angle)
+        a_y = center["y"] + height
+
+        return {"x": a_x, "y": a_y, "z": a_z}
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         """
         Override this command for special logic to end the trial.
@@ -614,7 +659,8 @@ class Dataset(Controller, ABC):
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
 
     @abstractmethod
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
+                     view_id: Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         """
         Write a frame to the hdf5 file.

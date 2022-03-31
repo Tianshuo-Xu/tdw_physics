@@ -7,7 +7,7 @@ import importlib
 import numpy as np
 from enum import Enum
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from collections import OrderedDict
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
@@ -1043,13 +1043,16 @@ class Dominoes(RigidbodiesDataset):
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
-                     frame_num: int) -> \
+                     frame_num: int, zone_id: Optional[int] = None,
+                     view_id: Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
-        frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp,
+        frame, objs, tr, sleeping, camera_matrix = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
-                                                         frame_num=frame_num)
+                                                         frame_num=frame_num,
+                                                         zone_id=zone_id,
+                                                         view_id=view_id)
         # If this is a stable structure, disregard whether anything is actually moving.
-        return frame, objs, tr, sleeping and not (frame_num < 150)
+        return frame, objs, tr, sleeping and not (frame_num < 150), camera_matrix
 
     def _update_target_position(self, resp: List[bytes], frame_num: int) -> None:
         if frame_num <= 0:

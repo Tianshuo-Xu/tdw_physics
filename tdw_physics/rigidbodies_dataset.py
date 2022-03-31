@@ -544,9 +544,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 mesh_group.create_dataset(f"faces_{idx}", data=faces)
                 mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
+                     view_id: Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
-        frame, objs, tr, done = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num)
+        frame, objs, tr, done, camera_matrix = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num, zone_id=zone_id, view_id=view_id)
         num_objects = len(self.object_ids)
         # Physics data.
         velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))
@@ -600,19 +601,19 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 for i in range(en.get_num_contacts()):
                     env_collision_contacts = np.append(env_collision_contacts, (en.get_contact_normal(i),
                                                                                 en.get_contact_point(i)))
-        objs.create_dataset("velocities", data=velocities.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("angular_velocities", data=angular_velocities.reshape(num_objects, 3), compression="gzip")
-        collisions = frame.create_group("collisions")
-        collisions.create_dataset("object_ids", data=collision_ids.reshape((-1, 2)), compression="gzip")
-        collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
-                                  compression="gzip")
-        collisions.create_dataset("contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
-        collisions.create_dataset("states", data=collision_states.astype('S'), compression="gzip")
-        env_collisions = frame.create_group("env_collisions")
-        env_collisions.create_dataset("object_ids", data=env_collision_ids, compression="gzip")
-        env_collisions.create_dataset("contacts", data=env_collision_contacts.reshape((-1, 2, 3)),
-                                      compression="gzip")
-        return frame, objs, tr, sleeping
+        # objs.create_dataset("velocities", data=velocities.reshape(num_objects, 3), compression="gzip")
+        # objs.create_dataset("angular_velocities", data=angular_velocities.reshape(num_objects, 3), compression="gzip")
+        # collisions = frame.create_group("collisions")
+        # collisions.create_dataset("object_ids", data=collision_ids.reshape((-1, 2)), compression="gzip")
+        # collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
+        #                           compression="gzip")
+        # collisions.create_dataset("contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
+        # collisions.create_dataset("states", data=collision_states.astype('S'), compression="gzip")
+        # env_collisions = frame.create_group("env_collisions")
+        # env_collisions.create_dataset("object_ids", data=env_collision_ids, compression="gzip")
+        # env_collisions.create_dataset("contacts", data=env_collision_contacts.reshape((-1, 2, 3)),
+        #                               compression="gzip")
+        return frame, objs, tr, sleeping, camera_matrix
 
     def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
 

@@ -11,6 +11,8 @@ from tdw_physics.dataset import Dataset
 from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
 
 from PIL import Image
+import io
+import json
 
 class TransformsDataset(Dataset, ABC):
     """
@@ -101,15 +103,17 @@ class TransformsDataset(Dataset, ABC):
 
         return commands
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
+                     view_id: Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(self.object_ids)
 
         # Create a group for this frame.
-        frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        # frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        frame = None
 
         # Create a group for images.
-        images = frame.create_group("images")
+        # images = frame.create_group("images")
 
         # Transforms data.
         positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
@@ -121,7 +125,7 @@ class TransformsDataset(Dataset, ABC):
         for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
             bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
 
-        camera_matrices = frame.create_group("camera_matrices")
+        # camera_matrices = frame.create_group("camera_matrices")
 
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
@@ -129,8 +133,12 @@ class TransformsDataset(Dataset, ABC):
         # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         # print(frame_num, r_types)
 
+        write_data = frame_num == 5
+
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
+
+            print('r_id', r_id)
             if r_id == "tran":
                 tr = Transforms(r)
                 for i in range(tr.get_num()):
@@ -147,6 +155,7 @@ class TransformsDataset(Dataset, ABC):
                     rotations[i] = tr_dict[o_id]["rot"]
             elif r_id == "imag":
                 im = Images(r)
+
                 # Add each image.
                 for i in range(im.get_num_passes()):
                     pass_mask = im.get_pass_mask(i)
@@ -155,7 +164,25 @@ class TransformsDataset(Dataset, ABC):
                         image_data = TDWUtils.get_shaped_depth_pass(images=im, index=i)
                     else:
                         image_data = im.get_image(i)
-                    images.create_dataset(pass_mask, data=image_data, compression="gzip")
+
+                    if write_data:
+                        print('View id: ', view_id, pass_mask, zone_id)
+                        if '_img' in pass_mask or '_id' in pass_mask:
+                            if pass_mask == '_id':
+                                im_array = io.BytesIO(np.ascontiguousarray(image_data))
+                                if zone_id is not None:
+                                    zone_idx = [i for i, o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+                                    zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+                                    zone_color = zone_color.reshape(1, 1, 3)
+
+                                im_array = Image.open(im_array)
+                                im_array = np.asarray(im_array)
+                                im_array[im_array == zone_color] = 0
+                                im_array = Image.fromarray(im_array)
+                            else:
+                                im_array = Image.open(io.BytesIO(np.ascontiguousarray(image_data)))
+                            im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
+                        # images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
                     if pass_mask in self.save_passes:
@@ -188,20 +215,24 @@ class TransformsDataset(Dataset, ABC):
             # Add the camera matrices.
             elif OutputData.get_data_type_id(r) == "cama":
                 matrices = CameraMatrices(r)
-                camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
-                camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
 
+                projection_matrix = matrices.get_projection_matrix()
+                camera_matrix = matrices.get_camera_matrix()
+                print('Camera matrix: ', camera_matrix.reshape(4, 4))
+                print('projection matrix', projection_matrix.reshape(4, 4))
 
-    
+                # camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
+                # camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
 
-        objs = frame.create_group("objects")
-        objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
-        for bound_type in bounds.keys():
-            objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+        objs = None
+        # objs = frame.create_group("objects")
+        # objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
+        # objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
+        # objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+        # for bound_type in bounds.keys():
+        #     objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
 
-        return frame, objs, tr_dict, False
+        return frame, objs, tr_dict, False, camera_matrix
 
     def get_object_position(self, obj_id: int, resp: List[bytes]) -> None:
         position = None

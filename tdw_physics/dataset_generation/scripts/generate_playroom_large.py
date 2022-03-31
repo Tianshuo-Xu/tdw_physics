@@ -101,6 +101,10 @@ def get_args(dataset_dir: str):
     parser.add_argument("--launch_build",
                         action="store_true",
                         help="Whether to launch the build")
+    parser.add_argument("--num_views",
+                        type=int,
+                        default=1,
+                        help="Number of views / cameras")
 
     args = parser.parse_args()
     args = playroom_postproc(args)
@@ -275,7 +279,8 @@ def build_controller(args, launch_build=True):
         match_probe_and_target_color=args.match_probe_and_target_color,
         size_min=None,
         size_max=None,
-        probe_initial_height=0.25
+        probe_initial_height=0.25,
+        num_views=args.num_views
     )
 
     return C
@@ -352,6 +357,8 @@ def main(args):
     ## init the controller
     if (args.seed == -1) or (args.seed is None):
         args.seed = int(args.split) + num_moving_splits * args.group_order[0]
+
+
     Play = build_controller(args)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
     Play.command_log = output_dir.joinpath('tdw_commands.json')
