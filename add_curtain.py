@@ -10,9 +10,9 @@ def load_video(filename):
     return skvideo.io.vread(filename)
 
 
-#trial_name = "dump/dominoes/pilot_dominoes_2distinct_0middle_tdwroom_fixedcam"
-trial_name = "dump/roll/pilot_it2_rollingSliding_simple_ramp_box_2distinct"
-trial_id = 0
+trial_name = "dump/dominoes/pilot_dominoes_2distinct_3middle_tdwroom_fixedcam"
+#trial_name = "dump/roll/pilot_it2_rollingSliding_simple_ramp_box_2distinct"
+trial_id = 4
 
 seq_ids = [0, 1]
 
@@ -34,7 +34,7 @@ curtain_img = np.array(curtain_img.convert("RGB"))
 
 
 #adding curtain frame
-duration = 10
+duration = 20
 data1_tiled = np.tile(data1[-1:], [duration, 1, 1, 1])
 N, H, W, _ = data1_tiled.shape
 
