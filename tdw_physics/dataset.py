@@ -170,7 +170,7 @@ class Dataset(Controller, ABC):
              {"$type": "send_images", "frequency": "always"},
              {"$type": "set_anti_aliasing", "mode": "subpixel"}
         ])
-
+        print('FIELD OF VIEW: ', self.get_field_of_view())
         return commands
 
     def run(self,
@@ -448,35 +448,38 @@ class Dataset(Controller, ABC):
 
                 camera_matrix_dict = {}
                 for view_id in range(self.num_views):
-                    print('Process view: ', view_id)
+
                     commands = []
+                    delta_angle = 2 * np.pi / self.num_views
+                    noise = (random.random() - 0.5) * delta_angle
+                    print('delta angle / noise: ', delta_angle, noise)
                     a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
-                                                              radius=self.camera_radius_range[1] * 1.5,
-                                                              angle=(2 * np.pi / self.num_views) * view_id,
+                                                              radius=self.camera_radius_range[1] * 1.4,
+                                                              angle= delta_angle * view_id + noise,
                                                               height=self.camera_max_height)
                     # Set the camera parameters
                     self._set_avatar_attributes(a_pos)
-                    print('a_pos', a_pos)
 
                     commands.extend([
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
-                        {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim), }
+                        {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
+                        # {"$type": "set_camera_clipping_planes", "near": 0.1, "far": 10}
                     ])
 
                     resp = self.communicate(commands)
 
                     _, objs_grp, tr_dict, done, camera_matrix = self._write_frame(
-                        frames_grp=frames_grp, resp=resp, frame_num=frame, zone_id=self.zone_id, view_id=view_id)
+                        frames_grp=frames_grp, resp=resp, frame_num=frame, zone_id=self.zone_id, view_id=view_id, trial_num=trial_num)
 
                     camera_matrix_dict[f'view_{view_id}'] = camera_matrix.tolist()
-                    print('Camera matrix in dataset: ', camera_matrix)
 
-                with open('./tmp/camera_matrix.json', 'w') as fp:
-                    json.dump(camera_matrix_dict, fp, sort_keys=True, indent=4)
+
+                # with open('./tmp/camera_matrix.json', 'w') as fp:
+                #     json.dump(camera_matrix_dict, fp, sort_keys=True, indent=4)
 
                 # Write whether this frame completed the trial and any other trial-level data
-                labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
+                # labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
 
                 break
 
@@ -660,7 +663,7 @@ class Dataset(Controller, ABC):
 
     @abstractmethod
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
-                     view_id: Optional[int] = None) -> \
+                     view_id: Optional[int] = None, trial_num:Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         """
         Write a frame to the hdf5 file.

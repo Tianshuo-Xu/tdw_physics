@@ -1044,13 +1044,14 @@ class Dominoes(RigidbodiesDataset):
                      frames_grp: h5py.Group,
                      resp: List[bytes],
                      frame_num: int, zone_id: Optional[int] = None,
-                     view_id: Optional[int] = None) -> \
+                     view_id: Optional[int] = None, trial_num:Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         frame, objs, tr, sleeping, camera_matrix = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
                                                          frame_num=frame_num,
                                                          zone_id=zone_id,
-                                                         view_id=view_id)
+                                                         view_id=view_id,
+                                                         trial_num=trial_num)
         # If this is a stable structure, disregard whether anything is actually moving.
         return frame, objs, tr, sleeping and not (frame_num < 150), camera_matrix
 

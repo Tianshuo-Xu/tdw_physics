@@ -1,0 +1,44 @@
+2022-03-29 21:15:28,676 --- Generating split 4 / 31 with category seed 0
+2022-03-29 21:15:28,677 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-29 21:18:04,357 --- Initialized Controller with random seed 4
+2022-03-29 21:19:00,261 --- Generating split 4 / 31 with category seed 0
+2022-03-29 21:19:00,261 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-29 21:21:37,697 --- Initialized Controller with random seed 4
+2022-03-30 09:50:08,545 --- Generating split 4 / 31 with category seed 0
+2022-03-30 09:50:08,546 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 09:52:44,079 --- Initialized Controller with random seed 4
+2022-03-30 09:52:44,094 --- Starting trial << 0 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'tennis_rackets', 'distractor': 'b04_cgaxis_models_31_12_vray', 'occluder': 'b03_still_forklift', 'apply_force_to': 'probe'}
+2022-03-30 09:55:57,495 --- Generating split 4 / 31 with category seed 0
+2022-03-30 09:55:57,495 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 09:56:49,954 --- Generating split 4 / 31 with category seed 0
+2022-03-30 09:56:49,954 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 09:59:35,334 --- Initialized Controller with random seed 4
+2022-03-30 09:59:35,346 --- Starting trial << 0 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'tennis_rackets', 'distractor': 'b04_cgaxis_models_31_12_vray', 'occluder': 'b03_still_forklift', 'apply_force_to': 'probe'}
+2022-03-30 10:07:15,908 --- Finished trial << 0 >> with trial seed = 4000 (elapsed time: 460 seconds)
+2022-03-30 10:07:15,912 --- Starting trial << 1 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'b05_3dmax', 'distractor': 'b03_blue_edition_liquid_soap', 'occluder': 'filler_2010', 'apply_force_to': 'target'}
+2022-03-30 10:09:11,249 --- Finished trial << 1 >> with trial seed = 4001 (elapsed time: 115 seconds)
+2022-03-30 10:09:11,254 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:10:51,409 --- Generating split 4 / 31 with category seed 0
+2022-03-30 10:10:51,409 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 10:13:30,909 --- Initialized Controller with random seed 4
+2022-03-30 10:13:30,922 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:18:48,917 --- Generating split 4 / 31 with category seed 0
+2022-03-30 10:18:48,917 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 10:21:29,688 --- Initialized Controller with random seed 4
+2022-03-30 10:21:29,700 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:21:40,780 --- Generating split 4 / 31 with category seed 0
+2022-03-30 10:21:40,780 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 10:24:20,980 --- Initialized Controller with random seed 4
+2022-03-30 10:24:20,992 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:27:32,856 --- Generating split 4 / 31 with category seed 0
+2022-03-30 10:27:32,856 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 10:30:10,219 --- Initialized Controller with random seed 4
+2022-03-30 10:30:10,230 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:46:39,902 --- Generating split 4 / 31 with category seed 0
+2022-03-30 10:46:39,902 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+2022-03-30 10:49:27,894 --- Initialized Controller with random seed 4
+2022-03-30 10:49:27,908 --- Starting trial << 2 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'stridabike_vray', 'distractor': 'mouse_m505_1', 'occluder': 'necrobia_rufipes', 'apply_force_to': 'distractor'}
+2022-03-30 10:57:35,122 --- Finished trial << 2 >> with trial seed = 4002 (elapsed time: 487 seconds)
+2022-03-30 10:57:35,129 --- Starting trial << 3 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'decor_set_1_c&b2', 'distractor': 'refrigerator_small', 'occluder': 'villaverde_-_murano_luna_chandelier', 'apply_force_to': 'occluder'}
+2022-03-30 10:59:50,655 --- Finished trial << 3 >> with trial seed = 4003 (elapsed time: 135 seconds)
+2022-03-30 10:59:50,661 --- Starting trial << 4 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'cgaxis_models_22_33_vray', 'distractor': 'b04_bottle-with-label', 'occluder': 'b05_783611_antiqua_lightstar_composite', 'apply_force_to': 'probe'}

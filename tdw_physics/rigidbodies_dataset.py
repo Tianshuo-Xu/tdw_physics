@@ -545,9 +545,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
-                     view_id: Optional[int] = None) -> \
+                     view_id: Optional[int] = None, trial_num:Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
-        frame, objs, tr, done, camera_matrix = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num, zone_id=zone_id, view_id=view_id)
+        frame, objs, tr, done, camera_matrix = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num, zone_id=zone_id, view_id=view_id, trial_num=trial_num)
         num_objects = len(self.object_ids)
         # Physics data.
         velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))

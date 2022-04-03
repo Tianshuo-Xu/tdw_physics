@@ -1,0 +1,75 @@
+2022-03-28 13:51:59,857 --- Generating split 4 / 31 with category seed 0
+2022-03-28 13:51:59,857 --- Using group order ['probes', 'targets', 'distractors', 'occluders']
+random port 3409 chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.
+SET RANDOM SEED: 4
+2022-03-28 13:52:49,708 --- Initialized Controller with random seed 4
+  0%|                                                              | 0/1250 [00:00<?, ?it/s]Trials up to 5 already exist, skipping those
+UPDATE CONTROLLER STATE
+probe: b03_12_06_027
+target: kitchen_faucet
+distractor: bike_forma
+occluder: vysokozdvizny_vozik
+MATERIALS
+applying force to ---> target
+UPDATE CONTROLLER STATE
+probe: b03_12_06_027
+target: white_lamp
+distractor: monster_beats_studio
+occluder: forklift
+MATERIALS
+applying force to ---> distractor
+2022-03-28 13:52:49,725 --- Starting trial << 6 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'white_lamp', 'distractor': 'monster_beats_studio', 'occluder': 'forklift', 'apply_force_to': 'distractor'}
+The build quit due to an error. Check the build log for more info.
+If the build is on the same machine as this controller, the log path is probably /Users/honglinchen/Library/Logs/MIT/TDW/Player.log
+If the build is on a remote Linux server, the log path is probably ~/.config/unity3d/MIT/TDW/Player.log (where ~ is your home directory)
+No object id found for seg 3
+No object id found for seg 4
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 3
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+couldn't store bound data for object 5
+Couldn't store velocity data for object 3
+frame num 0
+ri_dict {4: {'vel': (0.0, -0.09809999912977219, 0.0), 'ang': (0.0, 0.0, 0.0)}, 2: {'vel': (0.0, 0.0, 0.0), 'ang': (0.0, 0.0, 0.0)}, 1: {'vel': (0.0, 0.0, 0.0), 'ang': (0.0, 0.0, 0.0)}}
+['imag', 'quit', 'tran', 'cama', 'boun', 'segm', 'rigi', '']
+Couldn't store velocity data for object 5
+frame num 0
+ri_dict {4: {'vel': (0.0, -0.09809999912977219, 0.0), 'ang': (0.0, 0.0, 0.0)}, 2: {'vel': (0.0, 0.0, 0.0), 'ang': (0.0, 0.0, 0.0)}, 1: {'vel': (0.0, 0.0, 0.0), 'ang': (0.0, 0.0, 0.0)}}
+['imag', 'quit', 'tran', 'cama', 'boun', 'segm', 'rigi', '']
+2022-03-28 13:53:00,555 --- Finished trial << 6 >> with trial seed = 4006 (elapsed time: 10 seconds)
+  1%|▎                                                     | 7/1250 [00:10<32:04,  1.55s/it]UPDATE CONTROLLER STATE
+probe: b03_12_06_027
+target: b04_cepillo
+distractor: b04_mouse_max_2016
+occluder: b04_wallmounted_soap_dispenser
+MATERIALS
+applying force to ---> occluder
+2022-03-28 13:53:00,560 --- Starting trial << 7 >> with kwargs {'probe': 'b03_12_06_027', 'target': 'b04_cepillo', 'distractor': 'b04_mouse_max_2016', 'occluder': 'b04_wallmounted_soap_dispenser', 'apply_force_to': 'occluder'}
+Traceback (most recent call last):
+  File "tdw_physics/dataset_generation/scripts/generate_playroom_large.py", line 394, in <module>
+    main(args)
+  File "tdw_physics/dataset_generation/scripts/generate_playroom_large.py", line 370, in main
+    Play.trial_loop(num=(end - start),
+  File "/Users/honglinchen/Documents/Research/Development/tdw_physics/tdw_physics/dataset.py", line 346, in trial_loop
+    self.trial(filepath=filepath,
+  File "/Users/honglinchen/Documents/Research/Development/tdw_physics/tdw_physics/dataset.py", line 472, in trial
+    _id = f['frames']['0000']['images']['_id']
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/Users/honglinchen/Documents/Programming/miniconda3/envs/tdw/lib/python3.8/site-packages/h5py/_hl/group.py", line 305, in __getitem__
+    oid = h5o.open(self.id, self._e(name), lapl=self._lapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5o.pyx", line 190, in h5py.h5o.open
+KeyError: "Unable to open object (object '_id' doesn't exist)"
+  1%|▎                                                     | 7/1250 [00:10<32:32,  1.57s/it]

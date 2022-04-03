@@ -158,6 +158,27 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
+def build_simple_scenario(models, num_trials, seed):
+    rng = np.random.RandomState(seed=seed)
+
+    scenarios = []
+    for i in range(num_trials):
+        permute_models = rng.permutation(models)
+
+        scene = {
+            'probe': permute_models[0],
+            'target': permute_models[1],
+            'distractor': permute_models[2],
+            'occluder': permute_models[3]
+        }
+
+        scene['apply_force_to'] = 'probe'
+
+        scenarios.append(scene)
+
+    return scenarios
+
+
 def build_scenarios(moving_models,
                     static_models,
                     num_trials_per_model,
@@ -318,11 +339,14 @@ def main(args):
             validation_models.extend(models)
         moving_models = static_models = validation_models
 
-    scenarios = build_scenarios(moving_models, static_models,
-                                args.num_trials_per_model, seed=args.category_seed,
-                                group_order=args.group_order,
-                                randomize_moving_object=args.randomize_moving_object
-                                )
+    # scenarios = build_scenarios(moving_models, static_models,
+    #                             args.num_trials_per_model, seed=args.category_seed,
+    #                             group_order=args.group_order,
+    #                             randomize_moving_object=args.randomize_moving_object
+    #                             )
+
+    models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
+    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed)
 
     start, end = args.start, (args.end or len(scenarios))
 

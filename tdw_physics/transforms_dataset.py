@@ -104,7 +104,7 @@ class TransformsDataset(Dataset, ABC):
         return commands
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, zone_id: Optional[int] = None,
-                     view_id: Optional[int] = None) -> \
+                     view_id: Optional[int] = None, trial_num:Optional[int] = None) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(self.object_ids)
 
@@ -138,7 +138,6 @@ class TransformsDataset(Dataset, ABC):
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
 
-            print('r_id', r_id)
             if r_id == "tran":
                 tr = Transforms(r)
                 for i in range(tr.get_num()):
@@ -166,7 +165,6 @@ class TransformsDataset(Dataset, ABC):
                         image_data = im.get_image(i)
 
                     if write_data:
-                        print('View id: ', view_id, pass_mask, zone_id)
                         if '_img' in pass_mask or '_id' in pass_mask:
                             if pass_mask == '_id':
                                 im_array = io.BytesIO(np.ascontiguousarray(image_data))
@@ -181,7 +179,16 @@ class TransformsDataset(Dataset, ABC):
                                 im_array = Image.fromarray(im_array)
                             else:
                                 im_array = Image.open(io.BytesIO(np.ascontiguousarray(image_data)))
-                            im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
+                            # im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
+
+                            if pass_mask == '_id':
+                                img_name = './tdw_multiview_simple/sc%s_img%s_mask.png' % (format(trial_num, '04d'), view_id)
+                            elif pass_mask == '_img':
+                                img_name = './tdw_multiview_simple/sc%s_img%s.png' % (format(trial_num, '04d'), view_id)
+                            else:
+                                break
+
+                            im_array.save(img_name)
                         # images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
@@ -218,8 +225,14 @@ class TransformsDataset(Dataset, ABC):
 
                 projection_matrix = matrices.get_projection_matrix()
                 camera_matrix = matrices.get_camera_matrix()
-                print('Camera matrix: ', camera_matrix.reshape(4, 4))
-                print('projection matrix', projection_matrix.reshape(4, 4))
+                np.set_printoptions(suppress=True)
+
+                # Invert camera matrix
+                if write_data:
+                    inverted_camera_matrix = np.linalg.inv(camera_matrix.reshape(4, 4))
+                    transformation_save_name = './tdw_multiview_simple/sc%s_img%s_RT.txt' % (format(trial_num, '04d'), view_id)
+                    print('Save inverted camera matrix to ', transformation_save_name)
+                    np.savetxt(transformation_save_name, inverted_camera_matrix)
 
                 # camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
                 # camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
