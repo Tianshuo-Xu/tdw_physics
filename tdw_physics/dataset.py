@@ -67,6 +67,7 @@ class Dataset(Controller, ABC):
         self.seed = seed
         if not bool(self.randomize):
             random.seed(self.seed)
+            np.random.seed(self.seed)
             print("SET RANDOM SEED: %d" % self.seed)
 
         # fluid actors need to be handled separately

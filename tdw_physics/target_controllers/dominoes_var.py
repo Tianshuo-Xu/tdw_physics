@@ -281,7 +281,6 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")
 
-
     parser.add_argument("--remove_middle",
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
@@ -508,7 +507,7 @@ def get_args(dataset_dir: str, parse=True):
             assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
 
             # red and yellow target and zone
-            args.use_test_mode_colors = True
+            args.use_test_mode_colors = False
 
             args.write_passes = "_img,_id,_depth,_normals,_flow"
             args.save_passes = "_img,_id"
@@ -797,7 +796,7 @@ class Dominoes(RigidbodiesDataset):
     def add_curtain(self):
         record, data = self.random_primitive(self._zone_types,
                                              scale={'x': 1.0, 'y': 0.8, 'z': 0.02},
-                                             color=np.array([1.0,0,0], np.float64),
+                                             color=np.array([0.76,0.76,0.76], np.float64),
                                              add_data=False
         )
 
@@ -844,13 +843,6 @@ class Dominoes(RigidbodiesDataset):
                  "is_kinematic": True,
                  "use_gravity": False}])
 
-        # commands.extend([{"$type": "create_avatar",
-        #         "type": "A_Img_Caps_Kinematic",
-        #         "id": "a"},
-        #         {"$type": "teleport_avatar_to",
-        #         "avatar_id": "a",
-        #         "position": location}
-        #         ])
 
         return commands
 
@@ -879,19 +871,21 @@ class Dominoes(RigidbodiesDataset):
                       [0.75136046, 0.06584012, 0.22674323],#red
                       [0.47, 0.38,   0.901],#purple
                        ]
+            non_star_color = [0, 0.27, 0.192]
             self.repeat_trial = False
             # sample distinct objects
             self.candidate_dict = dict()
             self.star_object = dict()
             self.star_object["type"] = random.choice(self._middle_types)
-            self.star_object["color"] = random.choice(colors)
+            self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
             #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-            self.star_object["mass"] = random.choice([0.1, 2.0, 10.0])
+            self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
             self.star_object["scale"] = get_random_xyz_transform(self.middle_scale_range)
-
+            print("====star object mass", self.star_object["mass"])
 
             #distinct_masses = [0.1, 2.0, 10.0]
             mass = 2.0
+            self.normal_mass = 2.0
             random.shuffle(colors)
             #random.shuffle(distinct_masses)
             ## add the non-star objects have the same weights
@@ -899,7 +893,7 @@ class Dominoes(RigidbodiesDataset):
                 self.candidate_dict[distinct_id] = dict()
                 self.candidate_dict[distinct_id]["type"] = random.choice(self._middle_types)
                 self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.middle_scale_range)
-                self.candidate_dict[distinct_id]["color"] = [0.9774568,  0.87879388, 0.40082996]
+                self.candidate_dict[distinct_id]["color"] = [0, 0.19, 0.125]#[0.9774568,  0.87879388, 0.40082996]
                 self.candidate_dict[distinct_id]["mass"] = mass
 
         else:
@@ -1214,9 +1208,10 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._place_target_zone())
 
         # Choose and place a target object.
+        print("hello1")
         commands.extend(self._place_star_object(interact_id))
 
-
+        print("hello2")
         #self.model_names.append(record.name)
         #self.scales.append(data['scale'])
         #self.colors
@@ -1226,10 +1221,10 @@ class Dominoes(RigidbodiesDataset):
             self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
 
         # Choose, place, and push a probe object.
-        commands.extend(self._place_and_push_probe_object())
+        commands.extend(self._place_and_push_probe_object(interact_id))
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
-        commands.extend(self._build_intermediate_structure())
+        commands.extend(self._build_intermediate_structure(interact_id))
 
         # Teleport the avatar to a reasonable position based on the drop height.
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
@@ -1335,6 +1330,15 @@ class Dominoes(RigidbodiesDataset):
             pass
         try:
             static_group.create_dataset("probe_id", data=self.probe_id)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("star_id", data=self.star_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("curtain_id", data=self.curtain_id)
         except (AttributeError,TypeError):
             pass
 
@@ -1571,7 +1575,6 @@ class Dominoes(RigidbodiesDataset):
                 add_data=(not self.remove_zone),
                 make_kinematic=True # zone shouldn't move
             ))
-
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(
@@ -1608,7 +1611,8 @@ class Dominoes(RigidbodiesDataset):
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
-
+        assert(o_id == 2), "make sure the star object is always with the same id"
+        self.star_id = o_id
 
         # else:
         #     # object properties don't change
@@ -1625,7 +1629,30 @@ class Dominoes(RigidbodiesDataset):
 
         if interact_id < self.num_interactions - 1:
             # try avoiding sampling the last one
-            pos_id = random.choice(range(max(self.total_num_dominoes -1, 2)))
+
+            if star_mass > self.normal_mass * 2: # heavy object
+
+                bias = np.random.uniform(0,1) < 0.75
+                if bias:
+                    pos_id = random.choice(range(1, self.total_num_dominoes))
+                else:
+                    pos_id = pos_id = random.choice(range(self.total_num_dominoes))
+
+            elif star_mass < self.normal_mass * 0.5: #light object
+                bias = np.random.uniform(0,1) < 0.75
+                if bias:
+                    pos_id = 0
+                else:
+                    pos_id = random.choice(range(self.total_num_dominoes))
+
+            else:
+                pos_id = pos_id = random.choice(range(self.total_num_dominoes))
+                #random.choice(range(self.total_num_dominoes -1))
+
+            # creating informative example by
+            # trying to put heavy object not at right most,
+            # and light object at the right most
+
             #self.target_pos_id = random.choice(range(self.total_num_dominoes))
         else:
             #self.target_pos_id = self.total_num_dominoes - 1
@@ -1646,7 +1673,9 @@ class Dominoes(RigidbodiesDataset):
         self.posid_to_objid[pos_id]["mass"] = star_mass
         self.posid_to_objid[pos_id]["scale"] = star_scale
         self.middle_scale = scale
-        if pos_id == self.total_num_dominoes - 1: #left most
+        if (interact_id < self.num_interactions - 1) or \
+           ((interact_id == self.num_interactions - 1) and\
+           pos_id == self.total_num_dominoes - 1):
             self.target = record
             self.target_type = data["name"]
             self.target_color = rgb
@@ -1687,7 +1716,7 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self) -> List[dict]:
+    def _place_and_push_probe_object(self, interact_id) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
@@ -1734,7 +1763,8 @@ class Dominoes(RigidbodiesDataset):
         self.posid_to_objid[pos_id]["rot"] = rot
         self.posid_to_objid[pos_id]["mass"] = probe_mass
         self.posid_to_objid[pos_id]["scale"] = self.probe_scale
-        if pos_id == self.total_num_dominoes - 1: #left most
+        if ((interact_id == self.num_interactions - 1) and\
+           pos_id == self.total_num_dominoes - 1):
             self.target = record
             self.target_type = data["name"]
             self.target_color = rgb
@@ -1963,12 +1993,12 @@ class Dominoes(RigidbodiesDataset):
                                                      seed=self.trial_seed)
                     c['color'] = {'r': rgb[0], 'g': rgb[1], 'b': rgb[2], 'a': 1.0}
 
-    def _build_intermediate_structure(self) -> List[dict]:
-        """
-        Abstract method for building a physically interesting intermediate structure between the probe and the target.
-        """
-        commands = []
-        return commands
+    # def _build_intermediate_structure(self) -> List[dict]:
+    #     """
+    #     Abstract method for building a physically interesting intermediate structure between the probe and the target.
+    #     """
+    #     commands = []
+    #     return commands
 
     def _set_distractor_objects(self) -> None:
 
@@ -2438,14 +2468,14 @@ class MultiDominoes(Dominoes):
 
         return funcs
 
-    def _build_intermediate_structure(self) -> List[dict]:
+    def _build_intermediate_structure(self, interact_id) -> List[dict]:
         # set the middle object color
         if self.monochrome:
             self.middle_color = self.random_color(exclude=self.target_color)
 
-        return self._place_middle_objects() if bool(self.trial_num_middle_objects) else []
+        return self._place_middle_objects(interact_id) if bool(self.trial_num_middle_objects) else []
 
-    def _place_middle_objects(self) -> List[dict]:
+    def _place_middle_objects(self, interact_id) -> List[dict]:
 
         offset = -0.5 * self.trial_collision_axis_length
         #min_offset = offset + self.target_scale["x"]
@@ -2459,11 +2489,16 @@ class MultiDominoes(Dominoes):
         pos_id_list = pos_id_list[1:]
 
         commands = []
-
         if self.remove_middle:
-            rm_idx = random.choice(range(self.num_middle_objects))
+            # don't remove the left most domino
+            # otherwise it will cause problem when
+            # detemining the "target" object
+            pos_id_list_tmp = copy.deepcopy(pos_id_list)
+            if pos_id_list_tmp[-1] == self.total_num_dominoes - 1:
+                pos_id_list_tmp.remove(self.total_num_dominoes - 1)
+            rm_pos_idx = random.choice(pos_id_list_tmp)
         else:
-            rm_idx = -1
+            rm_pos_idx = -1
 
         for m in range(self.trial_num_middle_objects):
             offset = pos_id_list[m] * self.spacing - 0.5#random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
@@ -2473,7 +2508,7 @@ class MultiDominoes(Dominoes):
             #     print("offset now", offset)
             #     break
 
-            if m == rm_idx:
+            if pos_id_list[m] == rm_pos_idx:
                 continue
 
             distinct_id = 0 #random.choice(range(self.num_distinct_objects))
@@ -2510,7 +2545,8 @@ class MultiDominoes(Dominoes):
             self.middle_type = data["name"]
             self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
 
-            if pos_id_list[m] == self.total_num_dominoes - 1: #left most
+            if((interact_id == self.num_interactions - 1) and\
+               pos_id_list[m] == self.total_num_dominoes - 1): #left most
                 self.target = record
                 self.target_type = data["name"]
                 self.target_color = rgb

@@ -3,11 +3,13 @@
 controller="tdw_physics/target_controllers/dominoes_var.py"
 ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
 #python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain --num 10 --height 128 --width 128
-python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_0middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_0middle_tdwroom_fixedcam_curtain --num 10 --height 128 --width 128
+#python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_0middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_0middle_tdwroom_fixedcam_curtain --num 10 --height 128 --width 128
+#python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_2middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_2middle_tdwroom_fixedcam_curtain --num 10 --height 128 --width 128
 #python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_3middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_3middle_tdwroom_fixedcam_curtain --num 10 --height 128 --width 128
+#python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_familiarization/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_familiarization --num 10 --height 128 --width 128
 
 #python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir /mnt/fs4/hsiaoyut/tdw_fewshot/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam --num 200 --height 128 --width 128
-
+python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_3middleRM1_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_3middleRM1_tdwroom_fixedcam --testing_data_mode --num 10 --height 128 --width 128
 
 # try to add a robot
 # controller="tdw_physics/target_controllers/dominoes_var_continue.py"

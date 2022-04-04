@@ -174,6 +174,45 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         return rgb
 
+
+    def random_color_exclude_list(self, exclude_list=None, exclude_range=0.2, hsv_brightness=None):
+        import colorsys
+        if hsv_brightness is None:
+            rgb = [random.random(), random.random(), random.random()]
+        else:
+            assert(hsv_brightness <= 1 and hsv_brightness>0), hsv_brightness
+            rgb = [random.random(), random.random(), random.random()]
+            scale = ((1-hsv_brightness) * random.random() + hsv_brightness)/np.max(rgb)
+            rgb = [r*scale for r in rgb]
+        if exclude_list is None or len(exclude_list) == 0:
+            return rgb
+
+        while True:
+          bad_trial = False
+          for exclude in exclude_list:
+
+            assert len(exclude) == 3, exclude
+            if any([np.abs(exclude[i] - rgb[i]) < exclude_range for i in range(3)]):
+              bad_trial = True
+              break
+          if bad_trial:
+            if hsv_brightness is None:
+                rgb = [random.random(), random.random(), random.random()]
+            else:
+                rgb = [random.random(), random.random(), random.random()]
+                scale = ((1-hsv_brightness) * random.random() + hsv_brightness)/np.max(rgb)
+                rgb = [r*scale for r in rgb]
+
+                #scale = ((1-hsv_brightness) * random.random() + hsv_brightness)/np.max(rgb)
+
+                #hsv = (random.random(), 0.5 + random.random()/2.0, 0.4 + random.random()/5.0)
+                #rgb = colorsys.hsv_to_rgb(hsv[0], hsv[1], hsv[2])
+
+            #  rgb = [random.random(), random.random(), random.random()]
+          else:
+              break
+        return rgb
+
     def random_color_from_rng(self, exclude=None, exclude_range=0.33, seed=0):
 
         rng = np.random.RandomState(seed)
