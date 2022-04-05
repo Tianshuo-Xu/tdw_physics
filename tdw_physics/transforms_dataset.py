@@ -166,12 +166,12 @@ class TransformsDataset(Dataset, ABC):
 
                     if write_data:
                         if '_img' in pass_mask or '_id' in pass_mask:
-                            if pass_mask == '_id':
+                            if pass_mask == '_id' and zone_id is not None:
                                 im_array = io.BytesIO(np.ascontiguousarray(image_data))
-                                if zone_id is not None:
-                                    zone_idx = [i for i, o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-                                    zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-                                    zone_color = zone_color.reshape(1, 1, 3)
+
+                                zone_idx = [i for i, o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+                                zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+                                zone_color = zone_color.reshape(1, 1, 3)
 
                                 im_array = Image.open(im_array)
                                 im_array = np.asarray(im_array)

@@ -454,9 +454,9 @@ class Dataset(Controller, ABC):
                     noise = (random.random() - 0.5) * delta_angle
                     print('delta angle / noise: ', delta_angle, noise)
                     a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
-                                                              radius=self.camera_radius_range[1] * 1.4,
+                                                              radius=self.camera_radius_range[1] * 1.5,
                                                               angle= delta_angle * view_id + noise,
-                                                              height=self.camera_max_height)
+                                                              height=self.camera_max_height * 1.5)
                     # Set the camera parameters
                     self._set_avatar_attributes(a_pos)
 
@@ -464,7 +464,7 @@ class Dataset(Controller, ABC):
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
                         {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
-                        # {"$type": "set_camera_clipping_planes", "near": 0.1, "far": 10}
+                        # {"$type": "set_camera_clipping_planes", "near": 1., "far": 18}
                     ])
 
                     resp = self.communicate(commands)

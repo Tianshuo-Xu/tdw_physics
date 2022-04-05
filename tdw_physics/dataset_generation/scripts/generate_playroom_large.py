@@ -105,6 +105,10 @@ def get_args(dataset_dir: str):
                         type=int,
                         default=1,
                         help="Number of views / cameras")
+    parser.add_argument("--num_distractors",
+                        type=int,
+                        default=1,
+                        help="Number of distractors")
 
     args = parser.parse_args()
     args = playroom_postproc(args)
@@ -287,8 +291,10 @@ def build_controller(args, launch_build=True):
         material_types=args.material_types,
         target_material=args.tmaterial,
         probe_material=args.pmaterial,
+        distractor_material=args.tmaterial,
+        occluder_material=args.tmaterial,
         distractor_categories=None,
-        num_distractors=1,
+        num_distractors=args.num_distractors,
         occluder_categories=None,
         num_occluders=1,
         occlusion_scale=args.occlusion_scale,
@@ -345,7 +351,10 @@ def main(args):
     #                             randomize_moving_object=args.randomize_moving_object
     #                             )
 
-    models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
+
+    # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
+    models_simple = ['green_side_chair'] * 4
+    models_simple = ['cube'] * 4
     scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed)
 
     start, end = args.start, (args.end or len(scenarios))

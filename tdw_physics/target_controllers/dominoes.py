@@ -1181,7 +1181,7 @@ class Dominoes(RigidbodiesDataset):
         self.zone = record
         self.zone_type = data["name"]
         self.zone_color = rgb
-        self.zone_id = o_id
+        self.zone_id = o_id if not self.remove_zone else None
         self.zone_scale = scale
 
         if any((s <= 0 for s in scale.values())):
