@@ -25,12 +25,17 @@ def list_files(paths, ext='mp4', exclude=[]):
     hdf5s = [r.split("_img.")[0]+".hdf5" for r in results]
     return results,names,hdf5s
 
-csv_filename = "dump/dominoes/physionpp-dominoes_merge.csv"
-local_stem = "dump/dominoes"
-tmp_mp4_folder = "dump/dominoes_mp4"
+with_dv2 = True
+data_root = "/media/htung/Extreme SSD/fish/tdw_physics"
+csv_filename = "physionpp-dominoes_merge_dv2.csv"
+
+local_stem = os.path.join(data_root, "dump/dominoes")
+csv_filename = os.path.join(local_stem, csv_filename)
+tmp_mp4_folder = local_stem + "_mp4"
 n_interactions = 2
 dirnames = [d.split('/')[-1] for d in glob(local_stem+'/*')] #arg_names
 data_dirs = [os.path.join(local_stem,d) for d in dirnames]
+
 
 #dataset_name = '{}_{}'.format(bucket_name, stim_version)
 stimulus_extension = "mp4" #what's the file extension for the stims? Provide without dot
@@ -46,14 +51,23 @@ full_hdf5_paths = []
 hdf5_names = []
 full_stim_paths = []
 full_stim_apaths = []
+if with_dv2:
+    full_stim_ifpaths = []
 filenames = []
 filenames_a = []
+filenames_if = []
 target_hit_zone_labels = []
 start_frame_after_curtain = []
+star_phy = []
+nonstar_phy = []
+
+
 for idx, full_stim_path in enumerate(candidate_full_stim_paths):
     file_prefix = full_stim_path[:-7]
-    n_inters = len([p for p in full_mp4_paths if p.startswith(file_prefix)])
+    n_inters = len([p for p in full_mp4_paths if p.startswith(file_prefix) and p.endswith("_img.mp4")])
     if n_inters != n_interactions:
+        print(">>>>", full_stim_path)
+        print([p for p in full_mp4_paths if p.startswith(file_prefix)])
         continue
     print(full_stim_path, n_interactions)
 
@@ -67,6 +81,20 @@ for idx, full_stim_path in enumerate(candidate_full_stim_paths):
         accumulate_frame += len(hdf5_prev["frames"])
 
     accumulate_frame += hdf5['static']['start_frame_after_curtain'][()]
+    mass_list = hdf5['static']['mass'][:]
+    object_ids = hdf5['static']['object_ids'][()].tolist()
+    star_mass = mass_list[object_ids.index(hdf5['static']['star_id'][()])]
+
+    exclude_list = [hdf5['static']['star_id'][()], hdf5['static']['zone_id'][()],hdf5['static']['curtain_id'][()]]
+    nonstar_mass = 0
+    for idx, object_id in enumerate(object_ids):
+        if object_id not in exclude_list:
+            nonstar_mass = mass_list[idx]
+    assert(np.abs(nonstar_mass - 2) < 0.0000001)
+
+    star_phy.append(star_mass)
+    nonstar_phy.append(nonstar_mass)
+
     target_hit_zone_labels.append(hdf5['static']['does_target_contact_zone'][()])
     start_frame_after_curtain.append(accumulate_frame)
     filename = "_".join(full_stim_path.split("/")[-2:])
@@ -74,8 +102,11 @@ for idx, full_stim_path in enumerate(candidate_full_stim_paths):
     #print(full_stim_path, n_interactions, )
     full_stim_paths.append(full_stim_path)
     full_stim_apaths.append(full_stim_path.replace("_img.mp4", "_aimg.mp4"))
+    if with_dv2:
+        full_stim_ifpaths.append(full_stim_path.replace("_img.mp4", "_ifimg.mp4"))
     filenames.append(filename)
     filenames_a.append(filename.replace("_img.mp4", "_aimg.mp4"))
+    filenames_if.append(filename.replace("_img.mp4", "_ifimg.mp4"))
     hdf5_names.append(filename.replace("_img.mp4", f"_{n_interactions-1:03}.hdf5"))
     #[x.replace("_img.mp4", f"_{n_interactions-1:03}.hdf5") for x in filenames]
 
@@ -95,10 +126,18 @@ for map_path in full_map_paths + full_hdf5_paths:
 
 with open(csv_filename, 'w', newline="") as csvfile:
     csvwriter = csv.writer(csvfile, delimiter=',')
-    csvwriter.writerow(["full_stim_paths", "full_stim_apaths", 'filenames', 'filenames_a', 'full_map_paths', 'mapnames', 'full_hdf5_paths', 'hdf5_names', 'target_hit_zone_labels', 'start_frame_after_curtain'])
-    for fp, fap, fn, fna, fm, mn, fh, hn, lb, sf  in zip(full_stim_paths, full_stim_apaths, filenames, filenames_a, full_map_paths, mapnames, full_hdf5_paths,hdf5_names, target_hit_zone_labels, start_frame_after_curtain):
-        csvwriter.writerow([fp.replace(local_stem, tmp_mp4_folder), fap.replace(local_stem, tmp_mp4_folder),\
-                             fn, fna, fm, mn, fh, hn, lb, sf])
+
+    if with_dv2:
+        csvwriter.writerow(["full_stim_paths", "full_stim_apaths", "full_stim_ifpaths", 'filenames', 'filenames_a', 'filenames_if', 'full_map_paths', 'mapnames', 'full_hdf5_paths', 'hdf5_names', 'target_hit_zone_labels', 'start_frame_after_curtain', 'star_phy', 'nonstar_phy'])
+        for fp, fap, fifp, fn, fna, fnif, fm, mn, fh, hn, lb, sf, sp, nsp  in zip(full_stim_paths, full_stim_apaths, full_stim_ifpaths, filenames, filenames_a, filenames_if, full_map_paths, mapnames, full_hdf5_paths,hdf5_names, target_hit_zone_labels, start_frame_after_curtain, star_phy, nonstar_phy):
+            csvwriter.writerow([fp.replace(local_stem, tmp_mp4_folder), fap.replace(local_stem, tmp_mp4_folder),\
+                                fifp.replace(local_stem, tmp_mp4_folder),\
+                                 fn, fna, fnif, fm, mn, fh, hn, lb, sf, sp, nsp])
+    else:
+        csvwriter.writerow(["full_stim_paths", "full_stim_apaths", 'filenames', 'filenames_a', 'full_map_paths', 'mapnames', 'full_hdf5_paths', 'hdf5_names', 'target_hit_zone_labels', 'start_frame_after_curtain'])
+        for fp, fap, fn, fna, fm, mn, fh, hn, lb, sf  in zip(full_stim_paths, full_stim_apaths, filenames, filenames_a, full_map_paths, mapnames, full_hdf5_paths,hdf5_names, target_hit_zone_labels, start_frame_after_curtain):
+            csvwriter.writerow([fp.replace(local_stem, tmp_mp4_folder), fap.replace(local_stem, tmp_mp4_folder),\
+                                 fn, fna, fm, mn, fh, hn, lb, sf])
 
 
 print("red_hits_yellow ratio",np.sum(target_hit_zone_labels), "/", len(target_hit_zone_labels))

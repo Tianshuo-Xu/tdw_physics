@@ -730,15 +730,21 @@ class Dominoes(RigidbodiesDataset):
 
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-        exists_up_to = 0
-        for f in output_dir.glob("*.hdf5"):
-            if int(f.stem) > exists_up_to:
-                exists_up_to = int(f.stem)
-
-        if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
         self.num_interactions = 2
         self.num_distinct_objects = 1
+
+        exists_up_to = 0
+        for f in output_dir.glob("*.hdf5"):
+
+            if int(f.stem[:4]) > exists_up_to:
+                exists_up_to = int(f.stem[:4])
+            else:
+                subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
+                if subvideos < self.num_interactions:
+                    exists_up_to = int(f.stem[:4])
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
