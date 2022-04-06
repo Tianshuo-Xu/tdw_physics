@@ -28,7 +28,6 @@ Pour water into a receptacle.
 # rocks
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 print([r for r in PRIMITIVE_NAMES if "trapezoid" in r])
-import ipdb; ipdb.set_trace()
 
 c = Controller()
 c.communicate(Controller.get_add_scene(scene_name="tdw_room"))
@@ -95,39 +94,59 @@ obi.create_fluid(object_id = f_id,
 
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_special.json'].records if not r.do_not_use]
 print(PRIMITIVE_NAMES)
-record = [r for r in MODEL_LIBRARIES['models_special.json'].records if r.name=="prim_cube"][0]
+record = [r for r in MODEL_LIBRARIES['models_flex.json'].records if r.name=="cube"][0]
 
+
+def
+from json import loads
+from tdw.librarian import ModelRecord
+
+with open("../asset/tri_slope/record.json", 'r') as j:
+    tmp = loads(j.read())
+    tmp["urls"]["Linux"] = "file:///home/htung/Documents/2021/tdw_physics/tdw_physics/target_controllers/asset/tri_slope/StandaloneLinux64/tri_slope"
+
+import ipdb; ipdb.set_trace()
+record = ModelRecord(tmp)
 
 o_id = Controller.get_unique_id()
-# c.communicate({"$type": "add_object",
-#                 "name": record.name,
-#                 "url": record.get_url(),
-#                 "scale_factor": {"x": 2, "y": 2, "z": 2},
-#                 "category": record.wcategory,
-#                 "id": o_id})
+c.communicate({"$type": "add_object",
+                "name": record.name,
+                "url": record.get_url(),
+                "scale_factor": record.scale_factor,
+                "category": record.wcategory,
+                "id": o_id})
 
-# c.communicate(
-#                 {"$type": "set_kinematic_state",
-#              "id": o_id,
-#              "is_kinematic": True,
-#              "use_gravity": False}
-#     )
+c.communicate(
+                {"$type": "set_kinematic_state",
+             "id": o_id,
+             "is_kinematic": True,
+             "use_gravity": False}
+    )
+c.communicate({"$type": "set_object_collision_detection_mode",
+                 "id": o_id,
+                 "mode": "continuous_speculative"})
+c.communicate({"$type": "rotate_object_to_euler_angles",
+                 "euler_angles": {"x": 0.0, "y": 90.0, "z": 0},
+                 "id": o_id})
 
-c.communicate(Controller.get_add_physics_object(#model_name="prim_cube",
-                                                model_name="triangular_prism",
-                                                #model_name='trapezoidal_table',
-                                                object_id=o_id,
-                                                #library="models_full.json",
-                                                #library="models_special.json",
-                                                library="models_flex.json",
-                                                kinematic=True,
-                                                gravity=False,
-                                                #position= {"x": 0, "y": 0.15, "z": 0},
-                                                #scale_factor={"x": 0.5, "y": 0.5, "z": 0.5},
-                                                position= {"x": 0, "y": 0.15, "z": 0},
-                                                rotation= {"x": 135, "y": 0.0, "z": 0},
-                                                scale_factor={"x": 0.5, "y": 0.5, "z": 0.5*np.sqrt(2)},
-                                                default_physics_values=False))
+c.communicate({"$type": "scale_object_and_mass",
+                 "scale_factor": {"x": 0.5, "y": 0.5, "z": 0.5},
+                 "id": o_id})
+# c.communicate(Controller.get_add_physics_object(#model_name="prim_cube",
+#                                                 model_name="cube",
+#                                                 #model_name='trapezoidal_table',
+#                                                 object_id=o_id,
+#                                                 #library="models_full.json",
+#                                                 #library="models_special.json",
+#                                                 library="models_flex.json",
+#                                                 kinematic=True,
+#                                                 gravity=False,
+#                                                 #position= {"x": 0, "y": 0.15, "z": 0},
+#                                                 #scale_factor={"x": 0.5, "y": 0.5, "z": 0.5},
+#                                                 position= {"x": 0, "y": 0.15, "z": 0},
+#                                                 rotation= {"x": 135, "y": 0.0, "z": 0},
+#                                                 scale_factor={"x": 0.5, "y": 0.5, "z": 0.5*np.sqrt(2)},
+#                                                 default_physics_values=False))
 
 
 # c.communicate(Controller.get_add_physics_object(model_name="pyramid", #"prim_cube",
