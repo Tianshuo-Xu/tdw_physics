@@ -229,7 +229,22 @@ class TransformsDataset(Dataset, ABC):
 
                 # Invert camera matrix
                 if write_data:
-                    inverted_camera_matrix = np.linalg.inv(camera_matrix.reshape(4, 4))
+                    x_rot = np.array([
+                        [1, 0, 0, 0],
+                        [0, 0, -1, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 0, 1]
+                    ])
+                    # Change from Y-up to Z-up since uORF's implementation assumes Z_up
+                    y_up_camera_matrix = camera_matrix.reshape(4, 4)
+                    # z_up_camera_matrix = np.copy(y_up_camera_matrix)
+                    # z_up_camera_matrix[:, 1] = y_up_camera_matrix[:, 2]
+                    # z_up_camera_matrix[:, 2] = y_up_camera_matrix[:, 1]
+                    # z_up_camera_matrix[1, 3] = y_up_camera_matrix[2, 3]
+                    # z_up_camera_matrix[2, 3] = y_up_camera_matrix[1, 3]
+
+                    z_up_camera_matrix = x_rot @ y_up_camera_matrix
+                    inverted_camera_matrix = np.linalg.inv(z_up_camera_matrix)
                     transformation_save_name = './tdw_multiview_simple/sc%s_img%s_RT.txt' % (format(trial_num, '04d'), view_id)
                     print('Save inverted camera matrix to ', transformation_save_name)
                     np.savetxt(transformation_save_name, inverted_camera_matrix)

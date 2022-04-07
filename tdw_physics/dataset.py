@@ -22,6 +22,7 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_across_trial_stats_from)
 from tdw_physics.util_geom import save_obj
 import shutil
+import math
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
 M = MaterialLibrarian()
@@ -445,18 +446,43 @@ class Dataset(Controller, ABC):
             #     continue
 
             if frame == 5:
-
                 camera_matrix_dict = {}
+                azimuth_rotation = True
+
+                if azimuth_rotation:
+                    delta_az_list = [x / self.num_views * np.pi * 2 for x in range(self.num_views)]
+                    az_range = 2 * np.pi / self.num_views
+                    origin_pos = {'x': 0.0, 'y': 3.10, 'z': 3.0}
+                    az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
+                    self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+                else:
+                    delta_angle = 2 * np.pi / self.num_views
+
                 for view_id in range(self.num_views):
 
                     commands = []
-                    delta_angle = 2 * np.pi / self.num_views
-                    noise = (random.random() - 0.5) * delta_angle
-                    print('delta angle / noise: ', delta_angle, noise)
-                    a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
-                                                              radius=self.camera_radius_range[1] * 1.5,
-                                                              angle= delta_angle * view_id + noise,
-                                                              height=self.camera_max_height * 1.5)
+
+                    if azimuth_rotation:
+                        a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
+
+                        # save azimuth
+                        az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
+                        az_rot_mat_2d = np.array([[math.cos(az_ori), - math.sin(az_ori)],
+                                                  [math.sin(az_ori), math.cos(az_ori)]])
+                        az_rot_mat = np.eye(3)
+                        az_rot_mat[:2, :2] = az_rot_mat_2d
+
+                        transformation_save_name = './tdw_multiview_simple/sc%s_img%s_azi_rot.txt' % (format(trial_num, '04d'), view_id)
+                        print('Save azi rot to ', transformation_save_name)
+                        np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
+
+                    else:
+
+                        noise = (random.random() - 0.5) * delta_angle
+                        a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
+                                                                  radius=self.camera_radius_range[1] * 1.5,
+                                                                  angle= delta_angle * view_id + noise,
+                                                                  height=self.camera_max_height * 1.5)
                     # Set the camera parameters
                     self._set_avatar_attributes(a_pos)
 
@@ -464,7 +490,7 @@ class Dataset(Controller, ABC):
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
                         {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
-                        # {"$type": "set_camera_clipping_planes", "near": 1., "far": 18}
+                        # {"$type": "set_camera_clipping_planes", "near": 2., "far": 12}
                     ])
 
                     resp = self.communicate(commands)
@@ -556,6 +582,23 @@ class Dataset(Controller, ABC):
         return {'x': v_x_new, 'y': vector['y'], 'z': v_z_new}
 
     @staticmethod
+    def cart2sph(x, y, z):
+        hxy = np.hypot(x, y)
+        r = np.hypot(hxy, z)
+        el = np.arctan2(z, hxy)
+        az = np.arctan2(y, x)
+        return az, el, r
+
+    @staticmethod
+    def sph2cart(az, el, r):
+        rcos_theta = r * np.cos(el)
+        x = rcos_theta * np.cos(az)
+        y = rcos_theta * np.sin(az)
+        z = r * np.sin(el)
+        return x, y, z
+
+
+    @staticmethod
     def scale_vector(
             vector: Dict[str, float],
             scale: float) -> Dict[str, float]:
@@ -605,6 +648,15 @@ class Dataset(Controller, ABC):
         a_y = center["y"] + height
 
         return {"x": a_x, "y": a_y, "z": a_z}
+
+    def get_rotating_camera_position_azimuth(self, az, el, r, delta_az, az_range, delta_dist=1.0):
+
+        az_ = az + delta_az + (random.random() - 0.5) * az_range
+        el_ = el # + np.pi / 15
+        r_ = r * delta_dist
+        x_, z_, y_ = self.sph2cart(az_, el_, r_)  # Compute in Z-up
+
+        return {"x": x_, "y": y_, "z": z_}, az_
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         """

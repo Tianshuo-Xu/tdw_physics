@@ -1912,6 +1912,12 @@ class Dominoes(RigidbodiesDataset):
                 commands.extend(
                     self.get_object_material_commands(
                         record, o_id, self.get_material_name(self.occluder_material)))
+
+                print('!!!!!!!!!!!!!!!!! Warning hardcode occlusion scale !!!!!!!!!!!!!!!!')
+                scale = {'x': 0.65, 'y': 0.65, 'z': 0.65}
+                rgb = [0., 0., 1.]
+                print('Occlusion scale / color: ', scale, rgb)
+
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},

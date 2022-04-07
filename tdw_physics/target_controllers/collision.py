@@ -218,7 +218,7 @@ class Collision(Dominoes):
         a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
                                                   radius=self.camera_radius_range[1] * 1.5,
                                                   angle=(2 * np.pi / self.num_views) * 0,
-                                                  height=self.camera_max_height)
+                                                  height=self.camera_max_height * 1.5)
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
 
