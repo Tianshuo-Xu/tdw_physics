@@ -97,6 +97,11 @@ def get_bouncy_args(dataset_dir: str, parse=True):
                         default=2.0,
                         help="Lift the target object off the floor/ramp. Useful for rotated objects")
 
+    parser.add_argument("--tbounce",
+                        type=str,
+                        default="[0.5,0.9]",
+                        help="range of bounciness setted for the target object")
+
     # layout
     parser.add_argument("--bouncy_axis_length",
                         type=float,
@@ -114,6 +119,11 @@ def get_bouncy_args(dataset_dir: str, parse=True):
                         type=int,
                         default=1,
                         help="Whether to place box_piles between the target and the zone")
+
+    parser.add_argument("--use_blocker_with_hole",
+                        type=int,
+                        default=0,
+                        help="Whether to use wall with a hole as a blocker")
 
     parser.add_argument("--box_piles",
                         type=str,
@@ -147,10 +157,12 @@ def get_bouncy_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
+        args.tbounce = handle_random_transform_args(args.tbounce)
         args.ramp_scale = handle_random_transform_args(args.ramp_scale)
 
         # box_piles
         args.use_box_piles = bool(args.use_box_piles)
+        args.use_blocker_with_hole = bool(args.use_blocker_with_hole)
 
         if args.box_piles is not None:
             targ_list = args.box_piles.split(',')
@@ -178,10 +190,12 @@ class Bouncy(MultiDominoes):
                  port: int = None,
                  zjitter=0.,
                  fupforce=[0., 0.],
+                 target_bounciness=[0., 0.],
                  ramp_scale=[0.2, 0.25, 0.5],
                  bouncy_axis_length=1.15,
                  use_ramp=True,
                  use_box_piles=True,
+                 use_blocker_with_hole=False,
                  box_piles=['cube'],
                  box_piles_position=0.5,
                  box_piles_scale=[2, 1, 1],
@@ -197,12 +211,14 @@ class Bouncy(MultiDominoes):
         self.ramp_scale = ramp_scale
         self.bouncy_axis_length = self.collision_axis_length = bouncy_axis_length
         self.use_box_piles = use_box_piles
+        self.use_blocker_with_hole = use_blocker_with_hole
         self.box_piles = box_piles
         self.box_piles_position = box_piles_position
         self.box_piles_scale = box_piles_scale
         self.box_piles_material = box_piles_material
         # self.box_piles_color = box_piles_color
         self.target_lift = target_lift
+        self.target_bounciness = target_bounciness
         self.force_offset_jitter = 0.
 
     def get_trial_initialization_commands(self) -> List[dict]:
@@ -344,7 +360,7 @@ class Bouncy(MultiDominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.0,
                 static_friction=0.0,
-                bounciness=0.8,
+                bounciness=random.uniform(*self.target_bounciness),
                 o_id=o_id,
                 add_data=True
             ))
@@ -584,55 +600,207 @@ class Bouncy(MultiDominoes):
         assert self.use_box_piles, "need to use box_piles"
         commands = []
 
-        # add box #1 (closest to yellow zone)
-        record, data = self.random_primitive(
-            object_types=self.get_types(self.box_piles),
-            scale=self.box_piles_scale,
-            color=self.random_color(exclude=self.target_color),
-        )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        if self.use_blocker_with_hole:
+            # add box with hole #1 (closest to yellow zone) bottom block #1
+            record, data = self.random_primitive(
+                object_types=self.get_types(self.box_piles),
+                scale={"x": 0.1, "y":1.0, "z": 0.2},
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
-        pos = {
-            "x": 1.0 * self.box_piles_position * self.bouncy_axis_length,
-            "y": -0.5 * scale['y'],
-            "z": 0
-        }
+            pos = {
+                "x": 1.0 * self.box_piles_position * self.bouncy_axis_length,
+                "y": -0.5 * scale['y'],
+                "z": -1.1
+            }
 
-        commands.extend(self.add_physics_object(
-            record=record,
-            position=pos,
-            rotation=TDWUtils.VECTOR3_ZERO,
-            mass=1000,
-            dynamic_friction=0.0,
-            static_friction=0.0,
-            bounciness=0.1,
-            o_id=o_id,
-            add_data=True)
-        )
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=1000,
+                dynamic_friction=1.0,
+                static_friction=1.0,
+                bounciness=0.1,
+                o_id=o_id,
+                add_data=True)
+            )
 
-        # Set the middle object material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.zone_material)))
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
 
-        # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-                "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
                 "id": o_id},
-            {"$type": "scale_object",
-                "scale_factor": scale,
-                "id": o_id}])
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
 
-        # make it a "kinematic" object that won't move
-        commands.extend([
-            {"$type": "set_object_collision_detection_mode",
-             "mode": "continuous_speculative",
-             "id": o_id},
-            {"$type": "set_kinematic_state",
-             "id": o_id,
-             "is_kinematic": True,
-             "use_gravity": True}])
+            # add box with hole #1 (closest to yellow zone) bottom block #2
+            record, data = self.random_primitive(
+                object_types=self.get_types(self.box_piles),
+                scale={"x": 0.1, "y":1.0, "z": 0.2},
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+            pos = {
+                "x": 1.0 * self.box_piles_position * self.bouncy_axis_length,
+                "y": -0.5 * scale['y'],
+                "z": 1.1
+            }
+
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=1000,
+                dynamic_friction=1.0,
+                static_friction=1.0,
+                bounciness=0.1,
+                o_id=o_id,
+                add_data=True)
+            )
+
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
+
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id},
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
+            
+            # add box with hole #1 (closest to yellow zone) upper block
+            record, data = self.random_primitive(
+                object_types=self.get_types(self.box_piles),
+                scale={"x": 0.1, "y":0.5, "z": 2.4},
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+            pos = {
+                "x": 1.0 * self.box_piles_position * self.bouncy_axis_length,
+                "y": 0.5,
+                "z": 0.0
+            }
+
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=2000,
+                dynamic_friction=1.0,
+                static_friction=1.0,
+                bounciness=0.1,
+                o_id=o_id,
+                add_data=True)
+            )
+
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
+
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id},
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
+
+        else:
+            # add box #1 (closest to yellow zone)
+            record, data = self.random_primitive(
+                object_types=self.get_types(self.box_piles),
+                scale=self.box_piles_scale,
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+            pos = {
+                "x": 1.0 * self.box_piles_position * self.bouncy_axis_length,
+                "y": -0.5 * scale['y'],
+                "z": 0
+            }
+
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=1000,
+                dynamic_friction=0.0,
+                static_friction=0.0,
+                bounciness=0.1,
+                o_id=o_id,
+                add_data=True)
+            )
+
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
+
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id},
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
 
         # add box #2 (second closest to yellow zone)
         record, data = self.random_primitive(
@@ -805,6 +973,15 @@ class Bouncy(MultiDominoes):
         # clear some other stuff
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
+        try:
+            static_group.create_dataset("if_use_blocker_with_hole", data=self.use_blocker_with_hole)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("if_use_box_piles", data=self.use_box_piles)
+        except (AttributeError,TypeError):
+            pass
         Dominoes._write_static_data(self, static_group)
 
         # static_group.create_dataset("bridge_height", data=self.bridge_height)
@@ -843,6 +1020,7 @@ if __name__ == "__main__":
         probe_objects=args.probe,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
+        target_bounciness=args.tbounce,
         probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,
@@ -860,6 +1038,7 @@ if __name__ == "__main__":
         fupforce=args.fupforce,
         use_ramp=args.ramp,
         use_box_piles=args.use_box_piles,
+        use_blocker_with_hole=args.use_blocker_with_hole,
         box_piles=args.box_piles,
         box_piles_position=args.box_piles_position,
         box_piles_scale=args.box_piles_scale,
