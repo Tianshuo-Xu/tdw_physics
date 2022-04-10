@@ -15,7 +15,7 @@ from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
+from tdw_physics.util import MODEL_LIBRARIES, ROOMS, get_parser, xyz_to_arr, arr_to_xyz, str_to_xyz
 
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args, none_or_str, none_or_int
 from tdw_physics.postprocessing.labels import is_trial_valid
@@ -206,19 +206,10 @@ class Collision(Dominoes):
 
         # Teleport the avatar to a reasonable position
 
+        print('Warning fixed initial camera position')
 
-        # a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
-        #                                         radius_max=self.camera_radius_range[1],
-        #                                         angle_min=self.camera_min_angle,
-        #                                         angle_max=self.camera_max_angle,
-        #                                         y_min=self.camera_min_height,
-        #                                         y_max=self.camera_max_height,
-        #                                         center=TDWUtils.VECTOR3_ZERO)
+        a_pos = {'x': 0.0, 'y': 2.5, 'z': 2.5}
 
-        a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
-                                                  radius=self.camera_radius_range[1] * 1.5,
-                                                  angle=(2 * np.pi / self.num_views) * 0,
-                                                  height=self.camera_max_height * 1.5)
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
 
@@ -241,7 +232,7 @@ class Collision(Dominoes):
 
         # test mode colors
         if self.use_test_mode_colors:
-            self._set_test_mode_colors(commands)        
+            self._set_test_mode_colors(commands)
 
         return commands
 

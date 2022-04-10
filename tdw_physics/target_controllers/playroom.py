@@ -447,13 +447,130 @@ class Playroom(Collision):
     def _set_occlusion_attributes(self) -> None:
 
         self.occluder_angular_spacing = 20
-        self.occlusion_distance_fraction = [0.3,0.6]
+        self.occlusion_distance_fraction = [0.25,0.35]
         self.occluder_rotation_jitter = 30.
         self.occluder_min_z = 0.75
         self.occluder_min_size = 0.5
         self.occluder_max_size = 1.5
         self.rescale_occluder_height = True
 
+    def get_trial_initialization_commands(self) -> List[dict]:
+        """This is where we string together the important commands of the controller in order"""
+        # return super().get_trial_initialization_commands()
+        commands = []
+
+        # randomization across trials
+        if not (self.randomize):
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            random.seed(self.trial_seed)
+        else:
+            self.trial_seed = -1  # not used
+
+        ## choose the room center
+        if self.room_center_range is not None:
+            self.room_center = get_random_xyz_transform(self.room_center_range)
+        else:
+            self._set_room_center()
+
+        # Choose and place the target zone.
+        commands.extend(self._place_target_zone())
+
+        radius = 1.5
+        min_distance = 1.0
+        point_generator = Points(n=3, r=radius, mindist=min_distance)
+        positions = point_generator.points
+
+        print('Positions: ', positions)
+
+        self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
+        # Choose and place a target object.
+        commands.extend(self._place_target_object())
+
+        self.target_position = {'x': float(positions[1][0]), 'y': 0., 'z': float(positions[1][1])}
+        self.target_rotation = self.get_rotation(self.target_rotation_range)
+        self._target_types = self.occluder_types
+        # Choose and place a 2nd target object.
+        commands.extend(self._place_target_object())
+
+        # Set the probe color
+        if self.probe_color is None:
+            self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
+
+        self.probe_initial_position = {'x': float(positions[2][0]), 'y': 0., 'z': float(positions[2][1])}
+        # Choose, place, and push a probe object.
+        commands.extend(self._place_and_push_probe_object())
+
+        # Build the intermediate structure that captures some aspect of "intuitive physics."
+        commands.extend(self._build_intermediate_structure())
+
+        print('Warning fixed initial camera position')
+        a_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
+
+        # Set the camera parameters
+        self._set_avatar_attributes(a_pos)
+
+        commands.extend([
+            {"$type": "teleport_avatar_to", "position": a_pos},
+            {"$type": "look_at_position", "position": self.camera_aim},
+            {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim), }
+        ])
+
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y']) / dist))
+
+        # # Place distractor objects in the background
+        # commands.extend(self._place_background_distractors())
+        #
+        # # Place occluder objects in the background
+        # commands.extend(self._place_occluders())
+
+        # test mode colors
+        if self.use_test_mode_colors:
+            self._set_test_mode_colors(commands)
+
+        return commands
+
+class Points():
+    def __init__(self,n=10, r=1, center=(0,0), mindist=0.2, maxtrials=1000 ) :
+        self.success = False
+        self.n = n
+        self.r = r
+        self.center=np.array(center)
+        self.d = mindist
+        self.points = np.ones((self.n,2))*10*r+self.center
+        self.c = 0
+        self.trials = 0
+        self.maxtrials = maxtrials
+        self.tx = "rad: {}, center: {}, min. dist: {} ".format(self.r, center, self.d)
+        self.fill()
+
+    def dist(self, p, x):
+        if len(p.shape) >1:
+            return np.sqrt(np.sum((p-x)**2, axis=1))
+        else:
+            return np.sqrt(np.sum((p-x)**2))
+
+    def newpoint(self):
+        x = (np.random.rand(2)-0.5)*2
+        x = x*self.r-self.center
+        if self.dist(self.center, x) < self.r:
+            self.trials += 1
+            if np.all(self.dist(self.points, x) > self.d):
+                self.points[self.c,:] = x
+                self.c += 1
+
+    def fill(self):
+        while self.trials < self.maxtrials and self.c < self.n:
+            self.newpoint()
+        self.points = self.points[self.dist(self.points,self.center) < self.r,:]
+        if len(self.points) == self.n:
+            self.success = True
+        self.tx +="\n{} of {} found ({} trials)".format(len(self.points),self.n,self.trials)
+
+    def __repr__(self):
+        return self.tx
 
 if __name__ == "__main__":
     import platform, os

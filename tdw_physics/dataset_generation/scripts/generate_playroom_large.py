@@ -162,19 +162,21 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_simple_scenario(models, num_trials, seed):
+def build_simple_scenario(models, num_trials, seed, num_distractors, permute=True):
     rng = np.random.RandomState(seed=seed)
 
     scenarios = []
     for i in range(num_trials):
-        permute_models = rng.permutation(models)
+        permute_models = rng.permutation(models) if permute else models
 
         scene = {
             'probe': permute_models[0],
             'target': permute_models[1],
-            'distractor': permute_models[2],
-            'occluder': permute_models[3]
+            'occluder': permute_models[2]
         }
+
+        if num_distractors > 0:
+            scene['distractor'] = permute_models[3]
 
         scene['apply_force_to'] = 'probe'
 
@@ -353,9 +355,10 @@ def main(args):
 
 
     # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
-    models_simple = ['green_side_chair'] * 4
-    models_simple = ['cube'] * 4
-    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed)
+    models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair', 'tan_side_chair']
+    # models_simple = ['cube'] * 4
+    # models_simple = ['checkers', 'cgaxis_models_50_24_vray', 'b03_zebra']
+    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed, num_distractors=args.num_distractors, permute=False)
 
     start, end = args.start, (args.end or len(scenarios))
 

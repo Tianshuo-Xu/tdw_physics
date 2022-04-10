@@ -312,7 +312,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in (['box', 'tdw', 'house'] + ROOMS), (args.room, ROOMS)
+        assert args.room in (['box', 'tdw', 'house', 'random_kitchen'] + ROOMS), (args.room, ROOMS)
         args.room_center = handle_random_transform_args(args.room_center)
 
         # parse the model libraries
@@ -843,6 +843,10 @@ class Dominoes(RigidbodiesDataset):
             add_scene = self.get_add_scene(scene_name="tdw_room")
         elif self.room == 'house':
             add_scene = self.get_add_scene(scene_name='archviz_house')
+        elif self.room == 'random_kitchen':
+            add_scene = self.get_add_scene(scene_name="box_room_2018")
+            # add_scene = self.get_add_scene(scene_name=random.choice([i for i in ROOMS if 'kitchen_1' in i]))
+            print('Add scene: ', add_scene)
         else:
             add_scene = self.get_add_scene(scene_name=self.room)
         return [add_scene,
@@ -853,7 +857,12 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_ambient_occlusion_intensity",
                  "intensity": 0.175},
                 {"$type": "set_ambient_occlusion_thickness_modifier",
-                 "thickness": 3.5}]
+                 "thickness": 3.5},
+                # {"$type": "set_ambient_intensity",
+                #  "intensity": 1.2},
+                {"$type": "set_shadow_strength", "strength": 0.40}
+
+                ]
 
     def _set_room_center(self) -> None:
         self.room_center = TDWUtils.VECTOR3_ZERO
@@ -1290,6 +1299,10 @@ class Dominoes(RigidbodiesDataset):
             }
 
         # Commands for adding hte object
+        print('\tTarget object scale: ', scale)
+        print('\tTarget object position: ', self.target_position)
+        print('\tTarget object rotation: ', self.target_rotation)
+
         commands = []
         commands.extend(
             self.add_primitive(
@@ -1362,6 +1375,10 @@ class Dominoes(RigidbodiesDataset):
             probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
         else:
             probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+
+        print('Probe object scale: ', scale)
+        print('Probe object position: ', self.probe_initial_position)
+        print('Probe object rotation: ', rot)
 
         commands.extend(
             self.add_primitive(

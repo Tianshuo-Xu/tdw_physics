@@ -42,7 +42,7 @@ def handle_random_transform_args(args):
             else:
                 assert len(args) == 2, (args, len(args))
         else:
-            args + 0.0
+            pass
     return args
 
 

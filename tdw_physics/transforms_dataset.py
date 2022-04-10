@@ -229,9 +229,9 @@ class TransformsDataset(Dataset, ABC):
 
                 # Invert camera matrix
                 if write_data:
-                    x_rot = np.array([
+                    toggle_yz = np.array([
                         [1, 0, 0, 0],
-                        [0, 0, -1, 0],
+                        [0, 0, 1, 0],
                         [0, 1, 0, 0],
                         [0, 0, 0, 1]
                     ])
@@ -243,7 +243,8 @@ class TransformsDataset(Dataset, ABC):
                     # z_up_camera_matrix[1, 3] = y_up_camera_matrix[2, 3]
                     # z_up_camera_matrix[2, 3] = y_up_camera_matrix[1, 3]
 
-                    z_up_camera_matrix = x_rot @ y_up_camera_matrix
+                    # adapted from: https://stackoverflow.com/questions/1263072/changing-a-matrix-from-right-handed-to-left-handed-coordinate-system
+                    z_up_camera_matrix = toggle_yz @ y_up_camera_matrix @ toggle_yz
                     inverted_camera_matrix = np.linalg.inv(z_up_camera_matrix)
                     transformation_save_name = './tdw_multiview_simple/sc%s_img%s_RT.txt' % (format(trial_num, '04d'), view_id)
                     print('Save inverted camera matrix to ', transformation_save_name)

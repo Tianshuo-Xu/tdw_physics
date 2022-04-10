@@ -29,7 +29,9 @@ M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
-
+MATERIAL_NAMES['selected'] = ['parquet_wood_mahogany', 'ceramic_tiles_floral_white', 'parquet_european_ash_grey',
+                               'ceramic_tiles_pale_goldenrod', 'terracotta_simple']
+MATERIAL_TYPES = MATERIAL_NAMES.keys()
 # colors for the target/zone overlay
 ZONE_COLOR = [255,255,0]
 TARGET_COLOR = [255,0,0]
@@ -452,7 +454,7 @@ class Dataset(Controller, ABC):
                 if azimuth_rotation:
                     delta_az_list = [x / self.num_views * np.pi * 2 for x in range(self.num_views)]
                     az_range = 2 * np.pi / self.num_views
-                    origin_pos = {'x': 0.0, 'y': 3.10, 'z': 3.0}
+                    origin_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
                 else:
