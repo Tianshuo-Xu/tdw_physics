@@ -118,13 +118,21 @@ if __name__ == '__main__':
     stims = stim_dir
     compute_metadata_from_stimuli(stims,
                                   label_funcs=[
+                                      trial_num,
                                       stimulus_name,
                                       probe_name,
                                       probe_segmentation_color,
                                       target_name,
                                       target_segmentation_color,
                                       zone_segmentation_color,
-                                      static_model_names
+                                      occluder_name,
+                                      occluder_segmentation_color,
+                                      distractor_name,
+                                      distractor_segmentation_color,
+                                      static_model_names,
+                                      moving_name,
+                                      moving_segmentation_color,
+                                      force_applied_to
                                   ],
                                   # label_funcs=basic_labels,
                                   add_controller_funcs=False,

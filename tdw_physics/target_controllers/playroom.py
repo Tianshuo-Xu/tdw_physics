@@ -86,7 +86,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ### force
     parser.add_argument("--fscale",
                         type=str,
-                        default="[10.0,10.0]",
+                        default="[2.5,2.5]",
                         help="range of scales to apply to push force")
     parser.add_argument("--fwait",
                         type=none_or_str,
@@ -138,8 +138,12 @@ def get_playroom_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--pscale",
                         type=str,
-                        default="[0.75,1.5]",
+                        default="[1.0,1.75]",
                         help="scale of probe objects")
+    parser.add_argument("--tscale",
+                        type=str,
+                        default="[1.0,1.75]",
+                        help="scale of target objects")
 
     ## size ranges for objects
     parser.add_argument("--size_min",
@@ -149,8 +153,10 @@ def get_playroom_args(dataset_dir: str, parse=True):
     parser.add_argument("--size_max",
                         type=none_or_str,
                         default="4.0",
-                        help="Maximum size for probe and target objects")    
-
+                        help="Maximum size for probe and target objects")
+    parser.add_argument("--randomize_object_size",
+                        action="store_true",
+                        help="Whether to randomly scale objects")
 
     ### layout
     parser.add_argument("--collision_axis_length",
@@ -167,11 +173,11 @@ def get_playroom_args(dataset_dir: str, parse=True):
     ## camera
     parser.add_argument("--camera_min_height",
                         type=float,
-                        default=2.0,
+                        default=1.5,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_height",
                         type=float,
-                        default=3.5,
+                        default=2.5,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -183,7 +189,7 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="[0.01,1.5]",
+                        default="[0.5,2.5]",
                         help="radial distance from camera to centerpoint")
 
     ## occluders and distractors
@@ -219,32 +225,47 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         type=none_or_int,
                         default=1,
                         help="number of distractors")
+    parser.add_argument("--dmaterial",
+                        type=none_or_str,
+                        default="parquet_wood_red_cedar",
+                        help="Material name for distractor. If None, samples from material_type")
+    parser.add_argument("--omaterial",
+                        type=none_or_str,
+                        default="parquet_wood_red_cedar",
+                        help="Material name for occluder. If None, samples from material_type")
 
     def postprocess(args):
+
+        args = domino_postproc(args)
         args.fupforce = handle_random_transform_args(args.fupforce)
         args.size_min = handle_random_transform_args(args.size_min)
         args.size_max = handle_random_transform_args(args.size_max)
 
         ## don't let background objects move
-        args.no_moving_distractors = True
+        args.no_moving_distractors = False
 
         return args
 
-    args = parser.parse_args()
-    args = domino_postproc(args)
-    args = postprocess(args)
+    if parse:
+        args = parser.parse_args()
+        args = postprocess(args)
 
-    return args
+        return args
+
+    else:
+        return (parser, postprocess)
 
 class Playroom(Collision):
 
-    PRINT = True
+    PRINT = False
 
     def __init__(self, port=1071,
                  probe_categories=None,
                  target_categories=None,
                  size_min=0.05,
                  size_max=4.0,
+                 distractor_material=None,
+                 occluder_material=None,
                  **kwargs):
 
         self.probe_categories = probe_categories
@@ -252,8 +273,9 @@ class Playroom(Collision):
         self.size_min = size_min
         self.size_max = size_max
         super().__init__(port=port, **kwargs)
-        # print("sampling probes from", [(r.name, r.wcategory) for r in self._probe_types], len(self._probe_types))
-        # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))        
+
+        self.distractor_material = distractor_material
+        self.occluder_material = occluder_material
 
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
@@ -265,6 +287,14 @@ class Playroom(Collision):
         self._target_types = tlist
         # print("sampling targets from", [(r.name, r.wcategory) for r in self._target_types], len(self._target_types))
 
+    def set_distractor_types(self, olist):
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=None, flex_only=False)
+        self.distractor_types = tlist
+
+    def set_occluder_types(self, olist):
+        tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=None, flex_only=False)
+        self.occluder_types = tlist
+
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         return TDWUtils.VECTOR3_ZERO
@@ -272,6 +302,54 @@ class Playroom(Collision):
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
         # clear some other stuff
+
+    def update_controller_state(self,
+                                probe=None, probe_material=None, probe_color=None,
+                                target=None, target_material=None, target_color=None,
+                                distractor=None, distractor_material=None, distractor_color=None,
+                                occluder=None, occluder_material=None, occluder_color=None,
+                                zone_material=None, apply_force_to='probe',
+                                **kwargs) -> None:
+
+        print("UPDATE CONTROLLER STATE")
+        self.clear_static_data()
+        if probe is not None:
+            self.set_probe_types([probe])
+            print("probe: %s" % probe)
+        if target is not None:
+            self.set_target_types([target])
+            print("target: %s" % target)
+        if distractor is not None:
+            self.set_distractor_types([distractor])
+            print("distractor: %s" % distractor)
+        if occluder is not None:
+            self.set_occluder_types([occluder])
+            print("occluder: %s" % occluder)
+
+        print("MATERIALS")
+        if probe_material is not None:
+            self.probe_material = probe_material
+            print("probe %s" % self.probe_material)
+        if target_material is not None:
+            self.target_material = target_material
+            print("target %s" % self.target_material)
+        if distractor_material is not None:
+            self.distractor_material = distractor_material
+            print("distractor %s" % self.distractor_material)
+        if occluder_material is not None:
+            self.occluder_material = occluder_material
+            print("occluder %s" % self.occluder_material)
+        if zone_material is not None:
+            self.zone_material = zone_material
+            print("zone %s" % self.zone_material)
+
+        self.apply_force_to = apply_force_to
+        if self.apply_force_to == 'target':
+            self._fixed_target = False
+        else:
+            self._fixed_target = True
+        print("applying force to ---> %s" % self.apply_force_to)
+
 
     def _place_target_object(self) -> List[dict]:
 
@@ -284,6 +362,60 @@ class Playroom(Collision):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
+    def get_trial_initialization_commands(self) -> List[dict]:
+
+        commands = super().get_trial_initialization_commands()
+        self.distractor_id = int(self.object_ids[-2])
+        self.occluder_id = int(self.object_ids[-1])
+
+        obj_ids_dict = {
+            'probe': self.probe_id,
+            'target': self.target_id,
+            'distractor': self.distractor_id,
+            'occluder': self.occluder_id}
+
+        obj_indices_dict = {k: [idx for idx in range(len(self.object_ids))
+                                if self.object_ids[idx] == o_id][0]
+                            for k, o_id in obj_ids_dict.items()}
+
+        obj_initial_positions_dict = {
+            k: self.initial_positions[idx] for k,idx in obj_indices_dict.items()}
+
+        if self.apply_force_to != 'probe':
+            assert self.force_wait > 0, self.force_wait
+
+            ## overwrite self.push_cmd
+            pos = obj_initial_positions_dict[self.apply_force_to]
+            angle = np.degrees(np.arctan2(pos['z'], pos['x'])) + 180
+
+            ## lift the object to be pushed a bit
+            pos['y'] = 0.25
+            new_probe_pos = obj_initial_positions_dict['probe']
+            new_probe_pos['y'] = 0.0
+
+            ## teleport the relevant objects
+            commands.extend([
+                {"$type": "teleport_object", "position": pos, "id": obj_ids_dict[self.apply_force_to]},
+                {"$type": "teleport_object", "position": new_probe_pos, "id": self.probe_id}])
+            self.initial_positions[obj_indices_dict[self.apply_force_to]] = pos
+            self.initial_positions[obj_indices_dict['probe']] = new_probe_pos
+
+            self.push_force = self.get_push_force(
+                scale_range=self.probe_mass * np.array(self.force_scale_range),
+                angle_range=self.force_angle_range,
+                angle_offset=angle)
+            self.push_position = pos
+            self.push_position = {
+                k: v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                for k,v in self.push_position.items()}
+            self.push_cmd = self._get_push_cmd(obj_ids_dict[self.apply_force_to], self.push_position)
+
+        ## which object was moving
+        self.moving_name = self.model_names[obj_indices_dict[self.apply_force_to]]
+        self.moving_id = obj_ids_dict[self.apply_force_to]
+
+        return commands
+
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):
 
@@ -293,7 +425,7 @@ class Playroom(Collision):
 
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        self.flow_thresh = 10.0
+        self.flow_thresh = 1.0
         if frame > 150:
             return True
         elif (not self._is_object_in_view(resp, self.probe_id)):
@@ -310,7 +442,7 @@ class Playroom(Collision):
         self.distractor_rotation_jitter = 30
         self.distractor_min_z = 0.75
         self.distractor_min_size = 0.5
-        self.distractor_max_size = 1.0
+        self.distractor_max_size = 1.5
 
     def _set_occlusion_attributes(self) -> None:
 
@@ -319,7 +451,7 @@ class Playroom(Collision):
         self.occluder_rotation_jitter = 30.
         self.occluder_min_z = 0.75
         self.occluder_min_size = 0.5
-        self.occluder_max_size = 1.0
+        self.occluder_max_size = 1.5
         self.rescale_occluder_height = True
 
 
@@ -396,7 +528,11 @@ if __name__ == "__main__":
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
         size_min=args.size_min,
-        size_max=args.size_max
+        size_max=args.size_max,
+        distractor_material=args.dmaterial,
+        occluder_material=args.omaterial,
+        model_libraries=args.model_libraries,
+        randomize_object_size=args.randomize_object_size
     )
 
     if bool(args.run):

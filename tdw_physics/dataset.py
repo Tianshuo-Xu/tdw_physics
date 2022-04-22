@@ -1,4 +1,4 @@
-import sys, os, copy, subprocess, glob
+import sys, os, copy, subprocess, glob, logging, time
 import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
@@ -71,7 +71,6 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
-
     def communicate(self, commands) -> list:
         '''
         Save a log of the commands so that they can be rerun
@@ -169,7 +168,10 @@ class Dataset(Controller, ABC):
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
                          {"$type": "send_images",
-                          "frequency": "always"}])
+                          "frequency": "always"},
+                         {"$type": "set_anti_aliasing",
+                          "mode": "subpixel"}
+                         ])
         return commands
 
     def run(self,
@@ -285,13 +287,23 @@ class Dataset(Controller, ABC):
             print(stats_str)
 
 
+    def update_controller_state(self, **kwargs):
+        """
+        Change the state of the controller based on a set of kwargs.
+        """
+        return
 
     def trial_loop(self,
                    num: int,
                    output_dir: str,
                    temp_path: str,
-                   save_frame: int=None) -> None:
+                   save_frame: int=None,
+                   unload_assets_every: int = 10,
+                   update_kwargs: List[dict] = {},
+                   do_log: bool = False) -> None:
 
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * num
 
         output_dir = Path(output_dir)
         if not output_dir.exists():
@@ -318,8 +330,13 @@ class Dataset(Controller, ABC):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
-            if not filepath.exists():
+            ## update the controller state
+            self.update_controller_state(**update_kwargs[i])
 
+            if not filepath.exists():
+                if do_log:
+                    start = time.time()
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
@@ -330,7 +347,8 @@ class Dataset(Controller, ABC):
                 # Do the trial.
                 self.trial(filepath=filepath,
                            temp_path=temp_path,
-                           trial_num=i)
+                           trial_num=i,
+                           unload_assets_every=unload_assets_every)
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
@@ -344,13 +362,13 @@ class Dataset(Controller, ABC):
                             overwrite=True,
                             remove_pngs=(True if save_frame is None else False),
                             use_parent_dir=False)
-                        
+
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))
                         sv = sorted(frames)[save_frame]
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
-                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True) 
-                        
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
 
@@ -359,13 +377,18 @@ class Dataset(Controller, ABC):
                         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
                         vertices, faces = self.object_meshes[o_id]
                         save_obj(vertices, faces, obj_filename)
+
+                if do_log:
+                    end = time.time()
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
             pbar.update(1)
         pbar.close()
 
     def trial(self,
               filepath: Path,
               temp_path: Path,
-              trial_num: int) -> None:
+              trial_num: int,
+              unload_assets_every: int=10) -> None:
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
 
@@ -383,7 +406,7 @@ class Dataset(Controller, ABC):
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 10 == 0:
+        if trial_num % unload_assets_every == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
@@ -419,11 +442,10 @@ class Dataset(Controller, ABC):
 
             # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
-            if ('imag' not in r_ids) or ('tran' not in r_ids):
-                print("retrying frame %d, response only had %s" % (frame, r_ids))
-                frame -= 1
-                continue
-
+            # if ('imag' not in r_ids) or ('tran' not in r_ids):
+            #     print("retrying frame %d, response only had %s" % (frame, r_ids))
+            #     frame -= 1
+            #     continue
             frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
 
             # Write whether this frame completed the trial and any other trial-level data
@@ -449,28 +471,30 @@ class Dataset(Controller, ABC):
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
         # Save out the target/zone segmentation mask
-        _id = f['frames']['0000']['images']['_id']
-        #get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        #get colors
-        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        #get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        #as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        #save image
-        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+        if (self.zone_id in self.object_ids) and (self.target_id in self.object_ids):
+
+            _id = f['frames']['0000']['images']['_id']
+            #get PIL image
+            _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+            #get colors
+            zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+            #get individual maps
+            zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+            target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+            #colorize
+            zone_map = zone_map * ZONE_COLOR
+            target_map = target_map * TARGET_COLOR
+            joint_map = zone_map + target_map
+            # add alpha
+            alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+            joint_map = np.dstack((joint_map, alpha))
+            #as image
+            map_img = Image.fromarray(np.uint8(joint_map))
+            #save image
+            map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
         # Close the file.
         f.close()
@@ -531,7 +555,7 @@ class Dataset(Controller, ABC):
         if reflections:
             theta2 = random.uniform(angle_min+180, angle_max+180)
             theta = random.choice([theta, theta2])
-        a_y = random.uniform(y_min, y_max)
+        a_y = random.uniform(y_min, y_max) + center["y"]
         a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
         a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
         a_x = a_x_new
@@ -691,6 +715,9 @@ class Dataset(Controller, ABC):
         self._increment_object_id()
         return int(self._object_id_counter)
 
+    def add_room_center(self, vector):
+        return {k: vector[k] + self.room_center[k] for k in vector.keys()}
+
     def get_material_name(self, material):
 
         if material is not None:
@@ -715,6 +742,11 @@ class Dataset(Controller, ABC):
     def _set_segmentation_colors(self, resp: List[bytes]) -> None:
 
         self.object_segmentation_colors = None
+
+        if len(self.object_ids) == 0:
+            self.object_segmentation_colors = []
+            return
+
         for r in resp:
             if OutputData.get_data_type_id(r) == 'segm':
                 seg = SegmentationColors(r)

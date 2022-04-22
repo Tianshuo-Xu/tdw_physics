@@ -1,7 +1,7 @@
 from typing import Dict, List
 import random
 import numpy as np
-from tdw.librarian import ModelLibrarian, MaterialLibrarian
+from tdw.librarian import ModelLibrarian, MaterialLibrarian, SceneLibrarian
 from tdw.tdw_utils import TDWUtils
 import argparse
 
@@ -27,6 +27,9 @@ M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
                   for mtype in MATERIAL_TYPES}
+
+S = SceneLibrarian()
+ROOMS = [r.name for r in S.records]
 
 
 # The names of the image passes
@@ -133,7 +136,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--height", type=int, default=256, help="Screen width in pixels.")
     parser.add_argument("--framerate", type=int, default=30, help="Framerate for rendered movies")
-    parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")    
+    parser.add_argument("--gpu", type=none_or_int, default=0, help="ID of the gpu to run on")
     parser.add_argument("--seed", type=int, default=-1, help="Random seed with which to initialize scenario")
     parser.add_argument("--random", type=int, default=1, help="Whether to set trials randomly")
     parser.add_argument("--num_views", type=int, default=1, help="How many possible viewpoints to render trial from")
@@ -146,6 +149,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_movies", action='store_true', help="Whether to write out MP4s of each trial")
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
+    parser.add_argument("--unload_assets_every", type=int, default=10, help="Unload assets after how many trials")
 
     return parser
 
@@ -186,15 +190,16 @@ if __name__ == '__main__':
 
     if args.material_type is not None:
         print("=====MATERIAL TYPES=====")
-        print(MATERIAL_TYPES)
+        print(MATERIAL_TYPES, len(MATERIAL_TYPES), "total materials = %d" % sum([len(MATERIAL_NAMES[mtype]) for mtype in MATERIAL_TYPES]))
         assert args.material_type in MATERIAL_TYPES, "Must pass a valid material type"
 
+
         print("=====MATERIAL NAMES OF TYPE %s======" % args.material_type)
-        print(MATERIAL_NAMES[args.material_type])
+        print(MATERIAL_NAMES[args.material_type], len(MATERIAL_NAMES[args.material_type]))
 
     if args.model_category is not None:
         print("=====MODEL CATEGORIES=====")
-        print(MODEL_CATEGORIES)
+        print(MODEL_CATEGORIES, len(MODEL_CATEGORIES))
         assert args.model_category in MODEL_CATEGORIES, "Must pass a valid model category"
 
         print("=====%s MODELS OF CATEGORY %s=====" % \
@@ -225,3 +230,9 @@ if __name__ == '__main__':
                 models = _models.records
                 print([r.name for r in models \
                        if args.model_name in r.name])
+
+    print("DO NOT USE")
+    for lib, _models in MODEL_LIBRARIES.items():
+        models = _models.records
+        print([r.name for r in models \
+               if r.do_not_use])

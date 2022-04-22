@@ -12,6 +12,8 @@ from tdw_physics.util import arr_to_xyz
 def round_float(x, places=3):
     return round(float(x), places)
 
+def strip(s): return s[2:-1]
+
 #################
 #### STATIC #####
 #################
@@ -21,6 +23,9 @@ def get_static_val(d, key='object_ids'):
         return np.array(d['static'][key])
     except KeyError:
         return None
+
+def trial_num(d):
+    return int(get_static_val(d, 'trial_num'))
 
 def get_object_ids(d):
     return list(d['static']['object_ids'])
@@ -67,7 +72,7 @@ def find_collisions_frames(d, cdata='contacts', env_collisions=False):
         contacts = get_collisions(d, n, env_collisions)[cdata]
         collisions.append(bool(len(contacts)))
     return np.where(collisions)[0]
-    
+
 
 #################
 #### IMAGES #####
@@ -313,6 +318,55 @@ def target_name(d):
     target_name = model_names[_t]
     return str(target_name)
 
+def occluder_name(d):
+    return str(get_static_val(d, 'model_names')[-1])
+
+def distractor_name(d):
+    return str(get_static_val(d, 'model_names')[-2])
+
+def force_applied_to(d):
+    pushed = get_static_val(d, 'apply_force_to')
+    if pushed is None:
+        trial_num = int(get_static_val(d, 'trial_num'))
+        pushed = ['probe', 'target', 'distractor', 'occluder'][trial_num % 4]
+    else:
+        pushed = strip(str(pushed))
+    return pushed
+
+def moving_name(d):
+
+    name = get_static_val(d, 'moving_name')
+    if name is None:
+        pushed = force_applied_to(d)
+        name = {
+            'probe': probe_name(d),
+            'target': target_name(d),
+            'distractor': distractor_name(d),
+            'occluder': occluder_name(d)
+        }[pushed]
+    else:
+        name = str(name)
+    return name
+
+def moving_segmentation_color(d):
+    pushed = get_static_val(d, 'apply_force_to')
+    if pushed is None:
+        pushed = force_applied_to(d)
+    else:
+        pushed = strip(str(pushed))
+
+    colors = {
+        'probe': probe_segmentation_color(d),
+        'target': target_segmentation_color(d),
+        'distractor': distractor_segmentation_color(d),
+        'occluder': occluder_segmentation_color(d)
+    }
+    try:
+        return colors[pushed]
+    except:
+        print(colors, pushed)
+        raise TypeError()
+
 def probe_segmentation_color(d):
     obj_ids = get_object_ids(d)
     probe_id = get_static_val(d, 'probe_id')
@@ -334,6 +388,24 @@ def target_segmentation_color(d):
 
 def zone_segmentation_color(d):
     return object_segmentation_color(d, 'zone_id')
+
+def object_segmentation_color_by_ind(d, ind=0):
+    obj_ids = get_object_ids(d)
+    try:
+        _id = [i for i,o in enumerate(obj_ids)][ind]
+    except KeyError:
+        return None
+
+    seg_colors = get_static_val(d, 'object_segmentation_colors')
+    seg_color = seg_colors[_id]
+    return [int(c) for c in seg_color]
+
+def occluder_segmentation_color(d):
+    return object_segmentation_color_by_ind(d, -1)
+
+def distractor_segmentation_color(d):
+    return object_segmentation_color_by_ind(d, -2)
+
 
 def target_id(d):
     return int(get_static_val(d, 'target_id'))

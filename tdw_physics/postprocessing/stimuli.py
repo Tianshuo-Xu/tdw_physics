@@ -1,9 +1,14 @@
 import os, sys, copy, glob
+import h5py
+import numpy as np
 from subprocess import PIPE, STDOUT, DEVNULL
 import subprocess
 from typing import List, Dict, Tuple
 from pathlib import Path
 import argparse
+from tdw_physics.postprocessing.labels import get_pass_mask
+from PIL import Image
+from tqdm import tqdm
 
 default_ffmpeg_args = [
     '-vcodec', 'libx264',
@@ -79,16 +84,88 @@ def rename_mp4s(
             newname = stimulus_dir.name + '_' + path.split('/')[-1]
         newpath = stimulus_dir.joinpath(newname)
         mv = ["mv", path, str(newpath)]
-        subprocess.run(' '.join(mv), shell=True) 
+        subprocess.run(' '.join(mv), shell=True)
+
+def pngs_from_hdf5(filepath, pass_mask="_img"):
+    """
+    Create a directory of pngs from an hdf5 file.
+    """
+
+    ## create a png dir
+    filepath = Path(filepath)
+    stem = filepath.name.split('.')[0]
+    parentdir = filepath.parent
+    pngdir = parentdir.joinpath("%s_pngs" % stem)
+    if not pngdir.exists():
+        pngdir.mkdir(parents=True)
+
+    ## read the HDF5 and save out pngs one by one
+    fh = h5py.File(str(filepath), 'r')
+    frames = sorted(list(fh['frames'].keys()))
+    num_pngs = len(frames)
+    for n in range(num_pngs):
+        pngname = pass_mask[1:] + ("_%04d.png" % n)
+        png = pngdir.joinpath(pngname)
+        with open(png, 'wb') as p:
+            p.write(fh['frames'][frames[n]]['images'][pass_mask][:])
+
+    fh.close()
+
+    return pngdir
+
+def main(stimulus_dir: str,
+         file_pattern: str = "*.hdf5",
+         save_dir: str = None,
+         add_prefix: bool = False,
+         pass_mask: str = "_img",
+         size: List[int] = [256,256],
+         overwrite: bool = False):
+
+    filepaths = glob.glob(os.path.join(stimulus_dir, file_pattern))
+    print("files", filepaths)
+
+    if save_dir is not None:
+        save_dir = Path(save_dir)
+        if not save_dir.exists():
+            save_dir.mkdir(parents=True)
+
+    for fpath in tqdm(filepaths):
+        mp4name = fpath.split('.')[0] + pass_mask + ".mp4"
+        if save_dir is not None:
+            save_nm = Path(save_dir).joinpath(Path(mp4name).name)
+        else:
+            save_nm = mp4name
+
+        if Path(save_nm).exists() and not overwrite:
+            continue
+
+        pngdir = pngs_from_hdf5(fpath, pass_mask=pass_mask)
+        pngs_to_mp4(filename=mp4name,
+                    image_stem=pass_mask[1:] + "_",
+                    png_dir=pngdir,
+                    use_parent_dir=add_prefix,
+                    size=size,
+                    remove_pngs=True,
+                    rename_movies=False)
+        rm = subprocess.run('rm -rf ' + str(pngdir), shell=True)
+
+        if save_dir is not None:
+            save_nm = Path(save_dir).joinpath(Path(mp4name).name)
+            mv = subprocess.run('mv ' + mp4name + ' ' + str(save_nm), shell=True)
 
 if __name__ == "__main__":
 
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", type=str, help="The directory of mp4s to rename")
-    parser.add_argument("--files", type=str, default="*_img.mp4", help="The pattern of files to rename")
-    parser.add_argument("--remove_prefix", action="store_true", help="remove the name of the dir as prefix")
-    args = parser.parse_args()
-    
-    rename_mp4s(stimulus_dir=args.dir, remove_dir_prefix=args.remove_prefix, file_pattern=args.files)
+    parser.add_argument("--dir", type=str, help="The directory of HDF5s to create MP4s from")
+    parser.add_argument("--save_dir", type=str, default=None, help="The directory where to save resulting MP4s")
+    parser.add_argument("--files", type=str, default="*.hdf5", help="The pattern of files to rename")
+    parser.add_argument("--add_prefix", action="store_true", help="Add the name of the dir as prefix to MP4s")
+    parser.add_argument("--height", type=int, default=256, help="Height of movies in pixels")
+    parser.add_argument("--width", type=int, default=256, help="Width of movies in pixels")
 
+    args = parser.parse_args()
+    main(stimulus_dir=args.dir,
+         file_pattern=args.files,
+         save_dir=args.save_dir,
+         add_prefix=args.add_prefix,
+         size=[args.height, args.width])
