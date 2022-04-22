@@ -133,7 +133,7 @@ class TransformsDataset(Dataset, ABC):
         # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         # print(frame_num, r_types)
 
-        write_data = frame_num == 5
+        write_data = frame_num in [5, 6]
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
@@ -182,9 +182,9 @@ class TransformsDataset(Dataset, ABC):
                             # im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
 
                             if pass_mask == '_id':
-                                img_name = './tdw_multiview_simple/sc%s_img%s_mask.png' % (format(trial_num, '04d'), view_id)
+                                img_name = './tdw_multiview_simple/sc%s_frame%d_img%s_mask.png' % (format(trial_num, '04d'), frame_num, view_id)
                             elif pass_mask == '_img':
-                                img_name = './tdw_multiview_simple/sc%s_img%s.png' % (format(trial_num, '04d'), view_id)
+                                img_name = './tdw_multiview_simple/sc%s_frame%d_img%s.png' % (format(trial_num, '04d'), frame_num, view_id)
                             else:
                                 break
 
@@ -246,7 +246,7 @@ class TransformsDataset(Dataset, ABC):
                     # adapted from: https://stackoverflow.com/questions/1263072/changing-a-matrix-from-right-handed-to-left-handed-coordinate-system
                     z_up_camera_matrix = toggle_yz @ y_up_camera_matrix @ toggle_yz
                     inverted_camera_matrix = np.linalg.inv(z_up_camera_matrix)
-                    transformation_save_name = './tdw_multiview_simple/sc%s_img%s_RT.txt' % (format(trial_num, '04d'), view_id)
+                    transformation_save_name = './tdw_multiview_simple/sc%s_frame%d_img%s_RT.txt' % (format(trial_num, '04d'), frame_num, view_id)
                     print('Save inverted camera matrix to ', transformation_save_name)
                     np.savetxt(transformation_save_name, inverted_camera_matrix)
 

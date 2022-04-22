@@ -1359,14 +1359,18 @@ class Dominoes(RigidbodiesDataset):
 
         ### better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length,
-                                       "y": self.probe_initial_height,
-                                       "z": 0.}
+
         rot = self.get_y_rotation(self.probe_rotation_range)
-        if self.probe_horizontal:
-            rot["z"] = 90
-            self.probe_initial_position["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
-            self.probe_initial_position["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
+        # --- Original code for setting probe initial position ---
+        # self.probe_initial_position = {"x": -0.5*self.collision_axis_length,
+        #                                "y": self.probe_initial_height,
+        #                                "z": 0.}
+
+        # if self.probe_horizontal:
+        #     rot["z"] = 90
+        #     self.probe_initial_position["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
+        #     self.probe_initial_position["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
+        # --- End of code ---
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())

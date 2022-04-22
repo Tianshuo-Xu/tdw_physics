@@ -355,10 +355,13 @@ def main(args):
 
 
     # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
-    # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair', 'tan_side_chair']
+    # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = ['cube'] * 4
     models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray']
-    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed, num_distractors=args.num_distractors, permute=False)
+    # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
+    # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
+    # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
+    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
 
     start, end = args.start, (args.end or len(scenarios))
 

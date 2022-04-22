@@ -434,6 +434,7 @@ class Dataset(Controller, ABC):
         self._write_frame_labels(frames_grp, resp, -1, False)
 
         # Continue the trial. Send commands, and parse output data.
+        a_pos_dict = {}
         while not done:
             frame += 1
             print('frame %d' % frame)
@@ -446,15 +447,17 @@ class Dataset(Controller, ABC):
             #     print("retrying frame %d, response only had %s" % (frame, r_ids))
             #     frame -= 1
             #     continue
+            start_frame = 5
+            end_frame = 6
 
-            if frame == 5:
+            if frame in range(start_frame, end_frame+1):
                 camera_matrix_dict = {}
                 azimuth_rotation = True
 
                 if azimuth_rotation:
                     delta_az_list = [x / self.num_views * np.pi * 2 for x in range(self.num_views)]
                     az_range = 2 * np.pi / self.num_views
-                    origin_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
+                    origin_pos = {'x': 0.0, 'y': 2.2, 'z': 3.0}
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
                 else:
@@ -463,28 +466,31 @@ class Dataset(Controller, ABC):
                 for view_id in range(self.num_views):
 
                     commands = []
+                    if frame == start_frame:
+                        if azimuth_rotation:
+                            a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
 
-                    if azimuth_rotation:
-                        a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
+                            # save azimuth
+                            az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
+                            az_rot_mat_2d = np.array([[math.cos(az_ori), - math.sin(az_ori)],
+                                                      [math.sin(az_ori), math.cos(az_ori)]])
+                            az_rot_mat = np.eye(3)
+                            az_rot_mat[:2, :2] = az_rot_mat_2d
 
-                        # save azimuth
-                        az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
-                        az_rot_mat_2d = np.array([[math.cos(az_ori), - math.sin(az_ori)],
-                                                  [math.sin(az_ori), math.cos(az_ori)]])
-                        az_rot_mat = np.eye(3)
-                        az_rot_mat[:2, :2] = az_rot_mat_2d
+                            transformation_save_name = './tdw_multiview_simple/sc%s_img%s_azi_rot.txt' % (format(trial_num, '04d'), view_id)
+                            print('Save azi rot to ', transformation_save_name)
+                            np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
 
-                        transformation_save_name = './tdw_multiview_simple/sc%s_img%s_azi_rot.txt' % (format(trial_num, '04d'), view_id)
-                        print('Save azi rot to ', transformation_save_name)
-                        np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
+                        else:
 
+                            noise = (random.random() - 0.5) * delta_angle
+                            a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
+                                                                      radius=self.camera_radius_range[1] * 1.5,
+                                                                      angle= delta_angle * view_id + noise,
+                                                                      height=self.camera_max_height * 1.5)
+                        a_pos_dict[view_id] = a_pos
                     else:
-
-                        noise = (random.random() - 0.5) * delta_angle
-                        a_pos = self.get_rotating_camera_position(center=TDWUtils.VECTOR3_ZERO,
-                                                                  radius=self.camera_radius_range[1] * 1.5,
-                                                                  angle= delta_angle * view_id + noise,
-                                                                  height=self.camera_max_height * 1.5)
+                        a_pos = a_pos_dict[view_id]
                     # Set the camera parameters
                     self._set_avatar_attributes(a_pos)
 
@@ -508,8 +514,8 @@ class Dataset(Controller, ABC):
 
                 # Write whether this frame completed the trial and any other trial-level data
                 # labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
-
-                break
+                if frame == end_frame:
+                    break
 
         # Cleanup.
         commands = []
