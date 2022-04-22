@@ -155,6 +155,8 @@ class TransformsDataset(Dataset, ABC):
                         image_data = TDWUtils.get_shaped_depth_pass(images=im, index=i)
                     else:
                         image_data = im.get_image(i)
+
+
                     images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
@@ -192,14 +194,23 @@ class TransformsDataset(Dataset, ABC):
                 camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
 
 
-    
-
         objs = frame.create_group("objects")
         objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
         for bound_type in bounds.keys():
             objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+
+        if self.use_obi and self.save_meshes:
+            particles_group = objs.create_group("particles_positions")
+            velocities_group = objs.create_group("particles_velocities")
+
+            actor_ids = []
+            for actor_id in self.obi.actors:
+                actor_ids.append(actor_id)
+                particles_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].positions)
+                velocities_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].velocities)
+            objs.create_dataset("obi_object_ids", data=actor_ids, compression="gzip")
 
         return frame, objs, tr_dict, False
 

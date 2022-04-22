@@ -199,7 +199,9 @@ class Drop(MultiDominoes):
         ## initializes static data and RNG
         super().__init__(port=port, target_color=target_color, **kwargs)
 
+
         self.room = room
+        self.use_obi = True
 
         self.zone_scale_range = zone_scale_range
 
@@ -273,10 +275,12 @@ class Drop(MultiDominoes):
         # Choose and drop an object.
         commands.extend(self._place_drop_object())
 
+
         # Choose and place a middle object.
         commands.extend(self._place_intermediate_object())
 
         # Teleport the avatar to a reasonable position based on the drop height.
+        # nothing to do with tdw
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
@@ -307,10 +311,10 @@ class Drop(MultiDominoes):
         self.middle_scale = self.zone_scale
 
         # Place distractor objects in the background
-        commands.extend(self._place_background_distractors(z_pos_scale=1))
+        #commands.extend(self._place_background_distractors(z_pos_scale=1))
 
         # Place occluder objects in the background
-        commands.extend(self._place_occluders(z_pos_scale=1))
+        #commands.extend(self._place_occluders(z_pos_scale=1))
 
         # test mode colors
         if self.use_test_mode_colors:
@@ -336,6 +340,10 @@ class Drop(MultiDominoes):
                      resp: List[bytes],
                      frame_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
+
+
+        # if frame_num > 1:
+        #     import ipdb; ipdb.set_trace()
         frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
                                                          frame_num=frame_num)
@@ -417,8 +425,9 @@ class Drop(MultiDominoes):
         """
 
         # Create an object to drop.
-        from tdw.add_ons.obi import Obi
+
         from tdw.obi_data.fluids.fluid import Fluid, FLUIDS
+        from tdw.add_ons.third_person_camera import ThirdPersonCamera
         from tdw.obi_data.fluids.disk_emitter import DiskEmitter
 
         record, data = self.random_primitive(self._drop_types,
@@ -426,7 +435,6 @@ class Drop(MultiDominoes):
                                              color=self.target_color)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
-        obi = Obi()
         vis = [1.5, 0.00001, 0.001, 0.01, 1.0]
         fluid = Fluid(
         capacity=1500,
@@ -459,7 +467,7 @@ class Drop(MultiDominoes):
         refraction_downsample=1,
         foam_downsample=1,
         )
-        obi.create_fluid(object_id = o_id,
+        self.obi.create_fluid(object_id = o_id,
                  fluid=fluid,
                  shape=DiskEmitter(),
                  position={"x": 0, "y": 1.6, "z": -0.04}, # y is height
@@ -469,8 +477,9 @@ class Drop(MultiDominoes):
 
         self.drop_type = data["name"]
         self.target_color = rgb
-        self.target_id = o_id # this is the target object as far as we're concerned for collision detection
+        self.target_id = 1 #o_id # this is the target object as far as we're concerned for collision detection
 
+        #import ipdb; ipdb.set_trace()
         # # Choose the drop position and pose.
         height = random.uniform(self.height_range[0], self.height_range[1])
         self.heights = np.append(self.heights, height)

@@ -613,6 +613,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## whether only flex objects are allowed
         self.flex_only = flex_only
+        self.use_obi = False
 
         ## whether the occluders and distractors can move
         self.no_moving_distractors = no_moving_distractors
@@ -897,6 +898,9 @@ class Dominoes(RigidbodiesDataset):
         :param trial_num: The number of the current trial.
         """
         # Clear the object IDs and other static data
+
+
+
         from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
         if object_info == None:
 
@@ -942,6 +946,13 @@ class Dominoes(RigidbodiesDataset):
 
         self.clear_static_data()
 
+        if self.use_obi:
+            from tdw.add_ons.obi import Obi
+            obi = Obi()
+            self.add_ons = [obi] #.extend([obi])
+            self.obi = obi
+
+
         self._trial_num = trial_num
 
         # Create the .hdf5 file.
@@ -965,6 +976,7 @@ class Dominoes(RigidbodiesDataset):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
+
         resp = self.communicate(commands)
 
         self._set_segmentation_colors(resp)
@@ -1463,6 +1475,7 @@ class Dominoes(RigidbodiesDataset):
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
             except TypeError:
+                import ipdb; ipdb.set_trace()
                 print("Failed to get a new object position, %s" % target_position_new)
 
     def _write_frame_labels(self,
