@@ -71,6 +71,7 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
+        
     def communicate(self, commands) -> list:
         '''
         Save a log of the commands so that they can be rerun
