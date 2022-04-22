@@ -134,7 +134,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     A dataset for Rigidbody (PhysX) physics.
     """
 
-    def __init__(self, port: int = 1071, monochrome: bool = False, **kwargs):
+    def __init__(self,
+                 port: int = 1071,
+                 monochrome: bool = False,
+                 send_full_collision_data: bool = False,
+                 **kwargs):
 
         TransformsDataset.__init__(self, port=port, **kwargs)
 
@@ -142,6 +146,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         # Whether the objects will be set to the same color
         self.monochrome = monochrome
+
+        # Whether to send the full collision data
+        self._send_full_collision_data = send_full_collision_data
 
 
     def clear_static_data(self) -> None:
@@ -508,8 +515,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         commands = super()._get_send_data_commands()
         commands.extend([{"$type": "send_collisions",
                           "enter": True,
-                          "exit": True,
-                          "stay": True,
+                          "exit": self._send_full_collision_data,
+                          "stay": self._send_full_collision_data,
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])

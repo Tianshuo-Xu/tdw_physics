@@ -29,7 +29,12 @@ class OcpRigidDataset(rigid.RigidbodiesDataset):
 
     def __init__(self,
                  port: int = None,
-                 room: str = 'tdw',
+                 room: str = 'box',
+                 **kwargs
+                 ):
+        super().__init__(port=port, **kwargs)
+
+        
                  
     
 

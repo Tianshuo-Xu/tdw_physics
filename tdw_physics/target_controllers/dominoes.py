@@ -12,7 +12,7 @@ from collections import OrderedDict
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
-from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
+from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Collision, EnvironmentCollision
 from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
@@ -530,7 +530,7 @@ class Dominoes(RigidbodiesDataset):
     MAX_TRIALS = 1000
     DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
-    PRINT = False
+    PRINT = True
 
     def __init__(self,
                  port: int = None,
@@ -594,6 +594,7 @@ class Dominoes(RigidbodiesDataset):
                  use_test_mode_colors=False,
                  probe_initial_height=0.0,
                  randomize_object_size=False,
+                 send_full_collision_data=False,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -602,7 +603,9 @@ class Dominoes(RigidbodiesDataset):
             print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
         ## initializes static data and RNG
-        super().__init__(port=port, **kwargs)
+        super().__init__(port=port,
+                         send_full_collision_data=send_full_collision_data,
+                         **kwargs)
 
         ## which room to use
         self.room = room
@@ -931,7 +934,30 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+        
+        r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        for i, r_id in enumerate(r_ids):
+            if r_id == 'coll':
+                co = Collision(resp[i])
+                state = co.get_state()
+                if 'coll' in r_ids:
+                    print("collision %s! frame = %d" % (state, frame))
 
+                if state != 'enter':
+                    break
+                agent_id = co.get_collider_id()
+                patient_id = co.get_collidee_id()
+                relative_velocity = co.get_relative_velocity()
+                num_contacts = co.get_num_contacts()
+                contact_points = [co.get_contact_point(i)
+                                  for i in range(num_contacts)]
+                contact_normals = [co.get_contact_normal(i)
+                                   for i in range(num_contacts)]
+                print("agent: %d ---> patient %d" % (agent_id, patient_id))
+                print("relative velocity", relative_velocity)
+                print("contact points", contact_points)
+                print("contact normals", contact_normals)
+        
         if (self.force_wait != 0) and frame == self.force_wait:
             if self.PRINT:
                 print("applied %s at time step %d" % (self.push_cmd, frame))
