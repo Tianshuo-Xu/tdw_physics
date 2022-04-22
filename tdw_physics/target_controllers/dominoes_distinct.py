@@ -7,8 +7,6 @@ import copy
 import importlib
 from PIL import Image
 import io
-import os
-import math
 from tqdm import tqdm
 import numpy as np
 from pathlib import Path
@@ -283,6 +281,7 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")
 
+
     parser.add_argument("--remove_middle",
                         action="store_true",
                         help="Remove one of the middle dominoes scene.")
@@ -456,6 +455,7 @@ def get_args(dataset_dir: str, parse=True):
 
             # multiply the number of trials by a factor
             args.num = int(float(args.num) * args.num_multiplier)
+
             # change the random seed in a deterministic way
             args.random = 0
             args.seed = (args.seed * 1000) % 997
@@ -509,7 +509,7 @@ def get_args(dataset_dir: str, parse=True):
             assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
 
             # red and yellow target and zone
-            args.use_test_mode_colors = False
+            args.use_test_mode_colors = True
 
             args.write_passes = "_img,_id,_depth,_normals,_flow"
             args.save_passes = "_img,_id"
@@ -732,20 +732,14 @@ class Dominoes(RigidbodiesDataset):
 
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-        self.num_interactions = 2
-        self.num_distinct_objects = 1
-
         exists_up_to = 0
         for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
 
-            if int(f.stem[:4]) > exists_up_to:
-                exists_up_to = int(f.stem[:4])
-            else:
-                subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
-                if subvideos < self.num_interactions:
-                    exists_up_to = int(f.stem[:4])
         if exists_up_to > 0:
             print('Trials up to %d already exist, skipping those' % exists_up_to)
+        self.num_interactions = 2
 
 
         pbar.update(exists_up_to)
@@ -768,12 +762,10 @@ class Dominoes(RigidbodiesDataset):
                     # Do the trial.
                     if interact_id > 0:
                         object_info = 1
-
-                    self.trial(filepath=filepath,
+                    object_info = self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=i * self.num_interactions + interact_id,
-                               object_info=object_info,
-                               interact_id=interact_id)
+                               object_info=object_info)
 
                     # Save an MP4 of the stimulus
                     if self.save_movies:
@@ -792,102 +784,19 @@ class Dominoes(RigidbodiesDataset):
                         rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
 
-                    # if self.save_meshes:
-                    #     for o_id in self.object_ids:
-                    #         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                    #         vertices, faces = self.object_meshes[o_id]
-                    #         save_obj(vertices, faces, obj_filename)
+                    if self.save_meshes:
+                        for o_id in self.object_ids:
+                            obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                            vertices, faces = self.object_meshes[o_id]
+                            save_obj(vertices, faces, obj_filename)
             pbar.update(1)
         pbar.close()
-
-    def xyzdict_to_array(self, dict_):
-        return np.array([dict_['x'], dict_['y'], dict_['z']])
-
-    def add_curtain(self):
-        record, data = self.random_primitive(self._zone_types,
-                                             scale={'x': 1.0, 'y': 0.8, 'z': 0.02},
-                                             color=np.array([0.76,0.76,0.76], np.float64),
-                                             add_data=False
-        )
-
-        # create the curtain
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.curtain = record
-        self.curtain_type = data["name"]
-        self.curtain_color = rgb
-        self.curtain_id = o_id
-        self.curtain_scale = scale
-
-
-        world_T_cam = np.eye(4)
-        y_axis = np.array([0, -1, 0])
-        z_axis = self.xyzdict_to_array(self.camera_aim) - self.xyzdict_to_array(self.camera_position)
-        x_axis = np.cross(y_axis, z_axis)
-        world_T_cam[:3,0]=x_axis
-        world_T_cam[:3,1]=y_axis
-        world_T_cam[:3,2]=z_axis
-        world_T_cam[:3,3]=self.xyzdict_to_array(self.camera_position)
-
-
-        location = dict()
-
-        self.curtain_center = world_T_cam.dot(np.array([0,   0.5, 0.2, 1]))[:3]
-        self.curtain_left = world_T_cam.dot(np.array([1.0,   0.5, 0.2, 1]))[:3]
-        self.curtain_initial = world_T_cam.dot(np.array([-1.0, 0.5,  0.2, 1]))[:3]
-        self.small_shift = world_T_cam[:3,:3].dot(np.array([0.01, 0,   0]))
-        initial_location = world_T_cam.dot(np.array([-1.0,  0.5,  0.2, 1]))
-        #import ipdb; ipdb.set_trace()
-        location['x'] = initial_location[0]
-        location['y'] = initial_location[1]
-        location['z'] = initial_location[2]
-
-
-        #import ipdb; ipdb.set_trace()
-        # location2 = dict()
-        # self.curtain_center_x = self.camera_position['x'] * 0.8 + self.camera_aim['x'] * 0.2
-        # self.curtain_left_x = self.curtain_center_x + 1.0
-        # location2['x'] = self.curtain_center_x - 1.0
-        # location2['y'] = self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
-        # location2['z'] = self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
-
-        rot_degree = dict()
-        rot_degree['x'] = 0
-        rot_degree['y'] = math.atan2(z_axis[0], z_axis[2]) * (180/math.pi)
-        rot_degree['z'] = 0
-
-        commands = []
-        commands.extend(
-            self.add_primitive(
-                record=record,
-                position=location,
-                rotation=rot_degree,
-                scale=scale,
-                material=self.zone_material,
-                color=rgb,
-                mass=500,
-                scale_mass=False,
-                dynamic_friction=self.zone_friction,
-                static_friction=(10.0 * self.zone_friction),
-                bounciness=0,
-                o_id=o_id,
-                add_data=(not self.remove_zone),
-                make_kinematic=False # zone shouldn't move
-            ))
-        commands.extend([{"$type": "set_kinematic_state",
-                 "id": o_id,
-                 "is_kinematic": True,
-                 "use_gravity": False}])
-
-
-        return commands
-
 
     def trial(self,
               filepath: Path,
               temp_path: Path,
               object_info,
-              trial_num: int,
-              interact_id: int) -> None:
+              trial_num: int) -> None:
         # generate a batch of trials instead of one
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
@@ -899,46 +808,32 @@ class Dominoes(RigidbodiesDataset):
         # Clear the object IDs and other static data
         from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
         if object_info == None:
-
-            # color for "star object"
-            colors = [[0.01844594, 0.77508636, 0.12749255],#pink
-                      [0.17443318, 0.22064707, 0.39867442],#black
-                      [0.75136046, 0.06584012, 0.22674323],#red
-                      [0.47, 0.38,   0.901],#purple
-                       ]
-            non_star_color = [0, 0.27, 0.192]
             self.repeat_trial = False
             # sample distinct objects
             self.candidate_dict = dict()
-            self.star_object = dict()
-            self.star_object["type"] = random.choice(self._middle_types)
-            self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
-            #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-            self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
-            self.star_object["scale"] = get_random_xyz_transform(self.middle_scale_range)
-            print("====star object mass", self.star_object["mass"])
+            colors = [[0.01844594, 0.77508636, 0.12749255],#pink
+                      [0.17443318, 0.22064707, 0.39867442],#black
+                      [0.9774568,  0.87879388, 0.40082996],#orange
+                      [0.75136046, 0.06584012, 0.22674323],#red
+                      [0.47, 0.38,   0.901],#purple
+                       ]
+            distinct_masses = [0.1, 2.0, 10.0]
 
-            #distinct_masses = [0.1, 2.0, 10.0]
-            mass = 2.0
-            self.normal_mass = 2.0
             random.shuffle(colors)
-            #random.shuffle(distinct_masses)
-            ## add the non-star objects have the same weights
-            for distinct_id in range(1):
+            random.shuffle(distinct_masses)
+            for distinct_id in range(self.num_distinct_objects):
                 self.candidate_dict[distinct_id] = dict()
                 self.candidate_dict[distinct_id]["type"] = random.choice(self._middle_types)
                 self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.middle_scale_range)
-                self.candidate_dict[distinct_id]["color"] = [0, 0.19, 0.125]#[0.9774568,  0.87879388, 0.40082996]
-                self.candidate_dict[distinct_id]["mass"] = mass
+                self.candidate_dict[distinct_id]["color"] = colors[distinct_id] #np.array(self.random_color(None, 0.25))
+                self.candidate_dict[distinct_id]["mass"] = distinct_masses[distinct_id]
 
         else:
             self.repeat_trial = True
 
-        self.trial_num_middle_objects = self.num_middle_objects
-        # random.choice(range(self.num_middle_objects + 1))
+        self.trial_num_middle_objects = random.choice(range(self.num_middle_objects + 1))
         self.trial_collision_axis_length = self.spacing * (self.trial_num_middle_objects + 1)
-        self.total_num_dominoes = self.trial_num_middle_objects + 2
-        self.position_ids = range(self.total_num_dominoes)
+
 
         self.clear_static_data()
 
@@ -953,13 +848,8 @@ class Dominoes(RigidbodiesDataset):
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
-        commands.extend(self.get_trial_initialization_commands(interact_id))
+        commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
-
-
-        #resp = self.communicate(commands)
-
-        commands.extend(self.add_curtain())
         commands.extend(self._get_send_data_commands())
 
         # Send the commands and start the trial.
@@ -978,58 +868,17 @@ class Dominoes(RigidbodiesDataset):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        self._write_frame_labels(frame_grp, resp, -1, False)
 
-        ## curatin leaves screen
-        if interact_id > 0: #curtain move from center to the left
-            import time
-            location = dict()
-            location['x'] = self.curtain_center[0]
-            location['y'] = self.curtain_center[1]
-            location['z'] = self.curtain_center[2]
-            # location['x'] = self.curtain_center_x
-            # location['y'] = self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
-            # location['z'] = self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
-
-            for i in range(200):
-                if i > 0:
-                    frame += 1
-                #print("hello", i)
-                #time.sleep(0.4)
-                #location['x'] += 0.01
-                location['x'] += self.small_shift[0]
-                location['y'] += self.small_shift[1]
-                location['z'] += self.small_shift[2]
-                commands = []
-                commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
-                #commands.extend(self.get_per_frame_commanAdding curtainds(resp, frame))
-                resp = self.communicate(commands)
-
-                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-
-                # Write whether this frame completed the trial and any other trial-level data
-                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
-                #if location['x'] > self.curtain_left_x:
-                #    break
-                dist_to_left = np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left)
-                if dist_to_left < 0.01:
-                    break
-
-                #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
-                #    break
-        else:
-            frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-            self._write_frame_labels(frame_grp, resp, -1, False)
-
-        before_start_frame = frame
-        self.start_frame_after_curtain = before_start_frame
         # Continue the trial. Send commands, and parse output data.
         while not done:
             frame += 1
             # print('frame %d' % frame)
-            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=self.force_wait+before_start_frame))
+            resp = self.communicate(self.get_per_frame_commands(resp, frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
-            # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
+            # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
             if ('imag' not in r_ids) or ('tran' not in r_ids):
                 print("retrying frame %d, response only had %s" % (frame, r_ids))
@@ -1041,42 +890,6 @@ class Dominoes(RigidbodiesDataset):
             # Write whether this frame completed the trial and any other trial-level data
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
 
-
-        ## curatin gets into screen
-        if interact_id < self.num_interactions-1: #curtain move from left to the center
-            import time
-            location = dict()
-            location['x'] = self.curtain_initial[0]#self.curtain_center_x - 1.0
-            location['y'] = self.curtain_initial[1]#self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
-            location['z'] = self.curtain_initial[2]#self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
-
-            for i in range(200):
-                frame += 1
-
-                #print("hello", i)
-                #time.sleep(0.4)
-                location['x'] += self.small_shift[0]
-                location['y'] += self.small_shift[1]
-                location['z'] += self.small_shift[2]
-
-                #location['x'] += 0.01
-                commands = []
-                commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
-                #commands.extend(self.get_per_frame_commands(resp, frame))
-
-                resp = self.communicate(commands)
-                dist_to_center = np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_center)
-
-                #print(dist_to_center)
-                if dist_to_center < 0.01:
-                    break
-                #if location['x'] > self.curtain_center_x:
-                #    break
-                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-
-                # Write whether this frame completed the trial and any other trial-level data
-                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
-
         # Cleanup.
         commands = []
         for o_id in self.object_ids:
@@ -1084,14 +897,12 @@ class Dominoes(RigidbodiesDataset):
                              "id": int(o_id)})
         self.communicate(commands)
 
-
-
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
             meta = OrderedDict()
             meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
             self.trial_metadata.append(meta)
-            self._post_write_static_data(static_group, meta)
+
             # Save the trial-level metadata
             json_str =json.dumps(self.trial_metadata, indent=4)
             self.meta_file.write_text(json_str, encoding='utf-8')
@@ -1099,7 +910,7 @@ class Dominoes(RigidbodiesDataset):
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
         # Save out the target/zone segmentation mask
-        _id = f['frames'][f'{self.start_frame_after_curtain:04}']['images']['_id']
+        _id = f['frames']['0000']['images']['_id']
         #get PIL image
         _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
         #get colors
@@ -1249,7 +1060,7 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5}]
 
-    def get_trial_initialization_commands(self, interact_id) -> List[dict]:
+    def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
         # randomization across trials
@@ -1263,10 +1074,9 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._place_target_zone())
 
         # Choose and place a target object.
-        print("hello1")
-        commands.extend(self._place_star_object(interact_id))
+        commands.extend(self._place_target_object())
 
-        print("hello2")
+
         #self.model_names.append(record.name)
         #self.scales.append(data['scale'])
         #self.colors
@@ -1276,10 +1086,10 @@ class Dominoes(RigidbodiesDataset):
             self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
 
         # Choose, place, and push a probe object.
-        commands.extend(self._place_and_push_probe_object(interact_id))
+        commands.extend(self._place_and_push_probe_object())
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
-        commands.extend(self._build_intermediate_structure(interact_id))
+        commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position based on the drop height.
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
@@ -1316,38 +1126,14 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
-        if force_wait == None:
-            if (self.force_wait != 0) and frame == self.force_wait:
-                if self.PRINT:
-                    print("applied %s at time step %d" % (self.push_cmd, frame))
-                return [self.push_cmd]
-            else:
-                return []
+        if (self.force_wait != 0) and frame == self.force_wait:
+            if self.PRINT:
+                print("applied %s at time step %d" % (self.push_cmd, frame))
+            return [self.push_cmd]
         else:
-            if (self.force_wait != 0) and frame == force_wait:
-                if self.PRINT:
-                    print("applied %s at time step %d" % (self.push_cmd, frame))
-                return [self.push_cmd]
-            else:
-                return []
-
-    def _post_write_static_data(self, static_group: h5py.Group, meta) -> None:
-        # write start_frame_id and red_hits_yellow label
-        # randomization
-        try:
-            static_group.create_dataset("start_frame_after_curtain", data=self.start_frame_after_curtain)
-        except (AttributeError,TypeError):
-            pass
-
-        key_from_meta = ["does_target_contact_zone", 'first_target_contact_zone_frame']
-
-        for key in key_from_meta:
-            try:
-                static_group.create_dataset(key, data=meta[key])
-            except (AttributeError,TypeError):
-                pass
+            return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -1385,15 +1171,6 @@ class Dominoes(RigidbodiesDataset):
             pass
         try:
             static_group.create_dataset("probe_id", data=self.probe_id)
-        except (AttributeError,TypeError):
-            pass
-
-        try:
-            static_group.create_dataset("star_id", data=self.star_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("curtain_id", data=self.curtain_id)
         except (AttributeError,TypeError):
             pass
 
@@ -1562,8 +1339,7 @@ class Dominoes(RigidbodiesDataset):
 
     def _get_zone_location(self, scale):
         return {
-            "x": self.total_num_dominoes * self.spacing - 0.5 + 0.2,
-            #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
+            "x": 0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z": 0.0 if not self.remove_zone else 10.0
         }
@@ -1611,7 +1387,6 @@ class Dominoes(RigidbodiesDataset):
             self.model_names = self.model_names[:-1]
         self.distinct_ids = np.append(self.distinct_ids, -1)
         # place it just beyond the target object with an effectively immovable mass and high friction
-
         commands = []
         commands.extend(
             self.add_primitive(
@@ -1630,6 +1405,7 @@ class Dominoes(RigidbodiesDataset):
                 add_data=(not self.remove_zone),
                 make_kinematic=True # zone shouldn't move
             ))
+
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(
@@ -1639,18 +1415,19 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_star_object(self, interact_id) -> List[dict]:
+    def _place_target_object(self) -> List[dict]:
         """
         Place a primitive object at one end of the collision axis.
         """
-        distinct_id = 1
+        distinct_id = random.choice(range(self.num_distinct_objects))
         self.distinct_ids = np.append(self.distinct_ids, distinct_id)
         # create a target object
         #if not self.repeat_trial: # sample from scratch
-        star_type = self.star_object["type"]
-        star_scale = self.star_object["scale"]
-        star_mass = self.star_object["mass"]
-        star_color = self.star_object["color"]
+        target_type = self.candidate_dict[distinct_id]["type"]
+        target_scale = self.candidate_dict[distinct_id]["scale"]
+        target_mass = self.candidate_dict[distinct_id]["mass"]
+        target_color = self.candidate_dict[distinct_id]["color"]
+
 
         # select an object
         # record, data = self.random_primitive(self._target_types,
@@ -1659,16 +1436,19 @@ class Dominoes(RigidbodiesDataset):
         #                                      add_data=False
         # )
 
-        record, data = self.random_primitive([star_type],
-                                             scale=star_scale,
-                                             color=star_color,
+        record, data = self.random_primitive([target_type],
+                                             scale=target_scale,
+                                             color=target_color,
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
-        assert(o_id == 2), "make sure the star object is always with the same id"
-        self.star_id = o_id
 
+        self.target = record
+        self.target_type = data["name"]
+        self.target_color = rgb
+        self.target_scale = self.middle_scale = scale
+        self.target_id = o_id
         # else:
         #     # object properties don't change
         #     record = self.target
@@ -1681,78 +1461,27 @@ class Dominoes(RigidbodiesDataset):
             self.remove_target = True
 
         # Where to put the target
+        if self.target_rotation is None:
+            self.target_rotation = self.get_rotation(self.target_rotation_range)
 
-        if interact_id < self.num_interactions - 1:
-            # try avoiding sampling the last one
-
-            if star_mass > self.normal_mass * 2: # heavy object
-
-                bias = np.random.uniform(0,1) < 0.75
-                if bias:
-                    pos_id = random.choice(range(1, self.total_num_dominoes))
-                else:
-                    pos_id = pos_id = random.choice(range(self.total_num_dominoes))
-
-            elif star_mass < self.normal_mass * 0.5: #light object
-                bias = np.random.uniform(0,1) < 0.75
-                if bias:
-                    pos_id = 0
-                else:
-                    pos_id = random.choice(range(self.total_num_dominoes))
-
-            else:
-                pos_id = pos_id = random.choice(range(self.total_num_dominoes))
-                #random.choice(range(self.total_num_dominoes -1))
-
-            # creating informative example by
-            # trying to put heavy object not at right most,
-            # and light object at the right most
-
-            #self.target_pos_id = random.choice(range(self.total_num_dominoes))
-        else:
-            #self.target_pos_id = self.total_num_dominoes - 1
-            pos_id = random.choice(range(self.total_num_dominoes))
-        # carpet, target, middle, middle | prob
-        star_position = {
-            "x": pos_id * self.spacing - 0.5,
-            "y": 0. if not self.remove_target else 10.0,
-            "z": 0. if not self.remove_target else 10.0
-        }
-        star_rotation = self.get_rotation(self.target_rotation_range)
-
-        self.star_pos_id = pos_id
-        self.posid_to_objid = dict()
-        self.posid_to_objid[pos_id] = dict()
-        self.posid_to_objid[pos_id]["o_id"] = o_id
-        self.posid_to_objid[pos_id]["rot"] = star_rotation
-        self.posid_to_objid[pos_id]["mass"] = star_mass
-        self.posid_to_objid[pos_id]["scale"] = star_scale
-        self.middle_scale = scale
-        if (interact_id < self.num_interactions - 1) or \
-           ((interact_id == self.num_interactions - 1) and\
-           pos_id == self.total_num_dominoes - 1):
-            self.target = record
-            self.target_type = data["name"]
-            self.target_color = rgb
-            self.target_scale = scale
-            self.target_id = o_id
-            if self.target_rotation is None:
-                self.target_rotation = star_rotation
-            if self.target_position is None:
-                self.target_position = star_position
+        if self.target_position is None:
+            self.target_position = {
+                "x": 0.5 * self.trial_collision_axis_length,
+                "y": 0. if not self.remove_target else 10.0,
+                "z": 0. if not self.remove_target else 10.0
+            }
 
         # Commands for adding hte object
         commands = []
-
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=star_position,
-                rotation=star_rotation,
+                position=self.target_position,
+                rotation=self.target_rotation,
                 scale=scale,
                 material=self.target_material,
                 color=rgb,
-                mass=star_mass, #2.0,
+                mass=target_mass, #2.0,
                 scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
@@ -1771,14 +1500,13 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self, interact_id) -> List[dict]:
+    def _place_and_push_probe_object(self) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
         exclude = not (self.monochrome and self.match_probe_and_target_color)
 
-        distinct_id = 0
-        #random.choice([x for x in range(self.num_distinct_objects) if x not in self.distinct_ids])
+        distinct_id = random.choice([x for x in range(self.num_distinct_objects) if x not in self.distinct_ids])
 
         self.distinct_ids = np.append(self.distinct_ids, distinct_id)
         # create a target object
@@ -1804,41 +1532,20 @@ class Dominoes(RigidbodiesDataset):
         # Add the object with random physics values
         commands = []
 
-        pos_id_list = [x for x in range(self.total_num_dominoes)]
-        pos_id_list.remove(self.star_pos_id)
-        pos_id = pos_id_list[0]
-
-        self.posid_to_objid[pos_id] = dict()
-        self.posid_to_objid[pos_id]["o_id"] = o_id
         ### better sampling of random physics values
         #self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": pos_id * self.spacing - 0.5, "y": 0., "z": 0.}
+        self.probe_initial_position = {"x": -0.5*self.trial_collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
-
-        self.posid_to_objid[pos_id]["rot"] = rot
-        self.posid_to_objid[pos_id]["mass"] = probe_mass
-        self.posid_to_objid[pos_id]["scale"] = self.probe_scale
-        if ((interact_id == self.num_interactions - 1) and\
-           pos_id == self.total_num_dominoes - 1):
-            self.target = record
-            self.target_type = data["name"]
-            self.target_color = rgb
-            self.target_scale = scale
-            self.target_id = o_id
-            if self.target_rotation is None:
-                self.target_rotation = rot
-            if self.target_position is None:
-                self.target_position = self.probe_initial_position
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
 
-        # if self.probe_has_friction:
-        #     probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
-        # else:
-        probe_physics_info = {'dynamic_friction': 0.5, 'static_friction': 0.5, 'bounciness': 0}
+        if self.probe_has_friction:
+            probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
+        else:
+            probe_physics_info = {'dynamic_friction': 0.5, 'static_friction': 0.5, 'bounciness': 0}
 
-        #probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+            #probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
         commands.extend(
             self.add_primitive(
@@ -1857,43 +1564,36 @@ class Dominoes(RigidbodiesDataset):
             ))
 
         # Set its collision mode
-        # drag the right most object
-        # object to push is either the probe object or the target object
-        push_oid = self.posid_to_objid[0]["o_id"]
-        rot_y = self.posid_to_objid[0]['rot']['y']
-        push_mass = self.posid_to_objid[0]['mass']
-        push_scale = self.posid_to_objid[0]['scale']
-
         commands.extend([
             {"$type": "set_object_drag",
-             "id": push_oid,
+             "id": o_id,
              "drag": 0, "angular_drag": 0}])
 
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
-            scale_range=push_mass * np.array(self.force_scale_range),
+            scale_range=self.probe_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range)
         self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, -rot_y, degrees=True)
+            self.push_force, -rot['y'], degrees=True)
 
         self.push_position = self.probe_initial_position
 
         if self.PRINT:
-            print("PROBE MASS", push_mass)
+            print("PROBE MASS", self.probe_mass)
             print("PUSH FORCE", self.push_force)
         if self.use_ramp:
-            self.push_cmd = self._get_push_cmd(push_oid, None)
+            self.push_cmd = self._get_push_cmd(o_id, None)
         else:
             self.push_position = {
                 k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    push_scale, rot_y)[k]
+                    self.probe_scale, rot['y'])[k]
                 for k,v in self.push_position.items()}
             self.push_position = {
                 k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
                 for k,v in self.push_position.items()}
 
-            self.push_cmd = self._get_push_cmd(push_oid, self.push_position)
+            self.push_cmd = self._get_push_cmd(o_id, self.push_position)
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
@@ -2048,12 +1748,12 @@ class Dominoes(RigidbodiesDataset):
                                                      seed=self.trial_seed)
                     c['color'] = {'r': rgb[0], 'g': rgb[1], 'b': rgb[2], 'a': 1.0}
 
-    # def _build_intermediate_structure(self) -> List[dict]:
-    #     """
-    #     Abstract method for building a physically interesting intermediate structure between the probe and the target.
-    #     """
-    #     commands = []
-    #     return commands
+    def _build_intermediate_structure(self) -> List[dict]:
+        """
+        Abstract method for building a physically interesting intermediate structure between the probe and the target.
+        """
+        commands = []
+        return commands
 
     def _set_distractor_objects(self) -> None:
 
@@ -2523,50 +2223,38 @@ class MultiDominoes(Dominoes):
 
         return funcs
 
-    def _build_intermediate_structure(self, interact_id) -> List[dict]:
+    def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
         if self.monochrome:
             self.middle_color = self.random_color(exclude=self.target_color)
 
-        return self._place_middle_objects(interact_id) if bool(self.trial_num_middle_objects) else []
+        return self._place_middle_objects() if bool(self.trial_num_middle_objects) else []
 
-    def _place_middle_objects(self, interact_id) -> List[dict]:
+    def _place_middle_objects(self) -> List[dict]:
 
         offset = -0.5 * self.trial_collision_axis_length
-        #min_offset = offset + self.target_scale["x"]
-        #max_offset = 0.5 * self.trial_collision_axis_length - self.target_scale["x"]
-
-
-        #self.target_pos_id = random.choice(range(self.total_num_dominoes))
-
-        pos_id_list = [x for x in range(self.total_num_dominoes)]
-        pos_id_list.remove(self.star_pos_id)
-        pos_id_list = pos_id_list[1:]
+        min_offset = offset + self.target_scale["x"]
+        max_offset = 0.5 * self.trial_collision_axis_length - self.target_scale["x"]
 
         commands = []
+
         if self.remove_middle:
-            # don't remove the left most domino
-            # otherwise it will cause problem when
-            # detemining the "target" object
-            pos_id_list_tmp = copy.deepcopy(pos_id_list)
-            if pos_id_list_tmp[-1] == self.total_num_dominoes - 1:
-                pos_id_list_tmp.remove(self.total_num_dominoes - 1)
-            rm_pos_idx = random.choice(pos_id_list_tmp)
+            rm_idx = random.choice(range(self.num_middle_objects))
         else:
-            rm_pos_idx = -1
+            rm_idx = -1
 
         for m in range(self.trial_num_middle_objects):
-            offset = pos_id_list[m] * self.spacing - 0.5#random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
-            #offset = np.minimum(np.maximum(offset, min_offset), max_offset)
-            # if offset >= max_offset:
-            #     print("couldn't place middle object %s" % str(m+1))
-            #     print("offset now", offset)
-            #     break
+            offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
+            offset = np.minimum(np.maximum(offset, min_offset), max_offset)
+            if offset >= max_offset:
+                print("couldn't place middle object %s" % str(m+1))
+                print("offset now", offset)
+                break
 
-            if pos_id_list[m] == rm_pos_idx:
+            if m == rm_idx:
                 continue
 
-            distinct_id = 0 #random.choice(range(self.num_distinct_objects))
+            distinct_id = random.choice(range(self.num_distinct_objects))
             self.distinct_ids = np.append(self.distinct_ids, distinct_id)
             # create a target object
             #if not self.repeat_trial: # sample from scratch
@@ -2582,35 +2270,15 @@ class MultiDominoes(Dominoes):
                                                  exclude_color=self.target_color
             )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-            self.posid_to_objid[pos_id_list[m]] = dict()
-            self.posid_to_objid[pos_id_list[m]]["o_id"] = o_id
             zpos = scale["z"] * random.uniform(-self.lateral_jitter, self.lateral_jitter)
             pos = arr_to_xyz([offset, 0., zpos])
             rot = self.get_y_rotation(self.middle_rotation_range)
-
-
             if self.horizontal:
                 rot["z"] = 90
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
-            self.posid_to_objid[pos_id_list[m]]["rot"] = rot
-            self.posid_to_objid[pos_id_list[m]]["mass"] = middle_mass
-            self.posid_to_objid[pos_id_list[m]]["scale"] = middle_scale
-
             self.middle_type = data["name"]
             self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
-
-            if((interact_id == self.num_interactions - 1) and\
-               pos_id_list[m] == self.total_num_dominoes - 1): #left most
-                self.target = record
-                self.target_type = data["name"]
-                self.target_color = rgb
-                self.target_scale = scale
-                self.target_id = o_id
-                if self.target_rotation is None:
-                    self.target_rotation = rot
-                if self.target_position is None:
-                    self.target_position = pos
 
             commands.extend(
                 self.add_physics_object(

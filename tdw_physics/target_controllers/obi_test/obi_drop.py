@@ -88,7 +88,7 @@ f_id = Controller.get_unique_id()
 obi.create_fluid(object_id = f_id,
                  fluid=fluid,
                  shape=DiskEmitter(),
-                 position={"x": 0, "y": 2.0, "z": 0}, # y is height
+                 position={"x": 0, "y": 1.5, "z": 0}, # y is height
                  rotation={"x": 100, "y": 0, "z": 0},
                  lifespan=1000,
                  speed=2)
@@ -113,38 +113,38 @@ o_id = Controller.get_unique_id()
 #              "use_gravity": False}
 #     )
 
-c.communicate(Controller.get_add_physics_object(#model_name="prim_cube",
-                                                model_name="triangular_prism",
-                                                #model_name='trapezoidal_table',
-                                                object_id=o_id,
-                                                #library="models_full.json",
-                                                #library="models_special.json",
-                                                library="models_flex.json",
-                                                kinematic=True,
-                                                gravity=False,
-                                                #position= {"x": 0, "y": 0.15, "z": 0},
-                                                #scale_factor={"x": 0.5, "y": 0.5, "z": 0.5},
-                                                position= {"x": 0, "y": 0.15, "z": 0},
-                                                rotation= {"x": 135, "y": 0.0, "z": 0},
-                                                scale_factor={"x": 0.5, "y": 0.5, "z": 0.5*np.sqrt(2)},
-                                                default_physics_values=False))
-
-
-# c.communicate(Controller.get_add_physics_object(model_name="pyramid", #"prim_cube",
+# c.communicate(Controller.get_add_physics_object(#model_name="prim_cube",
+#                                                 model_name="triangular_prism",
+#                                                 #model_name='trapezoidal_table',
 #                                                 object_id=o_id,
-#                                                 library="models_flex.json",#"models_special.json",
+#                                                 #library="models_full.json",
+#                                                 #library="models_special.json",
+#                                                 library="models_flex.json",
 #                                                 kinematic=True,
 #                                                 gravity=False,
-#                                                 position= {"x": 0, "y": 0.1, "z": 0.5},
-#                                                 scale_factor={"x": 2.4, "y": 0.2, "z": 2.4},
+#                                                 #position= {"x": 0, "y": 0.15, "z": 0},
+#                                                 #scale_factor={"x": 0.5, "y": 0.5, "z": 0.5},
+#                                                 position= {"x": 0, "y": 0.15, "z": 0},
+#                                                 rotation= {"x": 135, "y": 0.0, "z": 0},
+#                                                 scale_factor={"x": 0.5, "y": 0.5, "z": 0.5*np.sqrt(2)},
 #                                                 default_physics_values=False))
+
+
+c.communicate(Controller.get_add_physics_object(model_name="pyramid", #"prim_cube",
+                                                object_id=o_id,
+                                                library="models_flex.json",#"models_special.json",
+                                                kinematic=True,
+                                                gravity=False,
+                                                position= {"x": 0, "y": 0.1, "z": 0.5},
+                                                scale_factor={"x": 2.4, "y": 0.2, "z": 2.4},
+                                                default_physics_values=False))
 color = [0.3, 0.3, 0.3]
 c.communicate(
             {"$type": "set_color",
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
              "id": o_id}
     )
-for i in range(500):
+for i in range(30):
 
     if i == 100:
         obi.set_fluid_speed(f_id, speed=0)
