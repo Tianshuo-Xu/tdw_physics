@@ -138,6 +138,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  port: int = 1071,
                  monochrome: bool = False,
                  send_full_collision_data: bool = False,
+                 collision_noise_range = None,
                  **kwargs):
 
         TransformsDataset.__init__(self, port=port, **kwargs)
@@ -150,6 +151,32 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # Whether to send the full collision data
         self._send_full_collision_data = send_full_collision_data
 
+        # how to generate collision noise
+        print("noise range", collision_noise_range)
+        self.set_collision_noise_generator(collision_noise_range)
+        if self.collision_noise_generator is not None:
+            print("example noise", self.collision_noise_generator())
+
+    def set_collision_noise_generator(self, noise_range):
+        if noise_range is None:
+            self.collision_noise_generator = None
+        elif hasattr(noise_range, 'keys'):
+            assert all([k in noise_range.keys() for k in ['x', 'y', 'z']])
+            self.collision_noise_generator = lambda: {
+                'x': random.uniform(noise_range['x'][0], noise_range['x'][1]),
+                'y': random.uniform(noise_range['y'][0], noise_range['y'][1]),
+                'z': random.uniform(noise_range['z'][0], noise_range['z'][1])
+            }
+        elif hasattr(noise_range, '__len__'):
+            assert len(noise_range) == 2, len(noise_range)
+            self.collision_noise_generator = lambda: {
+                'x': random.uniform(noise_range[0], noise_range[1]),
+                'y': random.uniform(noise_range[0], noise_range[1]),
+                'z': random.uniform(noise_range[0], noise_range[1])
+            }
+        else:
+            raise ValueError("%s cannot be interpreted as a noise range" \
+                             % noise_range)
 
     def clear_static_data(self) -> None:
         super().clear_static_data()
@@ -620,6 +647,56 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         env_collisions.create_dataset("contacts", data=env_collision_contacts.reshape((-1, 2, 3)),
                                       compression="gzip")
         return frame, objs, tr, sleeping
+
+    def _get_collision_data(self, resp: List[bytes]):
+
+        coll_data = None
+        r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        for i, r_id in enumerate(r_ids):
+            if r_id == 'coll':
+                co = Collision(resp[i])
+                state = co.get_state()
+                if state != 'enter':
+                    break
+                agent_id = co.get_collider_id()
+                patient_id = co.get_collidee_id()
+                relative_velocity = co.get_relative_velocity()
+                num_contacts = co.get_num_contacts()
+                contact_points = [co.get_contact_point(i)
+                                  for i in range(num_contacts)]
+                contact_normals = [co.get_contact_normal(i)
+                                   for i in range(num_contacts)]
+
+                coll_data = {
+                    'agent_id': agent_id,
+                    'patient_id': patient_id,
+                    'relative_velocity': relative_velocity,
+                    'num_contacts': num_contacts,
+                    'contact_points': contact_points,
+                    'contact_normals': contact_normals
+                }
+                if self.PRINT:
+                    print("agent: %d ---> patient %d" % (agent_id, patient_id))
+                    print("relative velocity", relative_velocity)
+                    print("contact points", contact_points)
+                    print("contact normals", contact_normals)
+
+        return coll_data
+
+    def apply_collision_noise(self, resp, data=None):
+        if data is None:
+            return []
+        o_id = data['patient_id']
+        force = self.collision_noise_generator()
+        print("collision noise", force)
+        cmds = [
+            {
+                "$type": "apply_force_to_object",
+                "force": force,
+                "id": o_id                
+            }
+        ]
+        return cmds
 
     def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
 

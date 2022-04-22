@@ -303,6 +303,12 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Probe and target will have the same color.")
 
+    ## collision noise
+    parser.add_argument("--collision_noise_range",
+                        type=str,
+                        default=None,
+                        help="xyz range for collision noise generator")
+
     def postprocess(args):
 
         # testing set data drew from a different set of models; needs to be preserved
@@ -353,6 +359,10 @@ def get_args(dataset_dir: str, parse=True):
         args.frot = handle_random_transform_args(args.frot)
         args.foffset = handle_random_transform_args(args.foffset)
         args.fwait = handle_random_transform_args(args.fwait)
+
+        ## collision noise
+        args.collision_noise_range = handle_random_transform_args(
+            args.collision_noise_range)
 
         args.horizontal = bool(args.horizontal)
 
@@ -595,6 +605,7 @@ class Dominoes(RigidbodiesDataset):
                  probe_initial_height=0.0,
                  randomize_object_size=False,
                  send_full_collision_data=False,
+                 collision_noise_range=None,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -605,6 +616,7 @@ class Dominoes(RigidbodiesDataset):
         ## initializes static data and RNG
         super().__init__(port=port,
                          send_full_collision_data=send_full_collision_data,
+                         collision_noise_range=collision_noise_range,
                          **kwargs)
 
         ## which room to use
@@ -935,37 +947,23 @@ class Dominoes(RigidbodiesDataset):
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         
-        r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-        for i, r_id in enumerate(r_ids):
-            if r_id == 'coll':
-                co = Collision(resp[i])
-                state = co.get_state()
-                if 'coll' in r_ids:
-                    print("collision %s! frame = %d" % (state, frame))
-
-                if state != 'enter':
-                    break
-                agent_id = co.get_collider_id()
-                patient_id = co.get_collidee_id()
-                relative_velocity = co.get_relative_velocity()
-                num_contacts = co.get_num_contacts()
-                contact_points = [co.get_contact_point(i)
-                                  for i in range(num_contacts)]
-                contact_normals = [co.get_contact_normal(i)
-                                   for i in range(num_contacts)]
-                print("agent: %d ---> patient %d" % (agent_id, patient_id))
-                print("relative velocity", relative_velocity)
-                print("contact points", contact_points)
-                print("contact normals", contact_normals)
-        
         if (self.force_wait != 0) and frame == self.force_wait:
             if self.PRINT:
                 print("applied %s at time step %d" % (self.push_cmd, frame))
-            return [self.push_cmd]
+            cmds = [self.push_cmd]
         else:
             if self.PRINT:
                 print(frame)
-            return []
+            cmds = []
+
+        ## apply collision noise
+        if self.collision_noise_generator is not None:
+            coll_data = self._get_collision_data(resp)
+            if coll_data is not None:
+                coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
+                cmds.extend(coll_noise_cmds)
+
+        return cmds
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -2211,7 +2209,8 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
+        collision_noise_range=args.collision_noise_range
     )
 
     if bool(args.run):
