@@ -28,3 +28,10 @@ def rotmag2vec(rotation: Dict[str, float],
     assert all([k in rotation.keys() for k in XYZ]),\
         "Ill formed vector provided: " + str(rotation)
     return dict([[k, rotation[k]*magnitude] for k in XYZ])
+
+
+def rad2deg(rad: float) -> float:
+    return rad * 180 / np.pi
+
+def deg2rad(deg: float) -> float:
+    return deg / 180 * np.pi

@@ -3,11 +3,17 @@ import numpy as np
 import random
 from tdw.librarian import ModelRecord
 from tdw_physics.rigidbodies_dataset import RigidbodiesDataset
-from dataclass import dataclass
+from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
+from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
 import copy
 from scipy.stats import vonmises, norm, lognorm
-from noisy_utils import rotmag2vec
+from tdw_physics.noisy.noisy_utils import rotmag2vec, vec2rotmag,\
+        rad2deg, deg2rad
+import os
+import json
+
+XYZ = ['x', 'y', 'z']
 
 
 @dataclass
@@ -51,6 +57,28 @@ class RigidNoiseParams:
     collision_dir: Dict[str, float] = None
     collision_mag: float = None
 
+    def save(self, flpth):
+        selfobj = {
+            'position': self.position,
+            'rotation': self.rotation,
+            'velocity_dir': self.velocity_dir,
+            'velocity_mag': self.velocity_mag,
+            'mass': self.mass,
+            'static_friction': self.static_friction,
+            'dynamic_friction': self.dynamic_friction,
+            'bounciness': self.bounciness,
+            'collision_dir': self.collision_dir,
+            'collision_mag': self.collision_mag
+        }
+        with open(flpth, 'w') as ofl:
+            json.dump(selfobj, ofl)
+
+    @staticmethod
+    def load(flpth):
+        with open(flpth, 'r') as ifl:
+            obj = json.load(ifl)
+        return RigidNoiseParams(**obj)
+
 
 class IsotropicRigidNoiseParams(RigidNoiseParams):
     """
@@ -77,7 +105,6 @@ class IsotropicRigidNoiseParams(RigidNoiseParams):
 
 
 NO_NOISE = RigidNoiseParams()
-XYZ = ['x', 'y', 'z']
 
 
 class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
@@ -111,14 +138,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        n = self.noise
+        n = self._noise_params
+        rotrad = dict([[k, deg2rad(rotation[k])]
+                       for k in rotation.keys()])
         for k in XYZ:
-            if n.position is not None and k in n.position.keys():
+            if n.position is not None and k in n.position.keys()\
+                    and n.position[k] is not None:
                 position[k] = norm.rvs(position[k],
                                        n.position[k])
-            if n.rotation is not None and k in n.rotation.keys():
-                rotation[k] = vonmises.rvs(n.rotation[k],
-                                           rotation[k])
+            if n.rotation is not None and k in n.rotation.keys()\
+                    and n.rotation[k] is not None:
+                rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k])
+        rotation = dict([[k, rad2deg(rotrad[k])]
+                         for k in rotrad.keys()])
         if n.mass is not None:
             mass = lognorm.rvs(n.mass, mass)
         # Clamp frictions to be > 0
@@ -136,6 +168,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                     norm.rvs(bounciness,
                                              n.bounciness)))
         return RigidbodiesDataset.add_physics_object(
+            self,
             record, position, rotation, mass,
             dynamic_friction, static_friction,
             bounciness, o_id, add_data
@@ -176,8 +209,11 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     def set_collision_noise_generator(self,
                                       noise_obj: RigidNoiseParams):
         # Only make noise if there is noise to be added
-        ncd = copy.copy(noise_obj['collision_dir'])
-        ncm = noise_obj['collision_mag']
+        if noise_obj.collision_dir is not None:
+            ncd = copy.copy(noise_obj.collision_dir)
+        else:
+            ncd = None
+        ncm = noise_obj.collision_mag
         if (ncd is None
                 or any([k in ncd.keys() for k in XYZ])) and\
                 ncm is None:
@@ -187,15 +223,17 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             if ncd is None:
                 def cng():
                     return rotmag2vec([[k, 0] for k in XYZ],
-                                      ncm)
+                                      lognorm.rvs(ncm, 1))
             elif ncm is None:
                 def cng():
-                    return rotmag2vec([[k, ncd[k]] for k in XYZ],
+                    return rotmag2vec([[k, vonmises.rvs(ncd[k], 0)]
+                                       for k in XYZ],
                                       1)
             else:
                 def cng():
-                    return rotmag2vec([[k, ncd[k]] for k in XYZ],
-                                      ncm)
+                    return rotmag2vec([[k, vonmises.rvs(ncd[k], 0)]
+                                       for k in XYZ],
+                                      lognorm.rvs(ncm, 1))
             self.collision_noise_generator = cng
 
     def settle(self):
@@ -204,3 +242,57 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         'settles' the world to avoid interpenetration
         """
         raise NotImplementedError()
+
+    """ Ensures collision data is sent pre/post """
+
+    def _get_send_data_commands(self) -> List[dict]:
+        commands = super()._get_send_data_commands()
+        commands.extend([{"$type": "send_collisions",
+                          "enter": True,
+                          "exit": True,
+                          "stay": self._send_full_collision_data,
+                          "collision_types": ["obj", "env"]},
+                         {"$type": "send_rigidbodies",
+                          "frequency": "always"}])
+
+        if self.save_meshes:
+            commands.append({"$type": "send_meshes", "frequency": "once"})
+
+        return commands
+
+    def _get_collision_data(self, resp: List[bytes]):
+        """ Extends RigidbodyDataset collisions to share state """
+        coll_data = None
+        r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        for i, r_id in enumerate(r_ids):
+            if r_id == 'coll':
+                co = Collision(resp[i])
+                state = co.get_state()
+                if state not in ['enter', 'exit']:
+                    break
+                agent_id = co.get_collider_id()
+                patient_id = co.get_collidee_id()
+                relative_velocity = co.get_relative_velocity()
+                num_contacts = co.get_num_contacts()
+                contact_points = [co.get_contact_point(i)
+                                  for i in range(num_contacts)]
+                contact_normals = [co.get_contact_normal(i)
+                                   for i in range(num_contacts)]
+
+                coll_data = {
+                    'agent_id': agent_id,
+                    'patient_id': patient_id,
+                    'relative_velocity': relative_velocity,
+                    'num_contacts': num_contacts,
+                    'contact_points': contact_points,
+                    'contact_normals': contact_normals,
+                    'state': state
+                }
+                if self.PRINT:
+                    print("agent: %d ---> patient %d" % (agent_id, patient_id))
+                    print("relative velocity", relative_velocity)
+                    print("contact points", contact_points)
+                    print("contact normals", contact_normals)
+                    print("state", state)
+
+        return coll_data
