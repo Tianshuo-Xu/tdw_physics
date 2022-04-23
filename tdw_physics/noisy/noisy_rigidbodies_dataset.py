@@ -119,7 +119,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._noise_params = noise
 
         # how to generate collision noise
-        #print("noise range", collision_noise_range)
+        self._ongoing_collisions = []
+        self._lasttime_collisions = []
         self.set_collision_noise_generator(noise)
         if self.collision_noise_generator is not None:
             print("example noise", self.collision_noise_generator())
@@ -179,13 +180,50 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         Overwrites abstract method to add collision noise commands
 
         Inhereting classes should *always* extend this output
+
+        self._ongoing_collisions = []
+        self._lasttime_collisions = []
         """
         cmds = []
         if self.collision_noise_generator is not None:
             coll_data = self._get_collision_data(resp)
-            if coll_data is not None:
-                coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
-                cmds.extend(coll_noise_cmds)
+            if len(coll_data) > 0:
+                new_collisions = []
+                for cd in coll_data:
+                    # Ensure consistency in naming / comparisons
+                    aid = min(cd['agent_id'], cd['patient_id'])
+                    pid = max(cd['agent_id'], cd['patient_id'])
+                    nm_ap = str(aid) + '_' + str(pid)
+
+                    """ This seems inefficient... """
+                    for r in resp[:-1]:
+                        r_id = OutputData.get_data_type_id(r)
+                        if r_id == "rigi":
+                            ri = Rigidbodies(r)
+                            for i in range(ri.get_num()):
+                                if ri.get_id(i) == aid:
+                                    va = ri.get_velocity(i)
+                                elif ri.get_id(i) == pid:
+                                    vp = ri.get_velocity(i)
+
+                    if cd['state'] == 'enter':
+                        print('start rvel: ' + nm_ap + ' : '
+                              + str(va) + '; ' + str(vp))
+                        self._ongoing_collisions.append(nm_ap)
+                        new_collisions.append(nm_ap)
+                    else:
+                        if nm_ap in self._lasttime_collisions:
+                            print('next rvel: ' + nm_ap + ' : '
+                                  + str(va) + '; ' + str(vp))
+
+                    if cd['state'] == 'exit':
+                        self._ongoing_collisions = [
+                            c for c in self._ongoing_collisions if
+                            c != nm_ap
+                        ]
+                self._lasttime_collisions = new_collisions
+                #coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
+                #cmds.extend(coll_noise_cmds)
 
         return cmds
 
@@ -221,18 +259,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         else:
             """ NOTE MAKE THIS ALL RELATIVE | ADD INPUT """
             if ncd is None:
+
                 def cng():
-                    return rotmag2vec([[k, 0] for k in XYZ],
+                    return rotmag2vec(dict([[k, 0] for k in XYZ]),
                                       lognorm.rvs(ncm, 1))
             elif ncm is None:
                 def cng():
-                    return rotmag2vec([[k, vonmises.rvs(ncd[k], 0)]
-                                       for k in XYZ],
+                    return rotmag2vec(dict([[k, vonmises.rvs(ncd[k], 0)]
+                                            for k in XYZ]),
                                       1)
             else:
                 def cng():
-                    return rotmag2vec([[k, vonmises.rvs(ncd[k], 0)]
-                                       for k in XYZ],
+                    return rotmag2vec(dict([[k, vonmises.rvs(ncd[k], 0)]
+                                            for k in XYZ]),
                                       lognorm.rvs(ncm, 1))
             self.collision_noise_generator = cng
 
@@ -247,10 +286,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     def _get_send_data_commands(self) -> List[dict]:
         commands = super()._get_send_data_commands()
+        # Can't send this more than once...
+        commands = [c for c in commands if c['$type'] != 'send_collisions']
         commands.extend([{"$type": "send_collisions",
                           "enter": True,
                           "exit": True,
-                          "stay": self._send_full_collision_data,
+                          "stay": True,
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
@@ -261,15 +302,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         return commands
 
     def _get_collision_data(self, resp: List[bytes]):
-        """ Extends RigidbodyDataset collisions to share state """
-        coll_data = None
+        coll_data = []
         r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         for i, r_id in enumerate(r_ids):
             if r_id == 'coll':
                 co = Collision(resp[i])
                 state = co.get_state()
-                if state not in ['enter', 'exit']:
-                    break
                 agent_id = co.get_collider_id()
                 patient_id = co.get_collidee_id()
                 relative_velocity = co.get_relative_velocity()
@@ -279,7 +317,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 contact_normals = [co.get_contact_normal(i)
                                    for i in range(num_contacts)]
 
-                coll_data = {
+                coll_data.append({
                     'agent_id': agent_id,
                     'patient_id': patient_id,
                     'relative_velocity': relative_velocity,
@@ -287,8 +325,9 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     'contact_points': contact_points,
                     'contact_normals': contact_normals,
                     'state': state
-                }
-                if self.PRINT:
+                })
+                #if self.PRINT:
+                if False:
                     print("agent: %d ---> patient %d" % (agent_id, patient_id))
                     print("relative velocity", relative_velocity)
                     print("contact points", contact_points)

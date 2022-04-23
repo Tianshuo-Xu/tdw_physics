@@ -33,5 +33,6 @@ def rotmag2vec(rotation: Dict[str, float],
 def rad2deg(rad: float) -> float:
     return rad * 180 / np.pi
 
+
 def deg2rad(deg: float) -> float:
     return deg / 180 * np.pi

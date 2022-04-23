@@ -1,0 +1,1 @@
+{"position": {"x": 0.1, "z": 0.1, "y": null}, "rotation": {"y": 25, "x": null, "z": null}, "velocity_dir": null, "velocity_mag": null, "mass": 0.1, "static_friction": null, "dynamic_friction": null, "bounciness": 0.1, "collision_dir": null, "collision_mag": null}

@@ -306,12 +306,10 @@ def get_args(dataset_dir: str, parse=True):
     parser.add_argument("--match_probe_and_target_color",
                         action="store_true",
                         help="Probe and target will have the same color.")
-
-    ## collision noise
-    parser.add_argument("--collision_noise_range",
+    parser.add_argument("--noise",
                         type=str,
                         default=None,
-                        help="xyz range for collision noise generator")
+                        help="path link to noise JSON file")
 
     def postprocess(args):
 
@@ -367,10 +365,6 @@ def get_args(dataset_dir: str, parse=True):
         args.frot = handle_random_transform_args(args.frot)
         args.foffset = handle_random_transform_args(args.foffset)
         args.fwait = handle_random_transform_args(args.fwait)
-
-        ## collision noise
-        args.collision_noise_range = handle_random_transform_args(
-            args.collision_noise_range)
 
         args.horizontal = bool(args.horizontal)
 
@@ -2243,11 +2237,7 @@ if __name__ == "__main__":
         else:
             os.environ["DISPLAY"] = ":0"
 
-    noise = RigidNoiseParams(
-        position={'x': .1, 'z': .1, 'y': None},
-        rotation={'y': 16, 'x': None, 'z': None},
-        bounciness=2
-    )
+    noise = RigidNoiseParams.load(args.noise)
 
     DomC = MultiDominoes(
         noise=noise,
@@ -2315,9 +2305,8 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors,
-        collision_noise_range=args.collision_noise_range
-    )
+        use_test_mode_colors=args.use_test_mode_colors
+        )
 
     if bool(args.run):
         DomC.run(num=args.num,
