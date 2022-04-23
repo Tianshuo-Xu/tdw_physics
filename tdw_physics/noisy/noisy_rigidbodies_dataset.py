@@ -97,42 +97,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         if self.collision_noise_generator is not None:
             print("example noise", self.collision_noise_generator())
 
-    """ TODO: MAKE GAUSSIAN """
-
-    def set_collision_noise_generator(self,
-                                      noise_obj: RigidNoiseParams):
-        # Only make noise if there is noise to be added
-        ncd = copy.copy(noise_obj['collision_dir'])
-        ncm = noise_obj['collision_mag']
-        if (ncd is None
-                or any([k in ncd.keys() for k in XYZ])) and\
-                ncm is None:
-            self.collision_noise_generator = None
-        else:
-            def f():
-                pass
-        """
-        if noise_range is None:
-            self.collision_noise_generator = None
-        elif hasattr(noise_range, 'keys'):
-            assert all([k in noise_range.keys() for k in ['x', 'y', 'z']])
-            self.collision_noise_generator = lambda: {
-                'x': random.uniform(noise_range['x'][0], noise_range['x'][1]),
-                'y': random.uniform(noise_range['y'][0], noise_range['y'][1]),
-                'z': random.uniform(noise_range['z'][0], noise_range['z'][1])
-            }
-        elif hasattr(noise_range, '__len__'):
-            assert len(noise_range) == 2, len(noise_range)
-            self.collision_noise_generator = lambda: {
-                'x': random.uniform(noise_range[0], noise_range[1]),
-                'y': random.uniform(noise_range[0], noise_range[1]),
-                'z': random.uniform(noise_range[0], noise_range[1])
-            }
-        else:
-            raise ValueError("%s cannot be interpreted as a noise range" \
-                             % noise_range)
-        """
-
     def add_physics_object(self,
                            record: ModelRecord,
                            position: Dict[str, float],
@@ -164,8 +128,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                             n.dynamic_friction))
         if n.static_friction is not None:
             static_friction = max(0,
-                                   norm.rvs(static_friction,
-                                            n.static_friction))
+                                  norm.rvs(static_friction,
+                                           n.static_friction))
         # Clamp bounciness between 0 and 1
         if n.bounciness is not None:
             bounciness = max(0, min(1,
@@ -176,6 +140,63 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             dynamic_friction, static_friction,
             bounciness, o_id, add_data
         )
+
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+        """
+        Overwrites abstract method to add collision noise commands
+
+        Inhereting classes should *always* extend this output
+        """
+        cmds = []
+        if self.collision_noise_generator is not None:
+            coll_data = self._get_collision_data(resp)
+            if coll_data is not None:
+                coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
+                cmds.extend(coll_noise_cmds)
+
+        return cmds
+
+    def apply_collision_noise(self, resp, data=None):
+        if data is None:
+            return []
+        o_id = data['patient_id']
+        force = self.collision_noise_generator()
+        #print("collision noise", force)
+        cmds = [
+            {
+                "$type": "apply_force_to_object",
+                "force": force,
+                "id": o_id
+            }
+        ]
+        return cmds
+
+    """ INCOMPLETE - Adds force but not relative """
+
+    def set_collision_noise_generator(self,
+                                      noise_obj: RigidNoiseParams):
+        # Only make noise if there is noise to be added
+        ncd = copy.copy(noise_obj['collision_dir'])
+        ncm = noise_obj['collision_mag']
+        if (ncd is None
+                or any([k in ncd.keys() for k in XYZ])) and\
+                ncm is None:
+            self.collision_noise_generator = None
+        else:
+            """ NOTE MAKE THIS ALL RELATIVE | ADD INPUT """
+            if ncd is None:
+                def cng():
+                    return rotmag2vec([[k, 0] for k in XYZ],
+                                      ncm)
+            elif ncm is None:
+                def cng():
+                    return rotmag2vec([[k, ncd[k]] for k in XYZ],
+                                      1)
+            else:
+                def cng():
+                    return rotmag2vec([[k, ncd[k]] for k in XYZ],
+                                      ncm)
+            self.collision_noise_generator = cng
 
     def settle(self):
         """
