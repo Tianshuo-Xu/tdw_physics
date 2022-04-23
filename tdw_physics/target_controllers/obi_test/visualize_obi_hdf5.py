@@ -1,7 +1,7 @@
 # read out the obi stored states
 
 import h5py
-filename = "/media/htung/Extreme SSD/fish/tdw_physics/dump/drop/pilot_it2_drop_all_bowls_box/0001_001.hdf5"
+filename = "/media/htung/Extreme SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_all_bowls_box/0002_000.hdf5"
 import numpy as np
 import imageio
 import vispy.scene

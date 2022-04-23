@@ -17,9 +17,18 @@ ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/g
 controller="tdw_physics/target_controllers/fluid_drop_var.py"
 ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
 
-python $controller @$ARGS_PATH/physionpp-dropfluid/pilot_it2_drop_all_bowls_box/commandline_args.txt --port 1071 --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/drop/pilot_it2_drop_all_bowls_box  --height 128 --width 128
+#python $controller @$ARGS_PATH/physionpp-dropfluid/pilot_it2_drop_all_bowls_box/commandline_args.txt --port 1071 --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/drop/pilot_it2_drop_all_bowls_box  --height 128 --width 128
 
 #python tdw_physics/target_controllers/drop.py @/home/htung/Documents/2021/human-physics-benchmarking/stimuli/generation/pilot-drop/iteration-1/pilot_it1_drop_all_bowls_box/commandline_args.txt --dir data/drop/pilot_it1_drop_all_bowls_box --save_meshes  --temp "D:/temp.hdf5"  --num 10 --height 128 --width 128
+
+
+
+
+##########cloth##################################
+controller="tdw_physics/target_controllers/cloth_drop_var.py"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+
+python $controller @$ARGS_PATH/physionpp-dropfluid/pilot_it2_drop_all_bowls_box/commandline_args.txt --port 1071 --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_all_bowls_box  --height 128 --width 128
 
 # try to add a robot
 # controller="tdw_physics/target_controllers/dominoes_var_continue.py"
