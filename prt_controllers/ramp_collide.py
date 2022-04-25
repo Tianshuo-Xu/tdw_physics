@@ -253,11 +253,13 @@ class Drop(RigidbodiesDataset):
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
-                     frame_num: int) -> \
+                     frame_num: int,
+                     view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
-                                                         frame_num=frame_num)
+                                                         frame_num=frame_num,
+                                                         view_num=view_num)
         # If this is a stable structure, disregard whether anything is actually moving.
         return frame, objs, tr, sleeping and frame_num < 300
 

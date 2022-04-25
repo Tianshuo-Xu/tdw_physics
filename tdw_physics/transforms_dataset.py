@@ -101,15 +101,29 @@ class TransformsDataset(Dataset, ABC):
 
         return commands
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num:int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(self.object_ids)
 
         # Create a group for this frame.
-        frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
 
-        # Create a group for images.
-        images = frame.create_group("images")
+        if view_num is None or view_num == 0:
+            # Create a group for the frame
+            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+
+            # Create a group for images.
+            images = frame.create_group("images")
+
+            camera_matrices = frame.create_group("camera_matrices")
+            objs = frame.create_group("objects")
+        else:
+            frame = frames_grp
+            images = frame["images"]
+            camera_matrices = frame["camera_matrices"]
+            objs = frame["objects"]
+
+
+        cam_suffix = '' if view_num is None else f'_cam{view_num}'
 
         # Transforms data.
         positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
@@ -121,7 +135,6 @@ class TransformsDataset(Dataset, ABC):
         for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
             bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
 
-        camera_matrices = frame.create_group("camera_matrices")
 
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
@@ -149,7 +162,9 @@ class TransformsDataset(Dataset, ABC):
                 im = Images(r)
                 # Add each image.
                 for i in range(im.get_num_passes()):
-                    pass_mask = im.get_pass_mask(i)
+
+                    pass_mask = im.get_pass_mask(i) + cam_suffix
+
                     # Reshape the depth pass array.
                     if pass_mask == "_depth":
                         image_data = TDWUtils.get_shaped_depth_pass(images=im, index=i)
@@ -188,18 +203,17 @@ class TransformsDataset(Dataset, ABC):
             # Add the camera matrices.
             elif OutputData.get_data_type_id(r) == "cama":
                 matrices = CameraMatrices(r)
-                camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
-                camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
+
+                camera_matrices.create_dataset("projection_matrix" + cam_suffix, data=matrices.get_projection_matrix())
+                camera_matrices.create_dataset("camera_matrix" + cam_suffix, data=matrices.get_camera_matrix())
 
 
-    
 
-        objs = frame.create_group("objects")
-        objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+        objs.create_dataset("positions" + cam_suffix, data=positions.reshape(num_objects, 3), compression="gzip")
+        objs.create_dataset("forwards" + cam_suffix, data=forwards.reshape(num_objects, 3), compression="gzip")
+        objs.create_dataset("rotations" + cam_suffix, data=rotations.reshape(num_objects, 4), compression="gzip")
         for bound_type in bounds.keys():
-            objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+            objs.create_dataset(bound_type + cam_suffix, data=bounds[bound_type], compression="gzip")
 
         return frame, objs, tr_dict, False
 

@@ -236,3 +236,24 @@ if __name__ == '__main__':
         models = _models.records
         print([r.name for r in models \
                if r.do_not_use])
+
+
+def cart2sphe(cart):
+    """ Convert cartesian coordinates to spherical coordinates (Y-up) """
+    hypot_xz = np.hypot(cart['x'], cart['z'])
+    sphe = {
+        'azimuth': np.arctan2(cart['z'], cart['x']),
+        'elevation': np.arctan2(cart['y'], hypot_xz),
+        'radius': np.hypot(hypot_xz, cart['y'])
+    }
+    return sphe
+
+def sphe2cart(sphe):
+    """ Convert spherical coordinates to cartesian coordinates (Y-up)"""
+    hypot_xz = sphe['radius'] * np.cos(sphe['elevation'])
+    cart = {
+        'x': hypot_xz * np.cos(sphe['azimuth']),
+        'z': hypot_xz * np.sin(sphe['azimuth']),
+        'y': sphe['radius'] * np.sin(sphe['elevation']),
+    }
+    return cart

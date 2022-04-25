@@ -22,7 +22,7 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
                                                get_across_trial_stats_from)
 from tdw_physics.util_geom import save_obj
 import shutil
-
+import tdw_physics.util as util
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
@@ -71,6 +71,7 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
+        self.num_views = kwargs.get('num_views', None)
     def communicate(self, commands) -> list:
         '''
         Save a log of the commands so that they can be rerun
@@ -430,13 +431,16 @@ class Dataset(Controller, ABC):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
         self._write_frame_labels(frame_grp, resp, -1, False)
 
         # Continue the trial. Send commands, and parse output data.
+        if self.num_views > 1:
+            multi_camera_positions = self.generate_multi_camera_positions(add_noise=False)
+
         while not done:
             frame += 1
-            # print('frame %d' % frame)
+            print('frame %d' % frame)
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
@@ -446,10 +450,27 @@ class Dataset(Controller, ABC):
             #     print("retrying frame %d, response only had %s" % (frame, r_ids))
             #     frame -= 1
             #     continue
-            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            if self.num_views > 1:
+                for view_num in range(self.num_views):
+                    # if view_num == 0 or frame == view_num:
+                    camera_position = multi_camera_positions[view_num]
+                    commands = self.move_camera_commands(camera_position, [])
+                    _resp = self.communicate(commands)
+                    print('\tview %d' % view_num)
+                    frame_grp, objs_grp, tr_dict, done = self._write_frame(
+                        frames_grp=frames_grp if view_num == 0 else frame_grp,
+                        resp=_resp, frame_num=frame, view_num=view_num)
+
+            else:
+                frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
 
             # Write whether this frame completed the trial and any other trial-level data
+
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+            if frame > 5:
+                break
 
         # Cleanup.
         commands = []
@@ -472,8 +493,10 @@ class Dataset(Controller, ABC):
 
         # Save out the target/zone segmentation mask
         if (self.zone_id in self.object_ids) and (self.target_id in self.object_ids):
-
-            _id = f['frames']['0000']['images']['_id']
+            try:
+                _id = f['frames']['0000']['images']['_id']
+            except:
+                _id = f['frames']['0000']['images']['_id_cam0']
             #get PIL image
             _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
             #get colors
@@ -504,6 +527,49 @@ class Dataset(Controller, ABC):
         except OSError:
             shutil.move(temp_path, filepath)
 
+    def generate_multi_camera_positions(self, add_noise=True):
+        '''
+        Generate multiple camera positions based on azimuth rotation
+        '''
+
+        azimuth_delta = 2 * np.pi / self.num_views  # delta rotation angle
+        init_pos_cart = self.camera_position # initial camera position (cartesian coordinate)
+        init_pos_sphe = util.cart2sphe(init_pos_cart) # initial camera position (spherical coordinate)
+        new_pos_sphe = copy.deepcopy(init_pos_sphe)
+
+        camera_pos_list = []
+        for i in range(self.num_views):
+            noise = (random.random() - 0.5) * azimuth_delta if add_noise else 0. # add noise to the azimuth rotation angles
+            azimuth = init_pos_sphe['azimuth'] + i * azimuth_delta + noise # rotation for a new camera view
+            new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
+            new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
+            camera_pos_list.append(new_pos_cart)
+        return camera_pos_list
+
+        # # save azimuth
+        # az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
+        # az_rot_mat_2d = np.array([[math.cos(az_ori), - math.sin(az_ori)],
+        #                           [math.sin(az_ori), math.cos(az_ori)]])
+        # az_rot_mat = np.eye(3)
+        # az_rot_mat[:2, :2] = az_rot_mat_2d
+        #
+        # transformation_save_name = './tdw_multiview_simple/sc%s_img%s_azi_rot.txt' % (format(trial_num, '04d'), view_id)
+        # print('Save azi rot to ', transformation_save_name)
+        # np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
+
+    def move_camera_commands(self, camera_pos, commands):
+        self._set_avatar_attributes(camera_pos)
+
+        commands.extend([
+            {"$type": "teleport_avatar_to", "position": camera_pos},
+            {"$type": "look_at_position", "position": self.camera_aim},
+            {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(camera_pos, self.camera_aim)},
+            # {"$type": "set_camera_clipping_planes", "near": 2., "far": 12}
+        ])
+        return commands
+
+
+
     @staticmethod
     def rotate_vector_parallel_to_floor(
             vector: Dict[str, float],
@@ -519,6 +585,7 @@ class Dataset(Controller, ABC):
         v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
 
         return {'x': v_x_new, 'y': vector['y'], 'z': v_z_new}
+
 
     @staticmethod
     def scale_vector(
@@ -619,7 +686,7 @@ class Dataset(Controller, ABC):
             static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
 
     @abstractmethod
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         """
         Write a frame to the hdf5 file.
@@ -637,6 +704,7 @@ class Dataset(Controller, ABC):
                             frame_grp: h5py.Group,
                             resp: List[bytes],
                             frame_num: int,
+
                             sleeping: bool) -> Tuple[h5py.Group, bool]:
         """
         Writes the trial-level data for this frame.
@@ -649,6 +717,7 @@ class Dataset(Controller, ABC):
         :return: Tuple(h5py.Group labels, bool done): the labels data and whether this is the last frame of the trial.
         """
         labels = frame_grp.create_group("labels")
+
         if frame_num > 0:
             complete = self.is_done(resp, frame_num)
         else:

@@ -101,6 +101,10 @@ def get_args(dataset_dir: str):
     parser.add_argument("--launch_build",
                         action="store_true",
                         help="Whether to launch the build")
+    parser.add_argument("--num_views",
+                        type=int,
+                        default=1,
+                        help="Number of views / cameras")
 
     args = parser.parse_args()
     args = playroom_postproc(args)
@@ -153,6 +157,29 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
         model_splits[i] = rng.permutation(sorted([r.name for r in models_here]))[:num]
 
     return model_splits
+
+def build_simple_scenario(models, num_trials, seed, num_distractors, permute=True):
+    rng = np.random.RandomState(seed=seed)
+
+    scenarios = []
+    for i in range(num_trials):
+        permute_models = rng.permutation(models) if permute else models
+
+        scene = {
+            'probe': permute_models[0],
+            'target': permute_models[1],
+            'occluder': permute_models[2]
+        }
+
+        if num_distractors > 0:
+            scene['distractor'] = permute_models[3]
+
+        scene['apply_force_to'] = 'probe'
+
+        scenarios.append(scene)
+
+    return scenarios
+
 
 def build_scenarios(moving_models,
                     static_models,
@@ -275,7 +302,8 @@ def build_controller(args, launch_build=True):
         match_probe_and_target_color=args.match_probe_and_target_color,
         size_min=None,
         size_max=None,
-        probe_initial_height=0.25
+        probe_initial_height=0.25,
+        num_views=args.num_views
     )
 
     return C
@@ -318,6 +346,10 @@ def main(args):
                                 group_order=args.group_order,
                                 randomize_moving_object=args.randomize_moving_object
                                 )
+
+    # models_simple = ['cube'] * 4
+    # scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed,
+    #                                   num_distractors=args.num_distractors, permute=True)
 
     start, end = args.start, (args.end or len(scenarios))
 

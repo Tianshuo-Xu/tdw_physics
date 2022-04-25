@@ -130,9 +130,9 @@ class FlexDataset(TransformsDataset, ABC):
             for key in actor_data:
                 actors_group.create_dataset(key, data=actor_data[key])
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
-        frame, objs, tr, done = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num)
+        frame, objs, tr, done = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
         particles_group = frame.create_group("particles")
         velocities_group = frame.create_group("velocities")
         for r in resp[:-1]:
