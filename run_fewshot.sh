@@ -1,5 +1,14 @@
 ############# dominoes ##################
 
+
+controller="tdw_physics/target_controllers/dominoes_base.py"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+ARGS_PATH2=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+
+controller="tdw_physics/target_controllers/multis_main.py"
+python $controller --scenario_types="dominoes,dominoes" @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt \
+--secondscene_args=$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_2middle_tdwroom_fixedcam/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dominoes3/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128
+
 controller="tdw_physics/target_controllers/dominoes_var.py"
 ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
 
@@ -28,7 +37,7 @@ ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/g
 controller="tdw_physics/target_controllers/cloth_drop_var.py"
 ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
 
-python $controller @$ARGS_PATH/physionpp-dropfluid/pilot_it2_drop_all_bowls_box/commandline_args.txt --port 1071 --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_all_bowls_box  --height 128 --width 128
+#python $controller @$ARGS_PATH/physionpp-dropfluid/pilot_it2_drop_all_bowls_box/commandline_args.txt --port 1071 --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_all_bowls_box  --height 128 --width 128
 
 # try to add a robot
 # controller="tdw_physics/target_controllers/dominoes_var_continue.py"
@@ -47,7 +56,7 @@ ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/g
 ######### clothSagging ###############################
 
 controller="tdw_physics/target_controllers/cloth_sagging.py"
-ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarkin3g-neurips2021-htung/stimuli/generation/configs"
 #python $controller @$ARGS_PATH/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir dump/dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam --num 200 --height 128 --width 128
 
 #python $controller @$ARGS_PATH/drape/test11/commandline_args.txt --dir dump/drape/test11 --num 200 --height 128 --width 128
