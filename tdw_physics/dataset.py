@@ -436,7 +436,8 @@ class Dataset(Controller, ABC):
 
         # Continue the trial. Send commands, and parse output data.
         if self.num_views > 1:
-            multi_camera_positions = self.generate_multi_camera_positions(add_noise=False)
+            azimuth_grp = f.create_group("azimuth")
+            multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=False)
 
         while not done:
             frame += 1
@@ -466,7 +467,6 @@ class Dataset(Controller, ABC):
                 frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
 
             # Write whether this frame completed the trial and any other trial-level data
-
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
 
             if frame > 5:
@@ -527,7 +527,7 @@ class Dataset(Controller, ABC):
         except OSError:
             shutil.move(temp_path, filepath)
 
-    def generate_multi_camera_positions(self, add_noise=True):
+    def generate_multi_camera_positions(self, azimuth_grp, add_noise=True):
         '''
         Generate multiple camera positions based on azimuth rotation
         '''
@@ -544,18 +544,16 @@ class Dataset(Controller, ABC):
             new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
             new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
             camera_pos_list.append(new_pos_cart)
-        return camera_pos_list
 
-        # # save azimuth
-        # az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
-        # az_rot_mat_2d = np.array([[math.cos(az_ori), - math.sin(az_ori)],
-        #                           [math.sin(az_ori), math.cos(az_ori)]])
-        # az_rot_mat = np.eye(3)
-        # az_rot_mat[:2, :2] = az_rot_mat_2d
-        #
-        # transformation_save_name = './tdw_multiview_simple/sc%s_img%s_azi_rot.txt' % (format(trial_num, '04d'), view_id)
-        # print('Save azi rot to ', transformation_save_name)
-        # np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
+            # save azimuth rotation matrix (for uORF training)
+            az_ori = azimuth + np.pi  # since cam faces world origin, its orientation azimuth differs by pi
+            az_rot_mat_2d = np.array([[np.cos(az_ori), - np.sin(az_ori)],
+                                      [np.sin(az_ori), np.cos(az_ori)]])
+            az_rot_mat = np.eye(3)
+            az_rot_mat[:2, :2] = az_rot_mat_2d
+            azimuth_grp.create_dataset(f"cam{i}", data=az_rot_mat)
+
+        return camera_pos_list
 
     def move_camera_commands(self, camera_pos, commands):
         self._set_avatar_attributes(camera_pos)

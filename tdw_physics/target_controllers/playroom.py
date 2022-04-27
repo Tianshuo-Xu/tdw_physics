@@ -429,11 +429,9 @@ class Playroom(Collision):
         if frame > 150:
             return True
         elif (not self._is_object_in_view(resp, self.probe_id)):
-            return False
             print('Stop since obbject is not in view')
             return True
         elif (self._max_optical_flow(resp) < self.flow_thresh) and (frame > (self.force_wait + 5)):
-            return False
             print('Stop since flow is small')
             return True
         else:

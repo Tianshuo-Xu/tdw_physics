@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-trial = '/home/honglinc/tdw_physics/rotate_data/model_split_0/0000.hdf5'
+trial = '/home/honglinc/tdw_physics/test_data/model_split_0/0000.hdf5'
 passes = ['_img', '_id', '_normal']
 num_views = 4
 f = h5py.File(trial, "r")
 
-
+breakpoint()
 # for fid, frame_num in enumerate(list(f["frames"].keys())[1:]):
 #     print(fid, frame_num)
 #     data = f["frames"][frame_num]['images'] # data for each frame
