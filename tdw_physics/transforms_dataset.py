@@ -75,6 +75,7 @@ class TransformsDataset(Dataset, ABC):
 
         # Log the static data.
         self.object_ids = np.append(self.object_ids, o_id)
+        self.object_names.append(record.name)
 
         if add_data:
             self.initial_positions = np.append(self.initial_positions, position)

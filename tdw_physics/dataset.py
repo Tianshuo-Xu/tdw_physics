@@ -88,6 +88,7 @@ class Dataset(Controller, ABC):
     '''
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+        self.object_names = []
         self.model_names = []
         self._initialize_object_counter()
 
@@ -377,6 +378,8 @@ class Dataset(Controller, ABC):
                         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
                         vertices, faces = self.object_meshes[o_id]
                         save_obj(vertices, faces, obj_filename)
+                        print(self.object_ids, self.object_names, self.model_names)
+                        save_obj(vertices, faces, os.path.join('./save_obj', f'{self.object_names[o_id-1]}.obj'))
 
                 if do_log:
                     end = time.time()
