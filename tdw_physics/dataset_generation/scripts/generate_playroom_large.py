@@ -26,6 +26,14 @@ NUM_STATIC_MODELS = 1000
 NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
 
+# All the models with flex enabled
+
+FLEX_MODELS  = {}
+for filename in MODEL_LIBRARIES.keys():
+    FLEX_MODELS[filename] = [record.name for record in MODEL_LIBRARIES[filename].records if record.flex == True]
+
+
+
 def _record_usable(record_name):
     if 'composite' in record_name:
         non_composite_name = record_name.split('_composite')[0]
@@ -358,8 +366,10 @@ def main(args):
     # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = ['cube'] * 4
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray']
+    models_simple = ['labrador_retriever_puppy', 'b05_grizzly', 'b04_horse_body_mesh' , 'b03_zebra_body', 'b03_calf', '688926_elephant', '129601_sheep', 'b03_dove_polysurface1', 'b05_figure_2_node', 'b04_duck']
+
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
-    models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
+    # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
 
@@ -404,7 +414,7 @@ def main(args):
     Play.write_passes = args.write_passes.split(',')
     Play.save_passes = args.save_passes.split(',')
     Play.save_movies = args.save_movies
-    Play.save_meshes = False
+    Play.save_meshes = args.save_meshes
     Play.save_labels = False
 
     log_cmds = [{"$type": "set_network_logging", "value": True}]

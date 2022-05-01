@@ -1383,6 +1383,7 @@ class Dominoes(RigidbodiesDataset):
         print('Probe object scale: ', scale)
         print('Probe object position: ', self.probe_initial_position)
         print('Probe object rotation: ', rot)
+        print('Probe object record: ', record.name)
 
         commands.extend(
             self.add_primitive(

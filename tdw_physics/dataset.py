@@ -457,7 +457,7 @@ class Dataset(Controller, ABC):
                 if azimuth_rotation:
                     delta_az_list = [x / self.num_views * np.pi * 2 for x in range(self.num_views)]
                     az_range = 2 * np.pi / self.num_views
-                    origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.5}
+                    origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
                 else:

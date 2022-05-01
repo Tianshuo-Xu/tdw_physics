@@ -109,8 +109,9 @@ class TransformsDataset(Dataset, ABC):
         num_objects = len(self.object_ids)
 
         # Create a group for this frame.
-        # frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
         frame = None
+        if view_id == 0 or view_id is None:
+            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
 
         # Create a group for images.
         # images = frame.create_group("images")
@@ -254,12 +255,13 @@ class TransformsDataset(Dataset, ABC):
                 # camera_matrices.create_dataset("camera_matrix", data=matrices.get_camera_matrix())
 
         objs = None
-        # objs = frame.create_group("objects")
-        # objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
-        # objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
-        # objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
-        # for bound_type in bounds.keys():
-        #     objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+        if view_id == 0 or view_id is None:
+            objs = frame.create_group("objects")
+            objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
+            objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
+            objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+            for bound_type in bounds.keys():
+                objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
 
         return frame, objs, tr_dict, False, camera_matrix
 
