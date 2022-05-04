@@ -480,7 +480,6 @@ class Playroom(Collision):
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 
-        print('Positions: ', positions)
         self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
         # Choose and place a target object.
         commands.extend(self._place_target_object())

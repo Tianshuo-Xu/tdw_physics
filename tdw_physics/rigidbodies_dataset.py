@@ -541,7 +541,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             obj_points = []
             for idx, object_id in enumerate(self.object_ids):
                 vertices, faces = self.object_meshes[object_id]
-                print('Faces, vertices: ', object_id, faces.shape, vertices.shape)
                 mesh_group.create_dataset(f"faces_{idx}", data=faces)
                 mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
 

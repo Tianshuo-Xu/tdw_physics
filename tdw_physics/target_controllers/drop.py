@@ -517,6 +517,7 @@ class Drop(MultiDominoes):
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
 
+
         return commands
 
 if __name__ == "__main__":

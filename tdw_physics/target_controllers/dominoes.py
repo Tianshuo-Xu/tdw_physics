@@ -860,7 +860,9 @@ class Dominoes(RigidbodiesDataset):
                  "thickness": 3.5},
                 # {"$type": "set_ambient_intensity",
                 #  "intensity": 1.2},
-                {"$type": "set_shadow_strength", "strength": 0.40}
+                {"$type": "set_shadow_strength", "strength": 0.40},
+                {"$type": "rotate_directional_light_by", "angle": 90, "axis": "pitch", "index": 0},
+                # {"$type": "adjust_directional_light_intensity_by", "intensity": 0.}
 
                 ]
 
@@ -1226,6 +1228,7 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
+            self.object_scale_factors = self.object_scale_factors[:-1]
 
         return commands
 
@@ -1329,6 +1332,7 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": self._get_destroy_object_command_name(o_id),
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
+            self.object_scale_factors = self.object_scale_factors[:-1]
 
         return commands
 

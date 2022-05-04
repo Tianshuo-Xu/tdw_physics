@@ -55,11 +55,20 @@ class Dataset(Controller, ABC):
                  seed: int=0,
                  save_args=True,
                  num_views=1,
+                 start=0,
                  **kwargs
     ):
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
+
+        if platform.system() == 'Linux':
+            os.environ["DISPLAY"] = ":6"
+
+            # if args.gpu is not None:
+            #     os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+            # else:
+            #     os.environ["DISPLAY"] = ":0"
 
         super().__init__(port=port,
                          check_version=check_version,
@@ -69,11 +78,13 @@ class Dataset(Controller, ABC):
         self.randomize = randomize
         self.seed = seed
         self.num_views = num_views
+        self.start = start
 
         if not bool(self.randomize):
             random.seed(self.seed)
             print("SET RANDOM SEED: %d" % self.seed)
             print("NUMBER OF VIEWS: %d" % self.num_views)
+            print('STARTING TRIAL NUMBER: %d' % self.start)
 
 
         # fluid actors need to be handled separately
@@ -88,6 +99,7 @@ class Dataset(Controller, ABC):
     '''
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+        self.object_scale_factors = []
         self.object_names = []
         self.model_names = []
         self._initialize_object_counter()
@@ -322,68 +334,77 @@ class Dataset(Controller, ABC):
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
         for f in output_dir.glob("*.hdf5"):
-            if int(f.stem) > exists_up_to:
-                exists_up_to = int(f.stem)
+            if int(f.stem.replace('sc', '')) > exists_up_to:
+                exists_up_to = int(f.stem.replace('sc', ''))
 
         if exists_up_to > 0:
             print('Trials up to %d already exist, skipping those' % exists_up_to)
 
         pbar.update(exists_up_to)
+
+        if self.start > 0:
+            exists_up_to = self.start
+            num = self.start + num
+
         for i in range(exists_up_to, num):
-            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+            trial_num = i
+            filepath = output_dir.joinpath('sc'+TDWUtils.zero_padding(trial_num, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
             ## update the controller state
-            self.update_controller_state(**update_kwargs[i])
+            self.update_controller_state(**update_kwargs[i-self.start])
 
             if not filepath.exists():
                 if do_log:
                     start = time.time()
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+                    logging.info("Starting trial << %d >> with kwargs %s" % (trial_num, update_kwargs[i-self.start]))
+
                 # Save out images
                 self.png_dir = None
+                self.output_dir = output_dir
+
                 if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(trial_num, 4))
                     if not self.png_dir.exists():
                         self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
                 self.trial(filepath=filepath,
                            temp_path=temp_path,
-                           trial_num=i,
+                           trial_num=trial_num,
                            unload_assets_every=unload_assets_every)
 
-                # Save an MP4 of the stimulus
-                if self.save_movies:
-                    for pass_mask in self.save_passes:
-                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
-                        cmd, stdout, stderr = pngs_to_mp4(
-                            filename=mp4_filename,
-                            image_stem=pass_mask[1:]+'_',
-                            png_dir=self.png_dir,
-                            size=[self._height, self._width],
-                            overwrite=True,
-                            remove_pngs=(True if save_frame is None else False),
-                            use_parent_dir=False)
+                # # Save an MP4 of the stimulus
+                # if self.save_movies:
+                #     for pass_mask in self.save_passes:
+                #         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                #         cmd, stdout, stderr = pngs_to_mp4(
+                #             filename=mp4_filename,
+                #             image_stem=pass_mask[1:]+'_',
+                #             png_dir=self.png_dir,
+                #             size=[self._height, self._width],
+                #             overwrite=True,
+                #             remove_pngs=(True if save_frame is None else False),
+                #             use_parent_dir=False)
+                #
+                #     if save_frame is not None:
+                #         frames = os.listdir(str(self.png_dir))
+                #         sv = sorted(frames)[save_frame]
+                #         png = output_dir.joinpath(TDWUtils.zero_padding(trial_num, 4) + ".png")
+                #         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+                #
+                #     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
-                    if save_frame is not None:
-                        frames = os.listdir(str(self.png_dir))
-                        sv = sorted(frames)[save_frame]
-                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
-                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
-
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
-                if self.save_meshes:
-                    for o_id in self.object_ids:
-                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                        vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
-                        print(self.object_ids, self.object_names, self.model_names)
-                        save_obj(vertices, faces, os.path.join('./save_obj', f'{self.object_names[o_id-1]}.obj'))
+                # if self.save_meshes:
+                #     for o_id in self.object_ids:
+                #         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                #         vertices, faces = self.object_meshes[o_id]
+                #         save_obj(vertices, faces, obj_filename)
+                #         save_obj(vertices, faces, os.path.join('./save_obj', f'{self.object_names[o_id-1]}.obj'))
 
                 if do_log:
                     end = time.time()
-                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (trial_num, self.trial_seed, int(end-start)))
             pbar.update(1)
         pbar.close()
 
@@ -480,8 +501,8 @@ class Dataset(Controller, ABC):
                             az_rot_mat = np.eye(3)
                             az_rot_mat[:2, :2] = az_rot_mat_2d
 
-                            transformation_save_name = './tdw_multiview_simple/sc%s_frame%d_img%s_azi_rot.txt' % (format(trial_num, '04d'), frame, view_id)
-                            print('Save azi rot to ', transformation_save_name)
+                            transformation_save_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s_azi_rot.txt' % (format(trial_num, '04d'), frame, view_id))
+                            # print('Save azi rot to ', transformation_save_name)
                             np.savetxt(transformation_save_name, az_rot_mat, fmt='%.5f')
 
                         else:
@@ -928,8 +949,9 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
-
-                assert(len(self.object_ids) == nmeshes)
+                if not len(self.object_ids) == nmeshes:
+                    breakpoint()
+                # assert(len(self.object_ids) == nmeshes), breakpoint()
                 for index in range(nmeshes):
                     o_id = meshes.get_object_id(index)
                     vertices = meshes.get_vertices(index)

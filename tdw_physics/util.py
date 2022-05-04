@@ -128,7 +128,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     :return: Parsed command-line arguments common to all controllers.
     """
     parser = argparse.ArgumentParser(add_help=get_help)
-    parser.add_argument("--port", type=int, default=None, help="Which port to communicate with build")
+    parser.add_argument("--port", type=int, default=1071, help="Which port to communicate with build")
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
     parser.add_argument("--num", type=int, default=3, help="The number of trials in the dataset.")
     parser.add_argument("--num_multiplier", type=float, default=1.0, help="Multiply the number of trials by this factor")

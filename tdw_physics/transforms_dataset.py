@@ -13,6 +13,7 @@ from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
 from PIL import Image
 import io
 import json
+import os
 
 class TransformsDataset(Dataset, ABC):
     """
@@ -75,7 +76,8 @@ class TransformsDataset(Dataset, ABC):
 
         # Log the static data.
         self.object_ids = np.append(self.object_ids, o_id)
-        self.object_names.append(record.name)
+        self.object_scale_factors.append(record.scale_factor)
+        # self.object_names.append(record.name)
 
         if add_data:
             self.initial_positions = np.append(self.initial_positions, position)
@@ -184,9 +186,9 @@ class TransformsDataset(Dataset, ABC):
                             # im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
 
                             if pass_mask == '_id':
-                                img_name = './tdw_multiview_simple/sc%s_frame%d_img%s_mask.png' % (format(trial_num, '04d'), frame_num, view_id)
+                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s_mask.png' % (format(trial_num, '04d'), frame_num, view_id))
                             elif pass_mask == '_img':
-                                img_name = './tdw_multiview_simple/sc%s_frame%d_img%s.png' % (format(trial_num, '04d'), frame_num, view_id)
+                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s.png' % (format(trial_num, '04d'), frame_num, view_id))
                             else:
                                 break
 
@@ -194,7 +196,7 @@ class TransformsDataset(Dataset, ABC):
                         # images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
-                    if pass_mask in self.save_passes:
+                    if pass_mask in self.save_passes and self.png_dir is not None:
                         filename = pass_mask[1:] + "_" + TDWUtils.zero_padding(frame_num, 4) + "." + im.get_extension(i)
                         path = self.png_dir.joinpath(filename)
                         if pass_mask in ["_depth", "_depth_simple"]:
@@ -248,8 +250,8 @@ class TransformsDataset(Dataset, ABC):
                     # adapted from: https://stackoverflow.com/questions/1263072/changing-a-matrix-from-right-handed-to-left-handed-coordinate-system
                     z_up_camera_matrix = toggle_yz @ y_up_camera_matrix @ toggle_yz
                     inverted_camera_matrix = np.linalg.inv(z_up_camera_matrix)
-                    transformation_save_name = './tdw_multiview_simple/sc%s_frame%d_img%s_RT.txt' % (format(trial_num, '04d'), frame_num, view_id)
-                    print('Save inverted camera matrix to ', transformation_save_name)
+                    transformation_save_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s_RT.txt' % (format(trial_num, '04d'), frame_num, view_id))
+                    # print('Save inverted camera matrix to ', transformation_save_name)
                     np.savetxt(transformation_save_name, inverted_camera_matrix)
 
                 # camera_matrices.create_dataset("projection_matrix", data=matrices.get_projection_matrix())
@@ -261,6 +263,8 @@ class TransformsDataset(Dataset, ABC):
             objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
             objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
             objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+            objs.create_dataset("scale_factor", data=np.array(self.object_scale_factors).reshape(num_objects, 1), compression="gzip")
+
             for bound_type in bounds.keys():
                 objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
 

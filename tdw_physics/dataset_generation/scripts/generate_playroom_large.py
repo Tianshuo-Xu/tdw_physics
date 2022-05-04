@@ -317,7 +317,8 @@ def build_controller(args, launch_build=True):
         size_min=None,
         size_max=None,
         probe_initial_height=0.25,
-        num_views=args.num_views
+        num_views=args.num_views,
+        start=args.start
     )
 
     return C
@@ -371,7 +372,7 @@ def main(args):
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=1000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
+    scenarios = build_simple_scenario(models_simple, num_trials=2000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
 
     start, end = args.start, (args.end or len(scenarios))
 
@@ -388,7 +389,7 @@ def main(args):
         return suffix
 
     suffix = _get_suffix(args.split, args.group_order) if not args.validation_set else 'val'
-    output_dir = Path(args.dir).joinpath('model_split_' + suffix)
+    output_dir = Path(args.dir) # .joinpath('model_split_' + suffix)
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
     temp_path = Path('tmp' + str(args.gpu))
@@ -406,7 +407,6 @@ def main(args):
     ## init the controller
     if (args.seed == -1) or (args.seed is None):
         args.seed = int(args.split) + num_moving_splits * args.group_order[0]
-
 
     Play = build_controller(args)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
