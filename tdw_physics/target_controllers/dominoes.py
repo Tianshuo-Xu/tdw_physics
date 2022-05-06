@@ -844,8 +844,8 @@ class Dominoes(RigidbodiesDataset):
         elif self.room == 'house':
             add_scene = self.get_add_scene(scene_name='archviz_house')
         elif self.room == 'random_kitchen':
-            add_scene = self.get_add_scene(scene_name="box_room_2018")
-            # add_scene = self.get_add_scene(scene_name=random.choice([i for i in ROOMS if 'kitchen_1' in i]))
+            # add_scene = self.get_add_scene(scene_name="box_room_2018")
+            add_scene = self.get_add_scene(scene_name=random.choice([i for i in ROOMS]))
             print('Add scene: ', add_scene)
         else:
             add_scene = self.get_add_scene(scene_name=self.room)

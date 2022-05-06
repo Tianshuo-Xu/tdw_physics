@@ -56,6 +56,7 @@ class Dataset(Controller, ABC):
                  save_args=True,
                  num_views=1,
                  start=0,
+                 scale_factor_dict=None,
                  **kwargs
     ):
         # save the command-line args
@@ -63,7 +64,8 @@ class Dataset(Controller, ABC):
         self._trial_num = None
 
         if platform.system() == 'Linux':
-            os.environ["DISPLAY"] = ":6"
+            os.environ["DISPLAY"] = ":5"
+
 
             # if args.gpu is not None:
             #     os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
@@ -89,6 +91,7 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
+        self.scale_factor_dict = scale_factor_dict
 
     '''
     def communicate(self, commands) -> list:
@@ -423,6 +426,7 @@ class Dataset(Controller, ABC):
 
         # Clear the object IDs and other static data
         self.clear_static_data()
+        print('\tObject ids after clear static state: ', self.object_ids)
         self._trial_num = trial_num
 
         # Create the .hdf5 file.
@@ -434,6 +438,8 @@ class Dataset(Controller, ABC):
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
+        # if args.room == 'random_kitchen':
+        #     commands.extend(self.get_scene_initialization_commands())
         commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
         commands.extend(self._get_send_data_commands())
@@ -442,6 +448,8 @@ class Dataset(Controller, ABC):
         r_types = ['']
         count = 0
         resp = self.communicate(commands)
+
+        print('\tObject ids after sending commands: ', self.object_ids)
 
         self._set_segmentation_colors(resp)
 
@@ -456,6 +464,8 @@ class Dataset(Controller, ABC):
         frames_grp = f.create_group("frames")
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
         self._write_frame_labels(frames_grp, resp, -1, False)
+
+        print('\tObject ids before looping: ', self.object_ids)
 
         # Continue the trial. Send commands, and parse output data.
         a_pos_dict = {}
@@ -538,15 +548,21 @@ class Dataset(Controller, ABC):
 
                 # Write whether this frame completed the trial and any other trial-level data
                 # labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
+
+                print('\tObject ids after end of frame %d: ' % frame, self.object_ids)
+
                 if frame == end_frame:
                     break
 
         # Cleanup.
         commands = []
+        print('Object ids before destroy: ', self.object_ids)
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
-        self.communicate(commands)
+        for cmd in commands:
+            print('Destroy: ', cmd)
+            self.communicate(cmd)
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
@@ -949,9 +965,7 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
-                if not len(self.object_ids) == nmeshes:
-                    breakpoint()
-                # assert(len(self.object_ids) == nmeshes), breakpoint()
+                assert(len(self.object_ids) == nmeshes)
                 for index in range(nmeshes):
                     o_id = meshes.get_object_id(index)
                     vertices = meshes.get_vertices(index)

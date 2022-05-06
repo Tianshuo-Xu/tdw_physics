@@ -74,19 +74,24 @@ class TransformsDataset(Dataset, ABC):
         if o_id is None:
             o_id: int = Controller.get_unique_id()
 
-        # Log the static data.
+        if self.scale_factor_dict is not None:
+            scale_factor = record.scale_factor * self.scale_factor_dict[record.name]
+        else:
+            scale_factor = record.scale_factor
+            # Log the static data.
         self.object_ids = np.append(self.object_ids, o_id)
-        self.object_scale_factors.append(record.scale_factor)
+        self.object_scale_factors.append(scale_factor)
         # self.object_names.append(record.name)
 
         if add_data:
             self.initial_positions = np.append(self.initial_positions, position)
             self.initial_rotations = np.append(self.initial_rotations, rotation)
 
+
         return {"$type": "add_object",
                 "name": record.name,
                 "url": record.get_url(),
-                "scale_factor": record.scale_factor,
+                "scale_factor": scale_factor,
                 "position": position,
                 "rotation": rotation,
                 "category": record.wcategory,
@@ -149,6 +154,7 @@ class TransformsDataset(Dataset, ABC):
                     tr_dict.update({tr.get_id(i): {"pos": pos,
                                                    "for": tr.get_forward(i),
                                                    "rot": tr.get_rotation(i)}})
+
                 # Add the Transforms data.
                 for o_id, i in zip(self.object_ids, range(num_objects)):
                     if o_id not in tr_dict:

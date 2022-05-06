@@ -255,7 +255,7 @@ def build_scenarios(moving_models,
 
     return scenarios
 
-def build_controller(args, launch_build=True):
+def build_controller(args, scale_dict, launch_build=True):
 
     C = Playroom(
         launch_build=args.launch_build,
@@ -318,7 +318,8 @@ def build_controller(args, launch_build=True):
         size_max=None,
         probe_initial_height=0.25,
         num_views=args.num_views,
-        start=args.start
+        start=args.start,
+        scale_factor_dict=scale_dict,
     )
 
     return C
@@ -367,14 +368,71 @@ def main(args):
     # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = ['cube'] * 4
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray']
-    models_simple = ['labrador_retriever_puppy', 'b05_grizzly', 'b04_horse_body_mesh' , 'b03_zebra_body', 'b03_calf', '688926_elephant', '129601_sheep', 'b03_dove_polysurface1', 'b05_figure_2_node', 'b04_duck']
+    # 10obj zoo
+
+    zoo_scale_dict = {
+        'labrador_retriever_puppy': 1.,
+        'b05_grizzly': 1.,
+        'b04_horse_body_mesh': 1.,
+        'b03_zebra_body': 1.,
+        'b03_calf': 1.,
+        '688926_elephant':1.,
+        '129601_sheep': 1.,
+        'b03_dove_polysurface1': 1.,
+        'b05_figure_2_node': 1.,
+        'b04_duck': 1.
+    }
+
+    kitchen_scale_dict = {
+        'b04_orange_00': 0.6,
+        'appliance-ge-profile-microwave3': 0.8,
+        'b01_croissant': 0.8,
+        'b03_banana_01_high': 1.0,
+        'b03_cocacola_can_cage': 0.6,
+        'b03_pcylinder2': 0.8,
+        'b03_pink_donuts_mesh': 0.8,
+        'coffee_maker': 0.7,
+        'coffeemug': 0.6,
+        'kettle': 0.7,
+    }
+
+    office_scale_dict = {
+        '022_vray_fix': 0.6,
+        '608_black': 0.5,
+        'alarm_clock': 0.6,
+        'arflex_strips_sofa': 1.0,
+        'b03_plane002': 0.8,
+        'b03_vm_hg2_047_vacuum': 0.85,
+        'b04_03_077': 0.7,
+        'b04_vm_v2_025': 0.75,
+        'b05_02_088': 1.0,
+        'b05_calculator': 0.8
+    }
+
+    if 'zoo_10obj' in args.dir:
+        models_simple = list(zoo_scale_dict.keys())
+        scale_dict = zoo_scale_dict
+    elif '20obj' in args.dir:
+        models_simple =  list(zoo_scale_dict.keys()) +  list(kitchen_scale_dict.keys())
+        scale_dict = zoo_scale_dict
+        scale_dict.update(kitchen_scale_dict)
+    elif '30obj' in args.dir:
+        models_simple = list(zoo_scale_dict.keys()) + list(kitchen_scale_dict.keys()) + list(office_scale_dict)
+        scale_dict = zoo_scale_dict
+        scale_dict.update(kitchen_scale_dict)
+        scale_dict.update(office_scale_dict)
+    else:
+        raise ValueError
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     scenarios = build_simple_scenario(models_simple, num_trials=2000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
 
+    print('Number of models: ', len(models_simple))
+
     start, end = args.start, (args.end or len(scenarios))
+
 
     for i,sc in enumerate(scenarios[start:end]):
         print(i, sc)
@@ -408,7 +466,7 @@ def main(args):
     if (args.seed == -1) or (args.seed is None):
         args.seed = int(args.split) + num_moving_splits * args.group_order[0]
 
-    Play = build_controller(args)
+    Play = build_controller(args, scale_dict)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
     Play.command_log = output_dir.joinpath('tdw_commands.json')
     Play.write_passes = args.write_passes.split(',')
