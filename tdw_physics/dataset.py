@@ -24,6 +24,20 @@ from tdw_physics.util_geom import save_obj
 import shutil
 import math
 
+import signal
+
+class timeout:
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+    def handle_timeout(self, signum, frame):
+        raise TimeoutError(self.error_message)
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handle_timeout)
+        signal.alarm(self.seconds)
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)
+
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
@@ -372,10 +386,11 @@ class Dataset(Controller, ABC):
                         self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
-                self.trial(filepath=filepath,
-                           temp_path=temp_path,
-                           trial_num=trial_num,
-                           unload_assets_every=unload_assets_every)
+                with timeout(seconds=60):
+                    self.trial(filepath=filepath,
+                               temp_path=temp_path,
+                               trial_num=trial_num,
+                               unload_assets_every=unload_assets_every)
 
                 # # Save an MP4 of the stimulus
                 # if self.save_movies:
@@ -472,6 +487,8 @@ class Dataset(Controller, ABC):
         while not done:
             frame += 1
             print('frame %d' % frame)
+            self.communicate([{"$type": "simulate_physics", "value": True}])
+
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
@@ -491,9 +508,13 @@ class Dataset(Controller, ABC):
                 if azimuth_rotation:
                     delta_az_list = [x / self.num_views * np.pi * 2 for x in range(self.num_views)]
                     az_range = 2 * np.pi / self.num_views
-                    origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
+
+                    # origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
+                    origin_pos = {'x': 0.0, 'y': 2.2, 'z': 2.2}
+
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+                    self.camera_aim = self.add_room_center(self.camera_aim)
                 else:
                     delta_angle = 2 * np.pi / self.num_views
 
@@ -503,6 +524,7 @@ class Dataset(Controller, ABC):
                     if frame == start_frame:
                         if azimuth_rotation:
                             a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
+                            a_pos = self.add_room_center(a_pos)
 
                             # save azimuth
                             az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
@@ -529,6 +551,7 @@ class Dataset(Controller, ABC):
                     self._set_avatar_attributes(a_pos)
 
                     commands.extend([
+                        {"$type": "simulate_physics", "value": False},
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
                         {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},

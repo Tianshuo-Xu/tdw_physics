@@ -506,11 +506,12 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
     def _get_send_data_commands(self) -> List[dict]:
         commands = super()._get_send_data_commands()
-        commands.extend([{"$type": "send_collisions",
-                          "enter": True,
-                          "exit": True,
-                          "stay": True,
-                          "collision_types": ["obj", "env"]},
+        commands.extend([
+            # {"$type": "send_collisions",
+            #               "enter": True,
+            #               "exit": True,
+            #               "stay": True,
+            #               "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
 

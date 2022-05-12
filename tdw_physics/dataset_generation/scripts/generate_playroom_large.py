@@ -376,15 +376,23 @@ def main(args):
         'b04_horse_body_mesh': 1.,
         'b03_zebra_body': 1.,
         'b03_calf': 1.,
-        '688926_elephant':1.,
+        '688926_elephant': 1.,
         '129601_sheep': 1.,
         'b03_dove_polysurface1': 1.,
         'b05_figure_2_node': 1.,
         'b04_duck': 1.
     }
 
+    test_zoo_scale_dict = {
+        '736684_elephant': 1.0,
+        'b03_cow': 1.0,
+        'b03_horse': 1.0,
+        'rockdove_polysurface77': 1.0,
+        'b04_mesh_giraffe': 1.0
+    }
+
     kitchen_scale_dict = {
-        'b04_orange_00': 0.6,
+        'b04_orange_00': 0.3,
         'appliance-ge-profile-microwave3': 0.8,
         'b01_croissant': 0.8,
         'b03_banana_01_high': 1.0,
@@ -396,20 +404,36 @@ def main(args):
         'kettle': 0.7,
     }
 
-    office_scale_dict = {
-        '022_vray_fix': 0.6,
-        '608_black': 0.5,
-        'alarm_clock': 0.6,
-        'arflex_strips_sofa': 1.0,
-        'b03_plane002': 0.8,
-        'b03_vm_hg2_047_vacuum': 0.85,
-        'b04_03_077': 0.7,
-        'b04_vm_v2_025': 0.75,
-        'b05_02_088': 1.0,
-        'b05_calculator': 0.8
+    test_kitchen_scale_dict = {
+        'b03_pain_au_chocolat': 0.8,
+        'b04_chocolate_donuts_mesh': 0.8,
+        'b03_rectangle01': 0.8,
+        # 'apple': 0.3,
+        'can_pepsi': 0.6
     }
 
-    if 'zoo_10obj' in args.dir:
+    office_scale_dict = {
+        'dice': 0.35,
+        'arflex_strips_sofa': 1.0,
+        'b03_worldglobe': 0.7,
+        'b05_gym_matrix_t7xi_treadmill': 0.9,
+        'b04_03_077': 0.6,
+        'b04_vm_v2_025': 0.65,
+        # 'b05_02_088': 0.8,
+        'rucksack': 0.8,
+        'b05_calculator': 0.7,
+        'student_classical_guitar': 1.2,
+        'buddah': 0.8
+    }
+
+    if 'zoo_10obj_test' in args.dir:
+        models_simple = list(test_zoo_scale_dict.keys())
+        scale_dict = test_zoo_scale_dict
+    elif '20obj_test' in args.dir:
+        models_simple =  list(test_zoo_scale_dict.keys()) +  list(test_kitchen_scale_dict.keys())
+        scale_dict = test_zoo_scale_dict
+        scale_dict.update(test_kitchen_scale_dict)
+    elif 'zoo_10obj' in args.dir:
         models_simple = list(zoo_scale_dict.keys())
         scale_dict = zoo_scale_dict
     elif '20obj' in args.dir:
@@ -434,8 +458,8 @@ def main(args):
     start, end = args.start, (args.end or len(scenarios))
 
 
-    for i,sc in enumerate(scenarios[start:end]):
-        print(i, sc)
+    # for i,sc in enumerate(scenarios[start:end]):
+    #     print(i, sc)
 
     ## set up the trial loop
     def _get_suffix(split, group_order):

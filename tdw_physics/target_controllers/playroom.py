@@ -468,7 +468,16 @@ class Playroom(Collision):
 
         ## choose the room center
         if self.room_center_range is not None:
-            self.room_center = get_random_xyz_transform(self.room_center_range)
+            if False:
+                generator = {
+                    'x': random.uniform(self.room_center_range['x'] - 2.5, self.room_center_range['x'] + 2.5),
+                    'y': self.room_center_range['y'],
+                    'z': self.room_center_range['z']
+                }
+                print('Generator: ', generator)
+                self.room_center = get_random_xyz_transform(generator)
+            else:
+                self.room_center = get_random_xyz_transform(self.room_center_range)
         else:
             self._set_room_center()
 
@@ -476,8 +485,8 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
-        radius = 1.5
-        min_distance = 1.0
+        radius = 1.1
+        min_distance = 1.1
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 

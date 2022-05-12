@@ -853,16 +853,15 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_aperture",
                  "aperture": 8.0},
                 {"$type": "set_post_exposure",
-                 "post_exposure": 0.4},
+                 "post_exposure": 0.8},  # original 0.4
                 {"$type": "set_ambient_occlusion_intensity",
                  "intensity": 0.175},
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5},
                 # {"$type": "set_ambient_intensity",
-                #  "intensity": 1.2},
+                #  "intensity": 0.5},
                 {"$type": "set_shadow_strength", "strength": 0.40},
-                {"$type": "rotate_directional_light_by", "angle": 90, "axis": "pitch", "index": 0},
-                # {"$type": "adjust_directional_light_intensity_by", "intensity": 0.}
+                {"$type": "rotate_directional_light_by", "angle": 90 if self.room == 'tdw_room' else 0, "axis": "pitch", "index": 0},
 
                 ]
 
@@ -1294,6 +1293,8 @@ class Dominoes(RigidbodiesDataset):
         if self.target_rotation is None:
             self.target_rotation = self.get_rotation(self.target_rotation_range)
 
+        self.target_position = self.add_room_center(self.target_position)
+
         if self.target_position is None:
             self.target_position = {
                 "x": 0.5 * self.collision_axis_length,
@@ -1384,6 +1385,7 @@ class Dominoes(RigidbodiesDataset):
         else:
             probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
+        self.probe_initial_position = self.add_room_center(self.probe_initial_position)
         print('Probe object scale: ', scale)
         print('Probe object position: ', self.probe_initial_position)
         print('Probe object rotation: ', rot)
