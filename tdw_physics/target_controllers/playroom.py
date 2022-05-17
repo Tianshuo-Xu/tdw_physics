@@ -485,8 +485,9 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
-        radius = 1.1
-        min_distance = 1.1
+        radius = 0.6
+        min_distance = 0.6
+
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 

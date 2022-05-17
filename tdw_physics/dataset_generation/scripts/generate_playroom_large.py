@@ -408,7 +408,6 @@ def main(args):
         'b03_pain_au_chocolat': 0.8,
         'b04_chocolate_donuts_mesh': 0.8,
         'b03_rectangle01': 0.8,
-        # 'apple': 0.3,
         'can_pepsi': 0.6
     }
 
@@ -429,7 +428,7 @@ def main(args):
     if 'zoo_10obj_test' in args.dir:
         models_simple = list(test_zoo_scale_dict.keys())
         scale_dict = test_zoo_scale_dict
-    elif '20obj_test' in args.dir:
+    elif 'tdw_generalization_test' in args.dir:
         models_simple =  list(test_zoo_scale_dict.keys()) +  list(test_kitchen_scale_dict.keys())
         scale_dict = test_zoo_scale_dict
         scale_dict.update(test_kitchen_scale_dict)
