@@ -14,6 +14,8 @@ from PIL import Image
 import io
 import json
 import os
+from skimage.util import view_as_windows
+
 
 class TransformsDataset(Dataset, ABC):
     """
@@ -143,6 +145,7 @@ class TransformsDataset(Dataset, ABC):
         # print(frame_num, r_types)
 
         write_data = frame_num in [5, 6]
+        save_occlusion = True
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
@@ -191,10 +194,23 @@ class TransformsDataset(Dataset, ABC):
                                 im_array = Image.open(io.BytesIO(np.ascontiguousarray(image_data)))
                             # im_array.save('./tmp/%s_view%s.png' % (pass_mask[1:], view_id))
 
+                            if save_occlusion:
+
+                                segment_map = self.get_hashed_segment_map(np.asarray(im_array))
+                                patch = view_as_windows(segment_map, (2, 2))
+
+                                segment_map = segment_map[:-1, :-1][..., None]
+                                patch = patch.reshape(segment_map.shape[0], segment_map.shape[1], 4)
+                                zero = (patch == 0) | (segment_map == 0)
+                                diff = segment_map != patch
+                                diff[zero] = 0.
+                                occlusion = '_occlusion_%d' % (1 if diff.sum() > 0 else 0)
+                            else:
+                                occlusion = ''
                             if pass_mask == '_id':
-                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s_mask.png' % (format(trial_num, '04d'), frame_num, view_id))
+                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s%s_mask.png' % (format(trial_num, '04d'), frame_num, view_id, occlusion))
                             elif pass_mask == '_img':
-                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s.png' % (format(trial_num, '04d'), frame_num, view_id))
+                                img_name = os.path.join(self.output_dir, 'sc%s_frame%d_img%s%s.png' % (format(trial_num, '04d'), frame_num, view_id, occlusion))
                             else:
                                 break
 
@@ -287,3 +303,10 @@ class TransformsDataset(Dataset, ABC):
                         position = tr.get_position(i)
 
         return position
+
+    @staticmethod
+    def get_hashed_segment_map(segmap, val=256):
+        out = np.zeros(segmap.shape[:2], dtype=np.int32)
+        for c in range(segmap.shape[-1]):
+            out += segmap[..., c] * (val ** c)
+        return out
