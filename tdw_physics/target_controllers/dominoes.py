@@ -1307,6 +1307,23 @@ class Dominoes(RigidbodiesDataset):
         print('\tTarget object position: ', self.target_position)
         print('\tTarget object rotation: ', self.target_rotation)
 
+        if self.save_meta_data:
+            data_dict =  {
+                        'scale': scale,
+                        'position': self.target_position,
+                        'rotation': self.target_rotation
+            }
+            if self._trial_num not in self.trial_metadata.keys():
+                self.trial_metadata[self._trial_num]= {record.name: data_dict}
+            else:
+                self.trial_metadata[self._trial_num][record.name] = data_dict
+
+        elif self.load_meta_data:
+            data_dict = self.trial_metadata[str(self._trial_num)][record.name]
+            scale = data_dict['scale']
+            self.target_position = data_dict['position']
+            self.target_rotation = data_dict['rotation']
+
         commands = []
         commands.extend(
             self.add_primitive(
@@ -1390,6 +1407,27 @@ class Dominoes(RigidbodiesDataset):
         print('Probe object position: ', self.probe_initial_position)
         print('Probe object rotation: ', rot)
         print('Probe object record: ', record.name)
+
+        if self.save_meta_data:
+            data_dict =  {
+                        'scale': scale,
+                        'position': self.probe_initial_position,
+                        'rotation': rot
+            }
+            if self._trial_num not in self.trial_metadata.keys():
+                self.trial_metadata[self._trial_num]= {record.name: data_dict}
+            else:
+                self.trial_metadata[self._trial_num][record.name] = data_dict
+
+        elif self.load_meta_data:
+            data_dict = self.trial_metadata[str(self._trial_num)][record.name]
+            scale = data_dict['scale']
+            if self.move_probe:
+                data = self.trial_metadata[str(self._trial_num)]['move_probe_position']
+                self.probe_initial_position = {'x': float(data[0]), 'y': 0., 'z': float(data[1])}
+            else:
+                self.probe_initial_position = data_dict['position']
+            rot = data_dict['rotation']
 
         commands.extend(
             self.add_primitive(

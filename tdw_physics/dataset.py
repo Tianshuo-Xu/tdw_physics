@@ -218,6 +218,7 @@ class Dataset(Controller, ABC):
             save_movies: bool = False,
             save_labels: bool = False,
             save_meshes: bool = False,
+            save_meta_data: bool = True,
             terminate: bool = True,
             args_dict: dict={}) -> None:
         """
@@ -280,6 +281,7 @@ class Dataset(Controller, ABC):
             else:
                 self.trial_metadata = []
 
+
         initialization_commands = self.get_initialization_commands(width=width, height=height)
 
         # Initialize the scene.
@@ -317,6 +319,8 @@ class Dataset(Controller, ABC):
             stats_file.write_text(stats_str, encoding='utf-8')
             print("ACROSS TRIAL STATS")
             print(stats_str)
+
+
 
 
     def update_controller_state(self, **kwargs):
@@ -391,6 +395,10 @@ class Dataset(Controller, ABC):
                                temp_path=temp_path,
                                trial_num=trial_num,
                                unload_assets_every=unload_assets_every)
+
+                if self.save_meta_data:
+                    trial_meta_str = json.dumps(self.trial_metadata, indent=4)
+                    self.meta_file.write_text(trial_meta_str, encoding='utf-8')
 
                 # # Save an MP4 of the stimulus
                 # if self.save_movies:
@@ -489,8 +497,8 @@ class Dataset(Controller, ABC):
             print('frame %d' % frame)
             self.communicate([{"$type": "simulate_physics", "value": True}])
 
-            resp = self.communicate(self.get_per_frame_commands(resp, frame))
-            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+            # resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            # r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
@@ -579,12 +587,11 @@ class Dataset(Controller, ABC):
 
         # Cleanup.
         commands = []
-        print('Object ids before destroy: ', self.object_ids)
+
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         for cmd in commands:
-            print('Destroy: ', cmd)
             self.communicate(cmd)
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
@@ -722,7 +729,7 @@ class Dataset(Controller, ABC):
 
     def get_rotating_camera_position_azimuth(self, az, el, r, delta_az, az_range, delta_dist=1.0):
 
-        az_ = az + delta_az + (random.random() - 0.5) * az_range
+        az_ = az + delta_az # + (random.random() - 0.5) * az_range
         el_ = el # + np.pi / 15
         r_ = r * delta_dist
         x_, z_, y_ = self.sph2cart(az_, el_, r_)  # Compute in Z-up

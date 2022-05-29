@@ -485,9 +485,9 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
-        radius = 1.0
-        min_distance = 1.0
-        point_generator = Points(n=3, r=radius, mindist=min_distance)
+        radius = 1.1
+        min_distance = 1.1
+        point_generator = Points(n=4, r=radius, mindist=min_distance)
         positions = point_generator.points
 
         self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
@@ -505,6 +505,11 @@ class Playroom(Collision):
             self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
 
         self.probe_initial_position = {'x': float(positions[2][0]), 'y': 0., 'z': float(positions[2][1])}
+
+        self.move_positions = positions[-1]
+        if self.save_meta_data:
+            self.trial_metadata[self._trial_num]['move_probe_position'] = list(self.move_positions)
+
         # Choose, place, and push a probe object.
         commands.extend(self._place_and_push_probe_object())
 

@@ -450,7 +450,7 @@ def main(args):
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=2000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
+    scenarios = build_simple_scenario(models_simple, num_trials=200, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
 
     print('Number of models: ', len(models_simple))
 
@@ -503,6 +503,29 @@ def main(args):
     Play.communicate(log_cmds + init_cmds)
     logging.info("Initialized Controller with random seed %d" % args.seed)
 
+    Play.save_meta_data = False
+    Play.load_meta_data = True
+    Play.move_probe = False
+
+    if Play.save_meta_data:
+        assert Play.load_meta_data is False and Play.move_probe is False
+
+    if Play.load_meta_data:
+        assert Play.save_meta_data is False
+
+    if Play.move_probe:
+        assert Play.load_meta_data is True and Play.save_meta_data is False
+
+    if Play.save_meta_data or Play.load_meta_data:
+        Play.meta_file = Path(output_dir).joinpath('metadata.json')
+        if Play.meta_file.exists() or Play.load_meta_data:
+            Play.trial_metadata = json.loads(Play.meta_file.read_text())
+            scenarios = Play.trial_metadata['scenerios']
+        else:
+            Play.trial_metadata = {}
+            Play.trial_metadata['scenerios'] = scenarios
+
+
     ## run the trial loop
     Play.trial_loop(num=(end - start),
                     output_dir=str(output_dir),
@@ -511,7 +534,6 @@ def main(args):
                     update_kwargs=scenarios[start:end],
                     unload_assets_every=args.unload_assets_every,
                     do_log=True)
-
 
     ## terminate build
     Play.communicate({"$type": "terminate"})

@@ -145,7 +145,7 @@ class TransformsDataset(Dataset, ABC):
         # print(frame_num, r_types)
 
         write_data = frame_num in [5, 6]
-        save_occlusion = True
+        save_occlusion = False
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
