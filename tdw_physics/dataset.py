@@ -380,13 +380,8 @@ class Dataset(Controller, ABC):
                 self.png_dir = None
                 self.output_dir = output_dir
 
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(trial_num, 4))
-                    if not self.png_dir.exists():
-                        self.png_dir.mkdir(parents=True)
-
                 # Do the trial.
-                with timeout(seconds=60):
+                with timeout(seconds=120):
                     self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=trial_num,
@@ -510,7 +505,7 @@ class Dataset(Controller, ABC):
                     az_range = 2 * np.pi / self.num_views
 
                     # origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
-                    origin_pos = {'x': 0.0, 'y': 2.2, 'z': 2.2}
+                    origin_pos = {'x': 0.0, 'y': 2.0, 'z': 3.0}
 
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}

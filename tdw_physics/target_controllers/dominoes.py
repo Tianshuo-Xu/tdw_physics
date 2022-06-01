@@ -853,14 +853,13 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_aperture",
                  "aperture": 8.0},
                 {"$type": "set_post_exposure",
-                 "post_exposure": 0.8},  # original 0.4
+                 "post_exposure": 0.4},
                 {"$type": "set_ambient_occlusion_intensity",
                  "intensity": 0.175},
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5},
                 # {"$type": "set_ambient_intensity",
                 #  "intensity": 0.5},
-                {"$type": "set_shadow_strength", "strength": 0.40},
                 {"$type": "rotate_directional_light_by", "angle": 90 if self.room == 'tdw_room' else 0, "axis": "pitch", "index": 0},
 
                 ]
@@ -1253,6 +1252,8 @@ class Dominoes(RigidbodiesDataset):
         else:
             smin, smax = get_range(size_range)
 
+        print(dmin, dmax)
+
         if dmax < smin:
             scale = smin / dmax
         elif dmax > smax:
@@ -1306,6 +1307,10 @@ class Dominoes(RigidbodiesDataset):
         print('\tTarget object scale: ', scale)
         print('\tTarget object position: ', self.target_position)
         print('\tTarget object rotation: ', self.target_rotation)
+
+        print('!!!!!!!!!!!!!!!!!!!!!!!!!!for dominos')
+        scale['z'] *= 0.2
+        scale['x'] *= 0.6
 
         commands = []
         commands.extend(
@@ -1391,6 +1396,10 @@ class Dominoes(RigidbodiesDataset):
         print('Probe object rotation: ', rot)
         print('Probe object record: ', record.name)
 
+        print('warning: for dominos!!!!!!!!!!!!')
+
+        scale['z'] *= 0.2
+        scale['x'] *= 0.6
         commands.extend(
             self.add_primitive(
                 record=record,

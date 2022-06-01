@@ -357,18 +357,21 @@ def main(args):
             validation_models.extend(models)
         moving_models = static_models = validation_models
 
-    # scenarios = build_scenarios(moving_models, static_models,
-    #                             args.num_trials_per_model, seed=args.category_seed,
-    #                             group_order=args.group_order,
-    #                             randomize_moving_object=args.randomize_moving_object
-    #                             )
+    scenarios = build_scenarios(moving_models, static_models,
+                                args.num_trials_per_model, seed=args.category_seed,
+                                group_order=args.group_order,
+                                randomize_moving_object=args.randomize_moving_object
+                                )
 
+    scale_dict = None
 
     # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
     # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = ['cube'] * 4
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray']
     # 10obj zoo
+    '''
+    
 
     zoo_scale_dict = {
         'labrador_retriever_puppy': 1.,
@@ -446,13 +449,16 @@ def main(args):
         scale_dict.update(office_scale_dict)
     else:
         raise ValueError
-
+    
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=2000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
+    
+    '''
 
-    print('Number of models: ', len(models_simple))
+    models_simple = ['cube'] * 3
+    scenarios = build_simple_scenario(models_simple, num_trials=200, seed=args.category_seed,
+                                      num_distractors=args.num_distractors, permute=True)
 
     start, end = args.start, (args.end or len(scenarios))
 
@@ -523,7 +529,7 @@ if __name__ == '__main__':
     import platform, os
     if platform.system() == 'Linux':
         if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+            os.environ["DISPLAY"] = ":5." + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
 
