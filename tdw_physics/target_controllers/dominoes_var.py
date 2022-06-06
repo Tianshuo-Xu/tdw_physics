@@ -614,6 +614,7 @@ class Dominoes(RigidbodiesDataset):
         ## whether only flex objects are allowed
         self.flex_only = flex_only
         self.use_obi = False
+        self.obi = None
 
         ## whether the occluders and distractors can move
         self.no_moving_distractors = no_moving_distractors
@@ -714,6 +715,9 @@ class Dominoes(RigidbodiesDataset):
         )
 
         self.use_test_mode_colors = use_test_mode_colors
+
+
+
 
     def trial_loop(self,
                    num: int,
@@ -882,6 +886,42 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
+    def get_additional_command_when_removing_curtain(self, frame=0):
+        return []
+
+    def generate_static_object_info(self):
+
+        # color for "star object"
+        colors = [[0.01844594, 0.77508636, 0.12749255],#pink
+                  [0.17443318, 0.22064707, 0.39867442],#black
+                  [0.75136046, 0.06584012, 0.22674323],#red
+                  [0.47, 0.38,   0.901],#purple
+                   ]
+        non_star_color = [246/255, 234/255, 224/255]
+
+        self.repeat_trial = False
+        # sample distinct objects
+        self.candidate_dict = dict()
+        self.star_object = dict()
+        self.star_object["type"] = random.choice(self._star_types)
+        self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+        #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
+        self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
+        print("====star object mass", self.star_object["mass"])
+
+        #distinct_masses = [0.1, 2.0, 10.0]
+        mass = 2.0
+        self.normal_mass = 2.0
+        random.shuffle(colors)
+        #random.shuffle(distinct_masses)
+        ## add the non-star objects have the same weights
+        for distinct_id in range(1):
+            self.candidate_dict[distinct_id] = dict()
+            self.candidate_dict[distinct_id]["type"] = random.choice(self._candidate_types)
+            self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.candidate_scale_range)
+            self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
+            self.candidate_dict[distinct_id]["mass"] = mass
 
     def trial(self,
               filepath: Path,
@@ -903,50 +943,15 @@ class Dominoes(RigidbodiesDataset):
 
         from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
         if object_info == None:
-
-            # color for "star object"
-            colors = [[0.01844594, 0.77508636, 0.12749255],#pink
-                      [0.17443318, 0.22064707, 0.39867442],#black
-                      [0.75136046, 0.06584012, 0.22674323],#red
-                      [0.47, 0.38,   0.901],#purple
-                       ]
-            non_star_color = [0, 0.27, 0.192]
-            self.repeat_trial = False
-            # sample distinct objects
-            self.candidate_dict = dict()
-            self.star_object = dict()
-            self.star_object["type"] = random.choice(self._middle_types)
-            self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
-            #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-            self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
-            self.star_object["scale"] = get_random_xyz_transform(self.middle_scale_range)
-            print("====star object mass", self.star_object["mass"])
-
-            #distinct_masses = [0.1, 2.0, 10.0]
-            mass = 2.0
-            self.normal_mass = 2.0
-            random.shuffle(colors)
-            #random.shuffle(distinct_masses)
-            ## add the non-star objects have the same weights
-            for distinct_id in range(1):
-                self.candidate_dict[distinct_id] = dict()
-                self.candidate_dict[distinct_id]["type"] = random.choice(self._middle_types)
-                self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.middle_scale_range)
-                self.candidate_dict[distinct_id]["color"] = [0, 0.19, 0.125]#[0.9774568,  0.87879388, 0.40082996]
-                self.candidate_dict[distinct_id]["mass"] = mass
-
+            self.generate_static_object_info()
         else:
             self.repeat_trial = True
 
-        self.trial_num_middle_objects = self.num_middle_objects
-        # random.choice(range(self.num_middle_objects + 1))
-        self.trial_collision_axis_length = self.spacing * (self.trial_num_middle_objects + 1)
-        self.total_num_dominoes = self.trial_num_middle_objects + 2
-        self.position_ids = range(self.total_num_dominoes)
-
         self.clear_static_data()
 
-        if self.use_obi:
+
+
+        if self.use_obi and self.obi is None:
             from tdw.add_ons.obi import Obi
             obi = Obi()
             self.add_ons = [obi] #.extend([obi])
@@ -1013,6 +1018,8 @@ class Dominoes(RigidbodiesDataset):
                 location['z'] += self.small_shift[2]
                 commands = []
                 commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
+                commands.extend(self.get_additional_command_when_removing_curtain(frame=frame))
+
                 #commands.extend(self.get_per_frame_commanAdding curtainds(resp, frame))
                 resp = self.communicate(commands)
 
@@ -1038,7 +1045,10 @@ class Dominoes(RigidbodiesDataset):
         while not done:
             frame += 1
             # print('frame %d' % frame)
-            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=self.force_wait+before_start_frame))
+            #print(frame, interact_id, self.force_wait, self.force_wait+before_start_frame)
+            force_wait_time = 0 if not self.force_wait else self.force_wait
+
+            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=force_wait_time+before_start_frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
@@ -1091,11 +1101,13 @@ class Dominoes(RigidbodiesDataset):
 
         # Cleanup.
         commands = []
+
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         self.communicate(commands)
-
+        if self.use_obi:
+            self.obi.reset()
 
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
@@ -1275,10 +1287,8 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._place_target_zone())
 
         # Choose and place a target object.
-        print("hello1")
         commands.extend(self._place_star_object(interact_id))
 
-        print("hello2")
         #self.model_names.append(record.name)
         #self.scales.append(data['scale'])
         #self.colors
@@ -1294,7 +1304,9 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._build_intermediate_structure(interact_id))
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+
+        if interact_id == 0:
+            self.a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
@@ -1304,7 +1316,7 @@ class Dominoes(RigidbodiesDataset):
                                                 reflections=self.camera_left_right_reflections)
 
         # Set the camera parameters
-        self._set_avatar_attributes(a_pos)
+        self._set_avatar_attributes(self.a_pos)
 
         commands.extend([
             {"$type": "teleport_avatar_to",
@@ -1312,7 +1324,7 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "look_at_position",
              "position": self.camera_aim},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+             "focus_distance": TDWUtils.get_distance(self.a_pos, self.camera_aim)}
         ])
 
 
@@ -1704,7 +1716,7 @@ class Dominoes(RigidbodiesDataset):
                 if bias:
                     pos_id = random.choice(range(1, self.total_num_dominoes))
                 else:
-                    pos_id = pos_id = random.choice(range(self.total_num_dominoes))
+                    pos_id = random.choice(range(self.total_num_dominoes))
 
             elif star_mass < self.normal_mass * 0.5: #light object
                 bias = np.random.uniform(0,1) < 0.75
@@ -1825,7 +1837,8 @@ class Dominoes(RigidbodiesDataset):
         self.posid_to_objid[pos_id]["o_id"] = o_id
         ### better sampling of random physics values
         #self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": pos_id * self.spacing - 0.5, "y": 0., "z": 0.}
+        self.probe_initial_position = {"x": pos_id * self.spacing
+         - 0.5, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
 
         self.posid_to_objid[pos_id]["rot"] = rot
@@ -2464,6 +2477,13 @@ class MultiDominoes(Dominoes):
         self.middle_mass_range = middle_mass_range
         self.middle_rotation_range = middle_rotation_range
         self.middle_color = middle_color
+
+
+        self._star_types = self._middle_types
+        self.star_scale_range = self.middle_scale_range
+        self._candidate_types = self._middle_types
+        self.candidate_scale_range = self.middle_scale_range
+
         self.randomize_colors_across_trials = False if (middle_color is not None) else True
         self.middle_material = self.get_material_name(middle_material)
         self.horizontal = horizontal
@@ -2475,6 +2495,14 @@ class MultiDominoes(Dominoes):
         self.spacing = self.collision_axis_length / (self.num_middle_objects + 1.)
         self.spacing_jitter = spacing_jitter
         self.lateral_jitter = lateral_jitter
+
+
+        self.trial_num_middle_objects = self.num_middle_objects
+        # random.choice(range(self.num_middle_objects + 1))
+        self.trial_collision_axis_length = self.spacing * (self.trial_num_middle_objects + 1)
+        self.total_num_dominoes = self.trial_num_middle_objects + 2
+        self.position_ids = range(self.total_num_dominoes)
+
 
     def set_middle_types(self, olist):
         if isinstance(olist, str):

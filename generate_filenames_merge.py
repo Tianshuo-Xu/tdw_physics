@@ -25,11 +25,14 @@ def list_files(paths, ext='mp4', exclude=[]):
     hdf5s = [r.split("_img.")[0]+".hdf5" for r in results]
     return results,names,hdf5s
 
-with_dv2 = True
+with_dv2 = False
 data_root = "/media/htung/Extreme SSD/fish/tdw_physics"
-csv_filename = "physionpp-dominoes_merge_dv2.csv"
+csv_filename = "physionpp-dominoes_merge.csv"
 
-local_stem = os.path.join(data_root, "dump/dominoes")
+if with_dv2:
+    csv_filename = csv_filename.replace(".csv", "_dv2.csv")
+
+local_stem = os.path.join(data_root, "dump/dominoes2")
 csv_filename = os.path.join(local_stem, csv_filename)
 tmp_mp4_folder = local_stem + "_mp4"
 n_interactions = 2

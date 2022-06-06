@@ -28,7 +28,7 @@ Pour water into a receptacle.
 # rocks
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 print([r for r in PRIMITIVE_NAMES if "trapezoid" in r])
-import ipdb; ipdb.set_trace()
+
 
 c = Controller()
 c.communicate(Controller.get_add_scene(scene_name="tdw_room"))
@@ -144,12 +144,51 @@ c.communicate(
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
              "id": o_id}
     )
-for i in range(30):
+for i in range(300):
 
     if i == 100:
         obi.set_fluid_speed(f_id, speed=0)
 
+    # if i == 1000:
+    #     obi.set_fluid_speed(f_id, speed=3.0)
+    # if i == 1200:
+    #     obi.set_fluid_speed(f_id, speed=0)
     c.communicate([])
 
+
+
+commands = []
+for oid in [o_id]:
+    commands.append({"$type": "destroy_object",
+                     "id": int(oid)})
+c.communicate(commands)
+obi.reset()
+
+
+
+new_fid= f_id  #f_id + 5
+
+obi.create_fluid(object_id = new_fid,
+                 fluid=fluid,
+                 shape=DiskEmitter(),
+                 position={"x": 0, "y": 1.5, "z": 0}, # y is height
+                 rotation={"x": 100, "y": 0, "z": 0},
+                 lifespan=1000,
+                 speed=2)
+
+c.communicate(Controller.get_add_physics_object(model_name="pyramid", #"prim_cube",
+                                                object_id=o_id,
+                                                library="models_flex.json",#"models_special.json",
+                                                kinematic=True,
+                                                gravity=False,
+                                                position= {"x": 0, "y": 0.1, "z": 0.5},
+                                                scale_factor={"x": 1.2, "y": 0.2, "z": 1.2},
+                                                default_physics_values=False))
+
+for i in range(600):
+
+    if i == 100:
+        obi.set_fluid_speed(new_fid, speed=0)
+    c.communicate([])
 
 c.communicate({"$type": "terminate"})
