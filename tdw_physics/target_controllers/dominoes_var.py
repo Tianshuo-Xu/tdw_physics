@@ -1035,6 +1035,8 @@ class Dominoes(RigidbodiesDataset):
 
                 #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
                 #    break
+                #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
+                #    break
         else:
             frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
             self._write_frame_labels(frame_grp, resp, -1, False)
@@ -1044,7 +1046,7 @@ class Dominoes(RigidbodiesDataset):
         # Continue the trial. Send commands, and parse output data.
         while not done:
             frame += 1
-            # print('frame %d' % frame)
+            #print('frame %d' % frame)
             #print(frame, interact_id, self.force_wait, self.force_wait+before_start_frame)
             force_wait_time = 0 if not self.force_wait else self.force_wait
 
