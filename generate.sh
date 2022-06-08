@@ -1,0 +1,4 @@
+CUDA_VISIBLE_DEVICES=5 python tdw_physics/dataset_generation/scripts/generate_playroom_large.py --dir test_zoo_30obj_2 --port 1073 --randomize_moving_object --split 1 --height 1024 --width 1024 --save_passes _img,_id,_flow --save_movies --gpu 0 --num_views 4 --room archviz_house --remove_zone True --pscale 1. --tscale 1. --occlusion_scale 1. --num_distractors 0 --prot None --trot None --launch_build --room_center [-13.5,0.96,-5.15]
+
+
+CUDA_VISIBLE_DEVICES=5 python tdw_physics/dataset_generation/scripts/generate_playroom_large.py --dir test_zoo_30obj_2 --port 1073 --randomize_moving_object --split 1 --height 1024 --width 1024 --save_passes _img,_id,_flow --save_movies --gpu 0 --num_views 4 --room tdw_room  --remove_zone True --pscale 0.9 --tscale 0.9 --occlusion_scale 0.9 --num_distractors 0 --prot None --trot None --launch_build

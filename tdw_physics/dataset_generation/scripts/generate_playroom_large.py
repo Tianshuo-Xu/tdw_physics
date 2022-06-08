@@ -455,8 +455,6 @@ def main(args):
 
     # models_simple = ['cube'] * 3
 
-    scale_dict = None
-
     scenarios = build_simple_scenario(models_simple, num_trials=200, seed=args.category_seed,
                                       num_distractors=args.num_distractors, permute=True)
 

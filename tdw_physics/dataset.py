@@ -25,7 +25,7 @@ import shutil
 import math
 
 import signal
-# from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
+from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
 
 
 class timeout:
@@ -484,10 +484,7 @@ class Dataset(Controller, ABC):
         done = False
         frames_grp = f.create_group("frames")
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-        print('Warning not writing frame label')
-        print('\n' * 5)
-        # self._write_frame_labels(frames_grp, resp, -1, False)
-
+        self._write_frame_labels(frames_grp, resp, -1, False)
         print('\tObject ids before looping: ', self.object_ids)
 
         # Continue the trial. Send commands, and parse output data.
@@ -519,7 +516,9 @@ class Dataset(Controller, ABC):
 
                     # origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
                     # origin_pos = {'x': 0.0, 'y': 2.0, 'z': 3.0}
-                    origin_pos =  {'x': -10.48 + 12.873, 'y': 1.81 - 1.85, 'z': - 6.583 + 5.75}
+                    origin_pos =  {'x': 1.5, 'y': 1.5, 'z': 1.5}
+                    # if not self.room == 'archviz_house':
+                    #     origin_pos['y'] += 1.
 
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     # self.camera_aim =  {'x': -12.873 + 13.0, 'y': 1.85 - 1.0, 'z': - 5.75 + 5.0}
@@ -567,7 +566,7 @@ class Dataset(Controller, ABC):
                         {"$type": "simulate_physics", "value": False},
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
-                        # {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
+                        {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
 
                         # {"$type": "set_camera_clipping_planes", "near": 2., "far": 12}
                     ])
@@ -736,10 +735,7 @@ class Dataset(Controller, ABC):
         return {"x": a_x, "y": a_y, "z": a_z}
 
     def get_rotating_camera_position_azimuth(self, az, el, r, delta_az, az_range, delta_dist=1.0):
-
-        print('Warning no noise')
-        print('\n' * 5)
-        az_ = az + delta_az # + (random.random() - 0.5) * az_range
+        az_ = az + delta_az + (random.random() - 0.5) * az_range
         el_ = el # + np.pi / 15
         r_ = r * delta_dist
         x_, z_, y_ = self.sph2cart(az_, el_, r_)  # Compute in Z-up

@@ -838,9 +838,11 @@ class Dominoes(RigidbodiesDataset):
         return 68
 
     def get_scene_initialization_commands(self) -> List[dict]:
+        commands = []
         if self.use_interior_scene_lighting:
             self.interior_scene_lighting.reset(hdri_skybox="noon_grass_4k")
             print('Interior lighting: ', self.interior_scene_lighting.hdri_skybox)
+            commands.extend([{"$type": "set_hdri_skybox_exposure", "exposure": 2.525}])
 
         if self.room == 'box':
             add_scene = self.get_add_scene(scene_name="box_room_2018")
@@ -854,56 +856,42 @@ class Dominoes(RigidbodiesDataset):
             print('Add scene: ', add_scene)
         else:
             add_scene = self.get_add_scene(scene_name=self.room)
-        commands = [add_scene,
-                {"$type": "set_aperture",
-                 "aperture": 8.0},
-                {"$type": "set_post_exposure",
-                 "post_exposure": 0.4},
-                {"$type": "set_ambient_occlusion_intensity",
-                 "intensity": 0.175},
-                {"$type": "set_ambient_occlusion_thickness_modifier",
-                 "thickness": 3.5},
-                # {"$type": "set_ambient_intensity", "intensity": 0.5},
-                # {"$type": "set_shadow_strength", "strength": 8.0},
-                ]
+        commands.extend([
+            add_scene,
+            {"$type": "set_post_exposure",
+             "post_exposure": 0.4},
+            {"$type": "set_ambient_occlusion_intensity",
+             "intensity": 0.175},
+            {"$type": "set_ambient_occlusion_thickness_modifier",
+             "thickness": 3.5},
+            {"$type": "set_aperture", "aperture": 1.5},
+        ])
 
 
         if not self.use_interior_scene_lighting:
             if self.room == 'tdw_room':
-                commands.extend([{"$type": "adjust_directional_light_intensity_by", "intensity": 0.25},
-                    {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
-                    {"$type": "set_shadow_strength", "strength": 0.6  },
+                commands.extend([
+
+                    {"$type": "adjust_directional_light_intensity_by", "intensity": 0.25},
+                    {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
+                    {"$type": "set_shadow_strength", "strength": 0.5},
                     {"$type": "rotate_directional_light_by", "angle": -30 if self.room == 'tdw_room' else 0, "axis": "pitch", "index": 0},
                 ])
             elif self.room == 'mm_craftroom_1b':
-                commands.extend([{"$type": "adjust_directional_light_intensity_by", "intensity": 1.0},
-                                 {"$type": "set_shadow_strength", "strength": 0.5}])
+                commands.extend([
+                    {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
+                    {"$type": "adjust_directional_light_intensity_by", "intensity": 0.5},
+                    {"$type": "set_shadow_strength", "strength": 0.5}])
             elif self.room == 'box':
-                # commands.extend([{"$type": "adjust_directional_light_intensity_by", "intensity": 1.0}])
                 commands.extend([
                     {"$type": "adjust_directional_light_intensity_by", "intensity": 5.25},
                     {"$type": "set_shadow_strength", "strength": 8.0},
-                     # {"$type": "rotate_directional_light_by", "angle": -30 if self.room == 'tdw_room' else 0,
-                     #  "axis": "pitch", "index": 0},
                 ])
             elif self.room == 'archviz_house':
-                print('Commands for archviz house')
-                commands = [
-                 self.get_add_scene(scene_name='archviz_house'),
-                 {"$type": "set_render_quality",
-                  "render_quality": 5},
-                 {"$type": "set_aperture",
-                  "aperture": 1.6},
-                 {"$type": "set_focus_distance",
-                  "focus_distance": 2.25},
-                 {"$type": "set_post_exposure",
-                  "post_exposure": 0.4},
-                 {"$type": "set_ambient_occlusion_intensity",
-                  "intensity": 0.175},
-                 {"$type": "set_ambient_occlusion_thickness_modifier",
-                  "thickness": 3.5},
-                 {"$type": "set_shadow_strength",
-                  "strength": 1.0}]
+                commands.extend([
+                 {"$type": "adjust_directional_light_intensity_by", "intensity": 0.4},
+                 {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
+                 {"$type": "set_shadow_strength", "strength": 0.5}])
             else:
                 pass
         return commands

@@ -361,10 +361,7 @@ class Playroom(Collision):
         return Dominoes._place_and_push_probe_object(self, size_range=self.probe_scale_range)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        print('!!!!!!!! WARNING PASS WRITING STATIC DATA  ')
-        print('\n' * 5)
-        pass
-        # Dominoes._write_static_data(self, static_group)
+        Dominoes._write_static_data(self, static_group)
 
     def get_trial_initialization_commands(self) -> List[dict]:
 
@@ -489,10 +486,9 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
-        '''
         
-        radius = 1.4
-        min_distance = 1.4
+        radius = 1.0
+        min_distance = 1.0
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 
@@ -532,6 +528,7 @@ class Playroom(Collision):
                                 rotation={"x": 0, "y": 90, "z": 0}),
         ])
 
+        '''
 
 
         print('Warning fixed initial camera position')
