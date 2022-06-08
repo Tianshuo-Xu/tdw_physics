@@ -9,6 +9,7 @@ from tdw.controller import Controller
 from tdw.librarian import ModelRecord
 from tdw_physics.dataset import Dataset
 from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
+from tdw.output_data import OutputData
 
 from PIL import Image
 import io
@@ -165,6 +166,7 @@ class TransformsDataset(Dataset, ABC):
                     positions[i] = tr_dict[o_id]["pos"]
                     forwards[i] = tr_dict[o_id]["for"]
                     rotations[i] = tr_dict[o_id]["rot"]
+
             elif r_id == "imag":
                 im = Images(r)
 

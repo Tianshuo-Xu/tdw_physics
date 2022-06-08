@@ -277,6 +277,7 @@ class Playroom(Collision):
         self.distractor_material = distractor_material
         self.occluder_material = occluder_material
 
+
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._probe_types = tlist
@@ -360,7 +361,10 @@ class Playroom(Collision):
         return Dominoes._place_and_push_probe_object(self, size_range=self.probe_scale_range)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        Dominoes._write_static_data(self, static_group)
+        print('!!!!!!!! WARNING PASS WRITING STATIC DATA  ')
+        print('\n' * 5)
+        pass
+        # Dominoes._write_static_data(self, static_group)
 
     def get_trial_initialization_commands(self) -> List[dict]:
 
@@ -485,6 +489,8 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
+        '''
+        
         radius = 1.4
         min_distance = 1.4
         point_generator = Points(n=3, r=radius, mindist=min_distance)
@@ -510,9 +516,27 @@ class Playroom(Collision):
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
+        '''
+        commands.extend([
+            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("live_edge_coffee_table"),
+                                position={"x": -12.8, "y": 0.96, "z": -5.47},
+                                rotation={"x": 0, "y": -90, "z": 0}),
+            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("chista_slice_of_teak_table"),
+                                position={"x": -14.394, "y": 0.96, "z": -7.06},
+                                rotation={"x": 0, "y": 21.35, "z": 0}),
+            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("chair_billiani_doll"),
+                                position={"x": -15.15, "y": 0.96, "z": -6.8},
+                                rotation={"x": 0, "y": 63.25, "z": 0}),
+            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("zenblocks"),
+                                position={"x": -12.7, "y": 1.288, "z": -5.55},
+                                rotation={"x": 0, "y": 90, "z": 0}),
+        ])
+
+
 
         print('Warning fixed initial camera position')
         a_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
+
 
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
@@ -520,7 +544,7 @@ class Playroom(Collision):
         commands.extend([
             {"$type": "teleport_avatar_to", "position": a_pos},
             {"$type": "look_at_position", "position": self.camera_aim},
-            {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim), }
+            # {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim), }
         ])
 
         self.camera_position = a_pos

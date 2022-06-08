@@ -25,6 +25,8 @@ import shutil
 import math
 
 import signal
+# from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
+
 
 class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
@@ -106,6 +108,13 @@ class Dataset(Controller, ABC):
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
         self.scale_factor_dict = scale_factor_dict
+
+        self.use_interior_scene_lighting = False
+
+        if self.use_interior_scene_lighting:
+            self.interior_scene_lighting = InteriorSceneLighting()
+            self.add_ons.append(self.interior_scene_lighting)
+
 
     '''
     def communicate(self, commands) -> list:
@@ -381,7 +390,9 @@ class Dataset(Controller, ABC):
                 self.output_dir = output_dir
 
                 # Do the trial.
-                with timeout(seconds=120):
+                with timeout(seconds=320):
+
+
                     self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=trial_num,
@@ -473,7 +484,9 @@ class Dataset(Controller, ABC):
         done = False
         frames_grp = f.create_group("frames")
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-        self._write_frame_labels(frames_grp, resp, -1, False)
+        print('Warning not writing frame label')
+        print('\n' * 5)
+        # self._write_frame_labels(frames_grp, resp, -1, False)
 
         print('\tObject ids before looping: ', self.object_ids)
 
@@ -505,10 +518,13 @@ class Dataset(Controller, ABC):
                     az_range = 2 * np.pi / self.num_views
 
                     # origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
-                    origin_pos = {'x': 0.0, 'y': 2.0, 'z': 3.0}
+                    # origin_pos = {'x': 0.0, 'y': 2.0, 'z': 3.0}
+                    origin_pos =  {'x': -10.48 + 12.873, 'y': 1.81 - 1.85, 'z': - 6.583 + 5.75}
 
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
-                    self.camera_aim = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+                    # self.camera_aim =  {'x': -12.873 + 13.0, 'y': 1.85 - 1.0, 'z': - 5.75 + 5.0}
+                    # self.camera_aim = {'x': -0.873, 'y': 0.85, 'z': -1.75}
+                    self.camera_aim = {'x': 0, 'y': 0, 'z': 0}
                     self.camera_aim = self.add_room_center(self.camera_aim)
                 else:
                     delta_angle = 2 * np.pi / self.num_views
@@ -518,8 +534,10 @@ class Dataset(Controller, ABC):
                     commands = []
                     if frame == start_frame:
                         if azimuth_rotation:
+
                             a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
                             a_pos = self.add_room_center(a_pos)
+                            print('Camera position: ', a_pos)
 
                             # save azimuth
                             az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
@@ -549,7 +567,8 @@ class Dataset(Controller, ABC):
                         {"$type": "simulate_physics", "value": False},
                         {"$type": "teleport_avatar_to", "position": a_pos},
                         {"$type": "look_at_position", "position": self.camera_aim},
-                        {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
+                        # {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)},
+
                         # {"$type": "set_camera_clipping_planes", "near": 2., "far": 12}
                     ])
 
@@ -593,6 +612,7 @@ class Dataset(Controller, ABC):
             self.meta_file.write_text(json_str, encoding='utf-8')
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
+
 
         '''
         
@@ -717,7 +737,9 @@ class Dataset(Controller, ABC):
 
     def get_rotating_camera_position_azimuth(self, az, el, r, delta_az, az_range, delta_dist=1.0):
 
-        az_ = az + delta_az + (random.random() - 0.5) * az_range
+        print('Warning no noise')
+        print('\n' * 5)
+        az_ = az + delta_az # + (random.random() - 0.5) * az_range
         el_ = el # + np.pi / 15
         r_ = r * delta_dist
         x_, z_, y_ = self.sph2cart(az_, el_, r_)  # Compute in Z-up

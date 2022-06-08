@@ -37,7 +37,7 @@ class Bouncing(RigidbodiesDataset):
         super().__init__(port=port)
 
     def get_field_of_view(self) -> float:
-        return 65
+        return 68
 
     def get_scene_initialization_commands(self) -> List[dict]:
         return [self.get_add_scene("box_room_2018"),
