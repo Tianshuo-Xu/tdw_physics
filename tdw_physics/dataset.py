@@ -14,7 +14,7 @@ import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
-from tdw.librarian import ModelRecord, MaterialLibrarian
+from tdw.librarian import ModelRecord, MaterialLibrarian, HDRISkyboxLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -25,7 +25,7 @@ import shutil
 import math
 
 import signal
-from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
+# from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
 
 
 class timeout:
@@ -79,8 +79,8 @@ class Dataset(Controller, ABC):
         self.save_args = save_args
         self._trial_num = None
 
-        if platform.system() == 'Linux':
-            os.environ["DISPLAY"] = ":5"
+        # if platform.system() == 'Linux':
+        #     os.environ["DISPLAY"] = ":5"
 
 
             # if args.gpu is not None:
@@ -114,6 +114,9 @@ class Dataset(Controller, ABC):
         if self.use_interior_scene_lighting:
             self.interior_scene_lighting = InteriorSceneLighting()
             self.add_ons.append(self.interior_scene_lighting)
+
+        # skybox_lib = HDRISkyboxLibrarian()
+        # self._skyboxes: List[str] = [r.name for r in skybox_lib.records if r.sun_intensity >= 0.8]
 
 
     '''
@@ -447,7 +450,7 @@ class Dataset(Controller, ABC):
 
         # Clear the object IDs and other static data
         self.clear_static_data()
-        print('\tObject ids after clear static state: ', self.object_ids)
+
         self._trial_num = trial_num
 
         # Create the .hdf5 file.
@@ -468,9 +471,9 @@ class Dataset(Controller, ABC):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
+
         resp = self.communicate(commands)
 
-        print('\tObject ids after sending commands: ', self.object_ids)
 
         self._set_segmentation_colors(resp)
 
@@ -485,13 +488,12 @@ class Dataset(Controller, ABC):
         frames_grp = f.create_group("frames")
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
         self._write_frame_labels(frames_grp, resp, -1, False)
-        print('\tObject ids before looping: ', self.object_ids)
 
         # Continue the trial. Send commands, and parse output data.
         a_pos_dict = {}
         while not done:
             frame += 1
-            print('frame %d' % frame)
+
             self.communicate([{"$type": "simulate_physics", "value": True}])
 
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
@@ -516,14 +518,14 @@ class Dataset(Controller, ABC):
 
                     # origin_pos = {'x': 0.0, 'y': 2.8, 'z': 2.8}
                     # origin_pos = {'x': 0.0, 'y': 2.0, 'z': 3.0}
-                    origin_pos =  {'x': 1.5, 'y': 1.5, 'z': 1.5}
+                    origin_pos =  {'x': 1.6, 'y': 1.5, 'z': 1.6}
                     # if not self.room == 'archviz_house':
                     #     origin_pos['y'] += 1.
 
                     az, el, r = self.cart2sph(x=origin_pos['x'], y=origin_pos['z'], z=origin_pos['y']) # Note: Y-up to Z-up
                     # self.camera_aim =  {'x': -12.873 + 13.0, 'y': 1.85 - 1.0, 'z': - 5.75 + 5.0}
                     # self.camera_aim = {'x': -0.873, 'y': 0.85, 'z': -1.75}
-                    self.camera_aim = {'x': 0, 'y': 0, 'z': 0}
+                    self.camera_aim = {'x': 0, 'y': 0.2, 'z': 0}
                     self.camera_aim = self.add_room_center(self.camera_aim)
                 else:
                     delta_angle = 2 * np.pi / self.num_views
@@ -536,7 +538,6 @@ class Dataset(Controller, ABC):
 
                             a_pos, az_ = self.get_rotating_camera_position_azimuth(az, el, r, delta_az_list[view_id], az_range)
                             a_pos = self.add_room_center(a_pos)
-                            print('Camera position: ', a_pos)
 
                             # save azimuth
                             az_ori = az_ + math.pi  # since cam faces world origin, its orientation azimuth differs by pi
@@ -576,28 +577,17 @@ class Dataset(Controller, ABC):
                     _, objs_grp, tr_dict, done, camera_matrix = self._write_frame(
                         frames_grp=frames_grp, resp=resp, frame_num=frame, zone_id=self.zone_id, view_id=view_id, trial_num=trial_num)
 
-                    camera_matrix_dict[f'view_{view_id}'] = camera_matrix.tolist()
-
-
-                # with open('./tmp/camera_matrix.json', 'w') as fp:
-                #     json.dump(camera_matrix_dict, fp, sort_keys=True, indent=4)
-
-                # Write whether this frame completed the trial and any other trial-level data
-                # labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
-
-                print('\tObject ids after end of frame %d: ' % frame, self.object_ids)
+                    # camera_matrix_dict[f'view_{view_id}'] = camera_matrix.tolist()
 
                 if frame == end_frame:
                     break
 
         # Cleanup.
         commands = []
-        print('Object ids before destroy: ', self.object_ids)
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         for cmd in commands:
-            print('Destroy: ', cmd)
             self.communicate(cmd)
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop

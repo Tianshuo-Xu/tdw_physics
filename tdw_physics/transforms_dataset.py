@@ -77,7 +77,7 @@ class TransformsDataset(Dataset, ABC):
         if o_id is None:
             o_id: int = Controller.get_unique_id()
 
-        if self.scale_factor_dict is not None:
+        if self.scale_factor_dict is not None and record.name in self.scale_factor_dict.keys():
             scale_factor = record.scale_factor * self.scale_factor_dict[record.name]
         else:
             scale_factor = record.scale_factor

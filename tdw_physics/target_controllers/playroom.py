@@ -277,7 +277,6 @@ class Playroom(Collision):
         self.distractor_material = distractor_material
         self.occluder_material = occluder_material
 
-
     def set_probe_types(self, olist):
         tlist = self.get_types(olist, libraries=["models_full.json", "models_special.json", "models_flex.json"], categories=self.probe_categories, flex_only=False, size_min=self.size_min, size_max=self.size_max)
         self._probe_types = tlist
@@ -312,22 +311,20 @@ class Playroom(Collision):
                                 zone_material=None, apply_force_to='probe',
                                 **kwargs) -> None:
 
-        print("UPDATE CONTROLLER STATE")
         self.clear_static_data()
         if probe is not None:
             self.set_probe_types([probe])
-            print("probe: %s" % probe)
+            # print("probe: %s" % probe)
         if target is not None:
             self.set_target_types([target])
-            print("target: %s" % target)
+            # print("target: %s" % target)
         if distractor is not None:
             self.set_distractor_types([distractor])
-            print("distractor: %s" % distractor)
+            # print("distractor: %s" % distractor)
         if occluder is not None:
             self.set_occluder_types([occluder])
-            print("occluder: %s" % occluder)
+            # print("occluder: %s" % occluder)
 
-        print("MATERIALS")
         if probe_material is not None:
             self.probe_material = probe_material
             print("probe %s" % self.probe_material)
@@ -364,16 +361,17 @@ class Playroom(Collision):
         Dominoes._write_static_data(self, static_group)
 
     def get_trial_initialization_commands(self) -> List[dict]:
+        # deprecated
 
-        commands = super().get_trial_initialization_commands()
-        self.distractor_id = int(self.object_ids[-2])
-        self.occluder_id = int(self.object_ids[-1])
+        commands = self._get_trial_initialization_commands()
 
         obj_ids_dict = {
             'probe': self.probe_id,
-            'target': self.target_id,
-            'distractor': self.distractor_id,
-            'occluder': self.occluder_id}
+            'object_1': int(self.object_ids[0]),
+            'object_2': int(self.object_ids[1])
+        }
+
+        assert self.probe_id == self.object_ids[-1]
 
         obj_indices_dict = {k: [idx for idx in range(len(self.object_ids))
                                 if self.object_ids[idx] == o_id][0]
@@ -381,6 +379,7 @@ class Playroom(Collision):
 
         obj_initial_positions_dict = {
             k: self.initial_positions[idx] for k,idx in obj_indices_dict.items()}
+
 
         if self.apply_force_to != 'probe':
             assert self.force_wait > 0, self.force_wait
@@ -390,9 +389,9 @@ class Playroom(Collision):
             angle = np.degrees(np.arctan2(pos['z'], pos['x'])) + 180
 
             ## lift the object to be pushed a bit
-            pos['y'] = 0.25
             new_probe_pos = obj_initial_positions_dict['probe']
-            new_probe_pos['y'] = 0.0
+            new_probe_pos['y'] = pos['y']
+            pos['y'] += 0.25
 
             ## teleport the relevant objects
             commands.extend([
@@ -457,7 +456,7 @@ class Playroom(Collision):
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
-        # return super().get_trial_initialization_commands()
+
         commands = []
 
         # randomization across trials
@@ -469,16 +468,7 @@ class Playroom(Collision):
 
         ## choose the room center
         if self.room_center_range is not None:
-            if False:
-                generator = {
-                    'x': random.uniform(self.room_center_range['x'] - 2.5, self.room_center_range['x'] + 2.5),
-                    'y': self.room_center_range['y'],
-                    'z': self.room_center_range['z']
-                }
-                print('Generator: ', generator)
-                self.room_center = get_random_xyz_transform(generator)
-            else:
-                self.room_center = get_random_xyz_transform(self.room_center_range)
+            self.room_center = get_random_xyz_transform(self.room_center_range)
         else:
             self._set_room_center()
 
@@ -486,9 +476,8 @@ class Playroom(Collision):
         self.zone_id = None
         # commands.extend(self._place_target_zone())
 
-        
-        radius = 1.0
-        min_distance = 1.0
+        radius = 1.3
+        min_distance = 1.3
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 
@@ -499,6 +488,7 @@ class Playroom(Collision):
         self.target_position = {'x': float(positions[1][0]), 'y': 0., 'z': float(positions[1][1])}
         self.target_rotation = self.get_rotation(self.target_rotation_range)
         self._target_types = self.occluder_types
+
         # Choose and place a 2nd target object.
         commands.extend(self._place_target_object())
 
@@ -512,28 +502,10 @@ class Playroom(Collision):
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
-        '''
-        commands.extend([
-            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("live_edge_coffee_table"),
-                                position={"x": -12.8, "y": 0.96, "z": -5.47},
-                                rotation={"x": 0, "y": -90, "z": 0}),
-            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("chista_slice_of_teak_table"),
-                                position={"x": -14.394, "y": 0.96, "z": -7.06},
-                                rotation={"x": 0, "y": 21.35, "z": 0}),
-            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("chair_billiani_doll"),
-                                position={"x": -15.15, "y": 0.96, "z": -6.8},
-                                rotation={"x": 0, "y": 63.25, "z": 0}),
-            self.add_transforms_object(record=MODEL_LIBRARIES['models_full.json'].get_record("zenblocks"),
-                                position={"x": -12.7, "y": 1.288, "z": -5.55},
-                                rotation={"x": 0, "y": 90, "z": 0}),
-        ])
-
-        '''
 
 
-        print('Warning fixed initial camera position')
+        # dummy camera initialization
         a_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
-
 
         # Set the camera parameters
         self._set_avatar_attributes(a_pos)
@@ -548,6 +520,7 @@ class Playroom(Collision):
         self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
         dist = TDWUtils.get_distance(a_pos, self.camera_aim)
         self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y']) / dist))
+
 
         # # Place distractor objects in the background
         # commands.extend(self._place_background_distractors())

@@ -28,6 +28,8 @@ while true; do
   --pscale 1.0 --tscale 1.0 --occlusion_scale 1.0 \
   --num_distractors 0 --prot None --trot None \
   --launch_build \
+  --validation_set \
+  --save_meshes \
   --room_center $ROOM_CENTER &&
 	break;
 done

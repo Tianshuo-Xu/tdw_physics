@@ -840,9 +840,9 @@ class Dominoes(RigidbodiesDataset):
     def get_scene_initialization_commands(self) -> List[dict]:
         commands = []
         if self.use_interior_scene_lighting:
-            self.interior_scene_lighting.reset(hdri_skybox="noon_grass_4k")
+            self.interior_scene_lighting.reset(hdri_skybox="ninomaru_teien_4k")
             print('Interior lighting: ', self.interior_scene_lighting.hdri_skybox)
-            commands.extend([{"$type": "set_hdri_skybox_exposure", "exposure": 2.525}])
+            commands.extend([{"$type": "set_hdri_skybox_exposure", "exposure": 10.525}])
 
         if self.room == 'box':
             add_scene = self.get_add_scene(scene_name="box_room_2018")
@@ -873,25 +873,26 @@ class Dominoes(RigidbodiesDataset):
                 commands.extend([
 
                     {"$type": "adjust_directional_light_intensity_by", "intensity": 0.25},
-                    {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
+                    {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
                     {"$type": "set_shadow_strength", "strength": 0.5},
                     {"$type": "rotate_directional_light_by", "angle": -30 if self.room == 'tdw_room' else 0, "axis": "pitch", "index": 0},
                 ])
             elif self.room == 'mm_craftroom_1b':
                 commands.extend([
                     {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
-                    {"$type": "adjust_directional_light_intensity_by", "intensity": 0.5},
+                    {"$type": "adjust_directional_light_intensity_by", "intensity": 0.6},
                     {"$type": "set_shadow_strength", "strength": 0.5}])
             elif self.room == 'box':
+
                 commands.extend([
-                    {"$type": "adjust_directional_light_intensity_by", "intensity": 5.25},
-                    {"$type": "set_shadow_strength", "strength": 8.0},
+                    {"$type": "adjust_directional_light_intensity_by", "intensity": 0.7},
+                    {"$type": "set_shadow_strength", "strength": 0.6},
                 ])
             elif self.room == 'archviz_house':
                 commands.extend([
                  {"$type": "adjust_directional_light_intensity_by", "intensity": 0.4},
                  {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
-                 {"$type": "set_shadow_strength", "strength": 0.5}])
+                 {"$type": "set_shadow_strength", "strength": 0.8}])
             else:
                 pass
         return commands
@@ -914,7 +915,6 @@ class Dominoes(RigidbodiesDataset):
             self.room_center = get_random_xyz_transform(self.room_center_range)
         else:
             self._set_room_center()
-
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
@@ -1201,6 +1201,7 @@ class Dominoes(RigidbodiesDataset):
                 "force": self.push_force,
                 "position": position_or_particle,
                 "id": o_id}
+
         return cmd
 
     def _get_zone_location(self, scale):
@@ -1285,8 +1286,6 @@ class Dominoes(RigidbodiesDataset):
         else:
             smin, smax = get_range(size_range)
 
-        print(dmin, dmax)
-
         if dmax < smin:
             scale = smin / dmax
         elif dmax > smax:
@@ -1336,10 +1335,10 @@ class Dominoes(RigidbodiesDataset):
                 "z": 0. if not self.remove_target else 10.0
             }
 
-        # Commands for adding hte object
-        print('\tTarget object scale: ', scale)
-        print('\tTarget object position: ', self.target_position)
-        print('\tTarget object rotation: ', self.target_rotation)
+        # # Commands for adding hte object
+        # print('\tTarget object scale: ', scale)
+        # print('\tTarget object position: ', self.target_position)
+        # print('\tTarget object rotation: ', self.target_rotation)
 
         # print('!!!!!!!!!!!!!!!!!!!!!!!!!!for dominos')
         # scale['z'] *= 0.2
@@ -1424,10 +1423,11 @@ class Dominoes(RigidbodiesDataset):
             probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
         self.probe_initial_position = self.add_room_center(self.probe_initial_position)
-        print('Probe object scale: ', scale)
-        print('Probe object position: ', self.probe_initial_position)
-        print('Probe object rotation: ', rot)
-        print('Probe object record: ', record.name)
+
+        # print('Probe object scale: ', scale)
+        # print('Probe object position: ', self.probe_initial_position)
+        # print('Probe object rotation: ', rot)
+        # print('Probe object record: ', record.name)
 
         # print('warning: for dominos!!!!!!!!!!!!')
         #

@@ -11,28 +11,46 @@ import json
 from tqdm import tqdm
 from tdw_physics.util import MODEL_LIBRARIES, none_or_str, none_or_int
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
-
+from tdw_physics.dataset_generation.scripts.playroom_selection import (
+    EXCLUDE_MODEL, EXCLUDE_CATEGORY, CATEGORY_SCALE_FACTOR, MODEL_SCALE_FACTOR)
 
 RECORDS = []
 for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
     RECORDS.extend(lib.records)
-MODELS = list(set([r for r in RECORDS if not r.do_not_use]))
-MODEL_NAMES = sorted(list(set([r.name for r in RECORDS if not r.do_not_use])))
+
+
+MODELS = list(set([r for r in RECORDS if not r.do_not_use and not r.name in EXCLUDE_MODEL and not 'composite' in r.name]))
+MODEL_NAMES = sorted(list(set([r.name for r in MODELS])))
+
 CATEGORIES = sorted(list(set([r.wcategory for r in RECORDS])))
+CATEGORIES = [cat for cat in CATEGORIES if cat not in EXCLUDE_CATEGORY]
+
 MODELS_PER_CATEGORY = {k: [r for r in MODELS if r.wcategory == k] for k in CATEGORIES}
+MODEL_NAME_PER_CATEGORY = {k: [r.name for r in MODELS if r.wcategory == k] for k in CATEGORIES}
 NUM_MODELS_PER_CATEGORY = {k: len([r for r in MODELS if r.wcategory == k]) for k in CATEGORIES}
+
+SCALE_DICT = {}
+for category in CATEGORY_SCALE_FACTOR.keys():
+    assert category in MODEL_NAME_PER_CATEGORY.keys(), category
+
+for category, model_names in MODEL_NAME_PER_CATEGORY.items():
+    if category in CATEGORY_SCALE_FACTOR.keys():
+        factor = CATEGORY_SCALE_FACTOR[category]
+        for model in model_names:
+            SCALE_DICT[model] = factor
+
+for model, factor in MODEL_SCALE_FACTOR.items():
+    SCALE_DICT[model] = factor
+
 NUM_MOVING_MODELS = 1000
 NUM_STATIC_MODELS = 1000
 NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
 
 # All the models with flex enabled
-
-FLEX_MODELS  = {}
-for filename in MODEL_LIBRARIES.keys():
-    FLEX_MODELS[filename] = [record.name for record in MODEL_LIBRARIES[filename].records if record.flex == True]
-
-
+ALL_FLEX_MODELS = [r.name for r in RECORDS if (r.flex == True and not r.do_not_use and not r.name in EXCLUDE_MODEL and not 'composite' in r.name)]
+for model in ALL_FLEX_MODELS:
+    assert model in MODEL_NAMES, breakpoint()
 
 def _record_usable(record_name):
     if 'composite' in record_name:
@@ -67,7 +85,7 @@ def get_args(dataset_dir: str):
                         help="random seed for splitting categores")
     parser.add_argument("--models_per_split",
                         type=int,
-                        default=125,
+                        default=250,
                         help="number of models in each category split")
     parser.add_argument("--num_moving_models",
                         type=int,
@@ -79,7 +97,7 @@ def get_args(dataset_dir: str):
                         help="number of models that will be static")
     parser.add_argument("--num_trials_per_model",
                         type=int,
-                        default=10,
+                        default=5,
                         help="Number of trials to create per moving model")
     parser.add_argument("--split",
                         type=int,
@@ -89,6 +107,9 @@ def get_args(dataset_dir: str):
                         action="store_true",
                         help="Whether to lump all the static models together for every split")
     parser.add_argument("--validation_set",
+                        action="store_true",
+                        help="Create the validation set using the objectmodels")
+    parser.add_argument("--testing_set",
                         action="store_true",
                         help="Create the validation set using the remaining models")
     parser.add_argument("--randomize_moving_object",
@@ -158,9 +179,11 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     rng = np.random.RandomState(seed=seed)
     model_splits = OrderedDict()
     cat_split_ind = 0
+
     for i,num in enumerate(num_models_per_split):
         models_here = []
         while (len(models_here) < num) and (cat_split_ind < len(category_splits.keys())):
+
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
                 models_here.extend(MODELS_PER_CATEGORY[cat])
@@ -197,6 +220,7 @@ def build_scenarios(moving_models,
                     static_models,
                     num_trials_per_model,
                     seed=0,
+                    room=None,
                     group_order=None,
                     randomize_moving_object=False
                     ):
@@ -204,54 +228,18 @@ def build_scenarios(moving_models,
     if group_order is None:
         group_order = range(4)
 
-    rng = np.random.RandomState(seed=(seed + group_order[0]))
+    room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
+    rng = np.random.RandomState(seed=(seed + room_seed[room]))
     num = num_trials_per_model
-    NM = len(moving_models)
-    NS = len(static_models)
 
-    probes = rng.permutation(moving_models)
-    targets = rng.permutation(moving_models)
-    distractors = rng.permutation(static_models)
-    occluders = rng.permutation(static_models)
-    groups = [probes, targets, distractors, occluders]
-
-    print("group order", group_order)
-    probes, targets, distractors, occluders = [groups[g] for g in group_order]
-
-    # ok_objects = {
-    #     'probe': [nm for nm in probes if _record_usable(nm)],
-    #     'target': [nm for nm in targets if _record_usable(nm)],
-    #     'distractor': [nm for nm in distractors if _record_usable(nm)],
-    #     'occluder': [nm for nm in occluders if _record_usable(nm)]
-    # }
+    all_models = list(moving_models) + list(static_models)
+    NM = len(all_models)
 
     scenarios = []
-    for i in range(num * NM):
-        probe_ind = i // num
-        target_ind = i % NM
-        dist_ind = occ_ind = i % NS
-        scene = {
-            'probe': probes[probe_ind],
-            'target': targets[target_ind],
-            'distractor': distractors[dist_ind],
-            'occluder': occluders[occ_ind]
-        }
-        # for k in scene:
-        #     if not _record_usable(scene[k]):
-        #         nm = scene[k] + ''
-        #         scene[k] = ok_objects[k][i*7 % len(ok_objects[k])]
-        #         print("Substituted <<%s>> for <<%s>> as the %s object in trial %d" % \
-        #                      (scene[k], nm, k, i))
-
-        if randomize_moving_object:
-            scene['apply_force_to'] = ['probe', 'target', 'distractor', 'occluder'][i % 4]
-        else:
-            scene['apply_force_to'] = 'probe'
-
+    for _ in range(num * NM):
+        selection = rng.choice(all_models, 3)
+        scene = {'probe': selection[0], 'target': selection[1], 'occluder': selection[2], 'apply_force_to': 'probe'}
         scenarios.append(scene)
-
-    print("num, NM, NS", num, NM, NS)
-
 
     return scenarios
 
@@ -347,23 +335,49 @@ def main(args):
         all_static_models.extend(s)
 
     ## create the scenarios
-    if not args.validation_set:
-        moving_models = moving_splits[args.split]
-        static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
-    else:
-        print("remaining", remaining_splits)
-        validation_models = []
-        for models in remaining_splits:
-            validation_models.extend(models)
+    if args.validation_set:
+
+        selected = [
+            'labrador_retriever_puppy', 'b05_grizzly', 'b04_horse_body_mesh', 'b03_zebra_body', 'b03_calf',
+            '688926_elephant', '129601_sheep', 'b03_dove_polysurface1', 'b05_figure_2_node', 'b04_duck', 'b04_orange_00',
+            'appliance-ge-profile-microwave3', 'b01_croissant', 'b03_banana_01_high', 'b03_cocacola_can_cage',
+            'b03_pcylinder2', 'b03_pink_donuts_mesh', 'coffee_maker', 'coffeemug', 'kettle', 'dice',
+            'arflex_strips_sofa', 'b03_worldglobe', 'b05_gym_matrix_t7xi_treadmill', 'b04_03_077', 'b04_vm_v2_025',
+            'rucksack', 'b05_calculator', 'student_classical_guitar', 'buddah'
+        ]
+
+        validation_models = [i for i in selected if i not in remaining_splits[0]]
+
+        for models in ALL_FLEX_MODELS:
+            if models not in remaining_splits[0]:
+                validation_models.append(models)
+
         moving_models = static_models = validation_models
+        print('Number of validation models: ', len(validation_models))
+
+    elif args.testing_set:
+        testing_models = []
+
+        for models in remaining_splits[0]:
+            if models in ALL_FLEX_MODELS:
+                testing_models.append(models)
+        moving_models = static_models = testing_models
+        print('Number of testing models: ', len(testing_models))
+    else:
+        moving_models = moving_splits[args.split]
+        static_models = static_splits[
+            args.split % num_static_splits] if not args.use_all_static_models else all_static_models
+
 
     scenarios = build_scenarios(moving_models, static_models,
                                 args.num_trials_per_model, seed=args.category_seed,
+                                room = args.room,
                                 group_order=args.group_order,
                                 randomize_moving_object=args.randomize_moving_object
                                 )
+    scale_dict = SCALE_DICT
 
-    scale_dict = None
+
 
     # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
     # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
@@ -371,6 +385,8 @@ def main(args):
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray']
     # 10obj zoo
 
+    '''
+    
     zoo_scale_dict = {
         'labrador_retriever_puppy': 1.,
         'b05_grizzly': 1.,
@@ -457,6 +473,7 @@ def main(args):
 
     scenarios = build_simple_scenario(models_simple, num_trials=200, seed=args.category_seed,
                                       num_distractors=args.num_distractors, permute=True)
+    '''
 
     start, end = args.start, (args.end or len(scenarios))
 
@@ -473,8 +490,14 @@ def main(args):
         suffix = str(suffix % (ns * len(group_order)))
         return suffix
 
-    suffix = _get_suffix(args.split, args.group_order) if not args.validation_set else 'val'
-    output_dir = Path(args.dir) # .joinpath('model_split_' + suffix)
+    if args.validation_set:
+        suffix = 'val'
+    elif args.testing_set:
+        suffix = 'test'
+    else:
+        suffix = _get_suffix(args.split, args.group_order)
+
+    output_dir = Path(args.dir).joinpath(args.room + '_split_' + suffix)
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
     temp_path = Path('tmp' + str(args.gpu))
@@ -527,7 +550,8 @@ if __name__ == '__main__':
     import platform, os
     if platform.system() == 'Linux':
         if args.gpu is not None:
-            os.environ["DISPLAY"] = ":5." + str(args.gpu)
+            print(args.gpu)
+            os.environ["DISPLAY"] = ":" + str(args.gpu)
         else:
             os.environ["DISPLAY"] = ":0"
 
