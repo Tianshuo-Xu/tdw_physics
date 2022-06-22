@@ -453,11 +453,11 @@ TRIAL_LABELS = [
     first_target_contact_zone_frame,
     first_target_hit_ground_frame,
     final_target_displacement,
-    final_target_mask_displacement,
-    target_visible_area,
-    zone_visible_area,
-    probe_visible_area,
-    is_any_object_fully_occluded
+    # final_target_mask_displacement,
+    # target_visible_area,
+    # zone_visible_area,
+    # probe_visible_area,
+    # is_any_object_fully_occluded
 ]
 
 def get_all_label_funcs():
@@ -490,7 +490,7 @@ def get_across_trial_stats_from(paths, funcs, agg_func=avg_label):
             try:
                 res_f[func.__name__ + '/' + agg_func.__name__] = func(f)
             except Exception as e:
-                print("Error occured during trials stats collection:",e)
+                print("Error occured during trials stats collection:",e, func.__name__ + '/' + agg_func.__name__, func)
         res.append(res_f)
         f.close()
 

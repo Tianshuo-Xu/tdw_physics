@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 setup(
     name='tdw_physics',
     version="0.3.1",
+    #packages=['tdw_physics'],
     description='Generic structure to create physics datasets with TDW.',
     long_description="Required Python scripts for TDW.",
     url='https://github.com/alters-mit/tdw_physics',
@@ -27,7 +28,7 @@ setup(
                       'pillow',
                       'weighted-collection',
                       'stopit',
-		      'tdw==1.8.14'
+		               'tdw==1.8.14',
                       'matplotlib',
                       'trimesh'],
 )

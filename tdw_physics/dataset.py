@@ -71,7 +71,7 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
-        self.num_views = kwargs.get('num_views', None)
+        self.num_views = kwargs.get('num_views', 1)
     def communicate(self, commands) -> list:
         '''
         Save a log of the commands so that they can be rerun
@@ -217,6 +217,7 @@ class Dataset(Controller, ABC):
 
         # which passes to write to the HDF5
         self.write_passes = write_passes
+        print("self.write_passes", self.write_passes)
         if isinstance(self.write_passes, str):
             self.write_passes = self.write_passes.split(',')
         self.write_passes = [p for p in self.write_passes if (p in PASSES)]
@@ -275,17 +276,17 @@ class Dataset(Controller, ABC):
             self.args_dict = copy.deepcopy(args_dict)
         self.save_command_line_args(output_dir)
 
-        # Save the across-trial stats
-        if self.save_labels:
-            hdf5_paths = glob.glob(str(output_dir) + '/*.hdf5')
-            stats = get_across_trial_stats_from(
-                hdf5_paths, funcs=self.get_controller_label_funcs(classname=type(self).__name__))
-            stats["num_trials"] = int(len(hdf5_paths))
-            stats_str = json.dumps(stats, indent=4)
-            stats_file = Path(output_dir).joinpath('trial_stats.json')
-            stats_file.write_text(stats_str, encoding='utf-8')
-            print("ACROSS TRIAL STATS")
-            print(stats_str)
+        # # Save the across-trial stats
+        # if self.save_labels:
+        #     hdf5_paths = glob.glob(str(output_dir) + '/*.hdf5')
+        #     stats = get_across_trial_stats_from(
+        #         hdf5_paths, funcs=self.get_controller_label_funcs(classname=type(self).__name__))
+        #     stats["num_trials"] = int(len(hdf5_paths))
+        #     stats_str = json.dumps(stats, indent=4)
+        #     stats_file = Path(output_dir).joinpath('trial_stats.json')
+        #     stats_file.write_text(stats_str, encoding='utf-8')
+        #     print("ACROSS TRIAL STATS")
+        #     print(stats_str)
 
 
     def update_controller_state(self, **kwargs):
@@ -431,17 +432,21 @@ class Dataset(Controller, ABC):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
+        # print("Hello***")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
         self._write_frame_labels(frame_grp, resp, -1, False)
+
+        # print("num views", self.num_views)
 
         # Continue the trial. Send commands, and parse output data.
         if self.num_views > 1:
             azimuth_grp = f.create_group("azimuth")
+            #TODO: set as flag
             multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=False)
 
         while not done:
             frame += 1
-            print('frame %d' % frame)
+            # print('frame %d' % frame)
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
@@ -452,25 +457,27 @@ class Dataset(Controller, ABC):
             #     frame -= 1
             #     continue
 
+            # print()
+
             if self.num_views > 1:
                 for view_num in range(self.num_views):
                     # if view_num == 0 or frame == view_num:
                     camera_position = multi_camera_positions[view_num]
                     commands = self.move_camera_commands(camera_position, [])
                     _resp = self.communicate(commands)
-                    print('\tview %d' % view_num)
+                    # print('\tview %d' % view_num)
                     frame_grp, objs_grp, tr_dict, done = self._write_frame(
                         frames_grp=frames_grp if view_num == 0 else frame_grp,
                         resp=_resp, frame_num=frame, view_num=view_num)
 
             else:
-                frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
+                frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
 
             # Write whether this frame completed the trial and any other trial-level data
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
 
-            if frame > 5:
-                break
+            # if frame > 5:
+            #     break
 
         # Cleanup.
         commands = []
@@ -496,6 +503,7 @@ class Dataset(Controller, ABC):
             try:
                 _id = f['frames']['0000']['images']['_id']
             except:
+                # print("inside cam0")
                 _id = f['frames']['0000']['images']['_id_cam0']
             #get PIL image
             _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
@@ -703,7 +711,7 @@ class Dataset(Controller, ABC):
                             resp: List[bytes],
                             frame_num: int,
 
-                            sleeping: bool) -> Tuple[h5py.Group, bool]:
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
         """
         Writes the trial-level data for this frame.
 

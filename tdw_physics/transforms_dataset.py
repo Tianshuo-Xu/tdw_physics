@@ -101,7 +101,7 @@ class TransformsDataset(Dataset, ABC):
 
         return commands
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num:int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(self.object_ids)
 
@@ -164,6 +164,8 @@ class TransformsDataset(Dataset, ABC):
                 for i in range(im.get_num_passes()):
 
                     pass_mask = im.get_pass_mask(i) + cam_suffix
+
+                    # print("pass mask", pass_mask)
 
                     # Reshape the depth pass array.
                     if pass_mask == "_depth":
