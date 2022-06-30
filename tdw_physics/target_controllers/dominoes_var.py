@@ -322,7 +322,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in ['box', 'tdw', 'house'], args.room
+        assert  args.room in ['box', 'tdw', 'random', 'mmcraft'], args.room
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -628,6 +628,7 @@ class Dominoes(RigidbodiesDataset):
         self.set_zone_types(target_zone)
         self.zone_location = zone_location
         self.zone_color = zone_color
+
         self.zone_scale_range = zone_scale_range
         self.zone_material = zone_material
         self.zone_friction = zone_friction
@@ -785,6 +786,7 @@ class Dominoes(RigidbodiesDataset):
 
                         for pass_mask in self.save_passes:
                             mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+
                             cmd, stdout, stderr = pngs_to_mp4(
                                 filename=mp4_filename,
                                 image_stem=pass_mask[1:]+'_',
@@ -906,7 +908,7 @@ class Dominoes(RigidbodiesDataset):
         self.star_object["type"] = random.choice(self._star_types)
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["mass"] = 20 #2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
@@ -997,7 +999,7 @@ class Dominoes(RigidbodiesDataset):
         frames_grp = f.create_group("frames")
 
         ## curatin leaves screen
-        if interact_id > 0: #curtain move from center to the left
+        if interact_id > 0: #curtain move from center to left
             import time
             location = dict()
             location['x'] = self.curtain_center[0]
@@ -1037,6 +1039,17 @@ class Dominoes(RigidbodiesDataset):
                 #    break
                 #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
                 #    break
+
+            # curtain stays
+            # for i in range(20):
+            #     frame += 1
+            #     resp = self.communicate([])
+            #     frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            #     # Write whether this frame completed the trial and any other trial-level data
+            #     labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+
+
         else:
             frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
             self._write_frame_labels(frame_grp, resp, -1, False)
@@ -1067,7 +1080,7 @@ class Dominoes(RigidbodiesDataset):
 
 
         ## curatin gets into screen
-        if interact_id < self.num_interactions-1: #curtain move from left to the center
+        if self.num_interactions > 1 and interact_id < self.num_interactions-1: #curtain goes to center
             import time
             location = dict()
             location['x'] = self.curtain_initial[0]#self.curtain_center_x - 1.0
@@ -1093,6 +1106,7 @@ class Dominoes(RigidbodiesDataset):
 
                 #print(dist_to_center)
                 if dist_to_center < 0.01:
+                    frame -= 1
                     break
                 #if location['x'] > self.curtain_center_x:
                 #    break
@@ -1101,6 +1115,14 @@ class Dominoes(RigidbodiesDataset):
                 # Write whether this frame completed the trial and any other trial-level data
                 labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
 
+            # #curtain stays
+            for i in range(10):
+                frame += 1
+                resp = self.communicate([])
+                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+                # Write whether this frame completed the trial and any other trial-level data
+                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
         # Cleanup.
         commands = []
 
@@ -1259,21 +1281,67 @@ class Dominoes(RigidbodiesDataset):
         return 55
 
     def get_scene_initialization_commands(self) -> List[dict]:
-        if self.room == 'box':
+
+        selected_room = ""
+        if self.room == 'random':
+            selected_room = random.choice(['box', 'tdw', 'mmcraft'])
+
+
+        if self.room == 'box' or selected_room == "box":
             add_scene = self.get_add_scene(scene_name="box_room_2018")
-        elif self.room == 'tdw':
+        elif self.room == 'tdw' or selected_room == "tdw":
             add_scene = self.get_add_scene(scene_name="tdw_room")
-        elif self.room == 'house':
+        elif self.room == 'house' or selected_room == "house":
             add_scene = self.get_add_scene(scene_name='archviz_house')
-        return [add_scene,
+        elif self.room == 'mmcraft' or selected_room == "mmcraft":
+            add_scene = self.get_add_scene(scene_name='mm_craftroom_1b')
+        print("room name", self.room, selected_room)
+        commands = [add_scene,
                 {"$type": "set_aperture",
-                 "aperture": 8.0},
+                 "aperture": 4.0},
                 {"$type": "set_post_exposure",
                  "post_exposure": 0.4},
                 {"$type": "set_ambient_occlusion_intensity",
                  "intensity": 0.175},
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5}]
+
+        if self.room == 'tdw' or selected_room == "tdw":
+            commands.extend([
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.25},
+                {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
+                {"$type": "set_shadow_strength", "strength": 0.5},
+                {"$type": "rotate_directional_light_by", "angle": -30, "axis": "pitch", "index": 0},
+            ])
+        elif self.room == 'box' or selected_room == "box":
+            commands.extend([
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.7},
+                {"$type": "set_shadow_strength", "strength": 0.6},
+            ])
+        elif self.room == 'house' or selected_room == "house":
+            commands.extend([
+             {"$type": "adjust_directional_light_intensity_by", "intensity": 0.4},
+             {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
+             {"$type": "set_shadow_strength", "strength": 0.8}])
+        elif self.room == 'mmcraft' or selected_room == "mmcraft":
+            commands.extend([
+                {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.2},
+                {"$type": "set_shadow_strength", "strength": 0.5}])
+
+
+        return commands
+        # return [add_scene,
+        #         {"$type": "set_aperture",
+        #          "aperture": 8.0},
+        #         {"$type": "set_post_exposure",
+        #          "post_exposure": 0.4},
+        #         {"$type": "set_ambient_occlusion_intensity",
+        #          "intensity": 0.175},
+        #         {"$type": "set_ambient_occlusion_thickness_modifier",
+        #          "thickness": 3.5}]
+
+
 
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         commands = []
@@ -1481,7 +1549,7 @@ class Dominoes(RigidbodiesDataset):
         return frame, objs, tr, sleeping and not (frame_num < 150)
 
     def _update_target_position(self, resp: List[bytes], frame_num: int) -> None:
-        if frame_num <= 0:
+        if frame_num <= 1:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
             target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
@@ -1719,6 +1787,7 @@ class Dominoes(RigidbodiesDataset):
                     pos_id = random.choice(range(1, self.total_num_dominoes))
                 else:
                     pos_id = random.choice(range(self.total_num_dominoes))
+
 
             elif star_mass < self.normal_mass * 0.5: #light object
                 bias = np.random.uniform(0,1) < 0.75
@@ -1979,14 +2048,14 @@ class Dominoes(RigidbodiesDataset):
 
         return cmds
 
-    def _add_ramp_base_to_ramp(self, color=None) -> None:
+    def _add_ramp_base_to_ramp(self, color=None, sample_ramp_base_height=True) -> None:
 
         cmds = []
 
         if color is None:
             color = self.random_color(exclude=self.target_color)
-
-        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
+        if sample_ramp_base_height:
+            self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
         if self.ramp_base_height < 0.01:
             self.ramp_base_scale = copy.deepcopy(self.ramp_scale)
             return []

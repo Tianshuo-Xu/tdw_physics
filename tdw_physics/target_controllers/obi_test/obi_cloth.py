@@ -54,14 +54,27 @@ c.add_ons.extend([camera, obi])
 # Create a cloth sheet.
 cloth_material = ClothMaterial(visual_material="3d_printed_mesh_round",
                                texture_scale={"x": 1, "y": 1},
-                               stretching_scale=0.75,
-                               stretch_compliance=0,
-                               max_compression=0,
-                               max_bending=0,
+                               stretching_scale=1,
+                               stretch_compliance=0.002,
+                               max_compression=0.5,
+                               max_bending=0.05,
+                               bend_compliance=1.0,
                                drag=0.05,
                                lift=0.05,
                                visual_smoothness=0,
                                mass_per_square_meter=0.15)
+
+# Fabric, Leather, Metal, Paper, Plastic
+# cloth_material = ClothMaterial(visual_material="3d_printed_mesh_round",
+#                                texture_scale={"x": 1, "y": 1},
+#                                stretching_scale=0.75,
+#                                stretch_compliance=0,
+#                                max_compression=0,
+#                                max_bending=0,
+#                                drag=0.05,
+#                                lift=0.05,
+#                                visual_smoothness=0,
+#                                mass_per_square_meter=0.15)
 
 
 

@@ -456,7 +456,7 @@ class Collision(Dominoes):
         else:
             self.push_position = {
                 k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    self.probe_scale, rot['y'])[k]
+                    scale, rot['y'])[k]
                 for k,v in self.push_position.items()}
             self.push_position = {
                 k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)

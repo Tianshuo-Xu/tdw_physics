@@ -40,7 +40,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     ### zone
     parser.add_argument("--zscale",
                         type=str,
-                        default="1.2,0.01,2.0",
+                        default="1.0,0.001,1.0",
                         help="scale of target zone")
 
     parser.add_argument("--zone",
@@ -77,7 +77,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--frot",
                         type=str,
-                        default="[0,0]",
+                        default="[-20,20]",
                         help="range of angles in xz plane to apply push force")
 
     parser.add_argument("--foffset",
@@ -87,27 +87,19 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--fjitter",
                         type=float,
-                        default=0,
+                        default=0.1,
                         help="jitter around object centroid to apply force")
-    parser.add_argument("--fupforce",
-                        type=str,
-                        default='[0.2,0.2]',
-                        help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically")
 
     ###target
     parser.add_argument("--target",
                         type=str,
-                        default="sphere",
+                        default="pipe,cube,pentagon",
                         help="comma-separated list of possible target objects")
 
     parser.add_argument("--tscale",
                         type=str,
-                        default="0.2,0.2,0.2",
+                        default="0.5,0.4,0.5",
                         help="scale of target objects")
-    parser.add_argument("--tlift",
-                        type=float,
-                        default=2.0,
-                        help="Lift the target object off the floor/ramp. Useful for rotated objects")
 
     ### layout
     parser.add_argument("--collision_axis_length",
@@ -116,6 +108,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         help="Length of spacing between probe and target objects at initialization.")
 
     ## collision specific arguments
+    parser.add_argument("--fupforce",
+                        type=str,
+                        default='[0,0]',
+                        help="Upwards component of force applied, with 0 being purely horizontal force and 1 being the same force being applied horizontally applied vertically.")
+
     ## camera
     parser.add_argument("--camera_min_angle",
                         type=float,
@@ -129,41 +126,6 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default="1.75",
                         help="radial distance from camera to centerpoint")
-
-
-    # layout
-    parser.add_argument("--bouncy_axis_length",
-                        type=float,
-                        default=1.5,
-                        help="Length of spacing between target object and zone.")
-
-
-    # box_piles
-    parser.add_argument("--use_box_piles",
-                        type=int,
-                        default=1,
-                        help="Whether to place box_piles between the target and the zone")
-
-    parser.add_argument("--box_piles",
-                        type=str,
-                        default="cube",
-                        help="comma-separated list of possible box_piles objects")
-
-    parser.add_argument("--box_piles_position",
-                        type=float,
-                        default=0.9,
-                        help="Fraction between 0 and 1 where to place the box_piles on the axis")
-
-    parser.add_argument("--box_piles_scale",
-                        type=str,
-                        default="[0.3,5.0,2.0]",
-                        help="Scaling factor of the box_piles in xyz.")
-
-    parser.add_argument("--box_piles_material",
-                        type=none_or_str,
-                        default=None,
-                        help="Material name for boxes. If None, same as zone material")
-
 
     ## occluders and distractors
     parser.add_argument("--occluder_aspect_ratio",
@@ -186,20 +148,6 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
-        # box_piles
-        args.use_box_piles = bool(args.use_box_piles)
-
-        if args.box_piles is not None:
-            targ_list = args.box_piles.split(',')
-            assert all([t in MODEL_NAMES for t in targ_list]), \
-                "All box_piles object names must be elements of %s" % MODEL_NAMES
-            args.box_piles = targ_list
-        else:
-            args.box_piles = MODEL_NAMES
-
-        args.box_piles_scale = handle_random_transform_args(
-            args.box_piles_scale)
-
         return args
 
     args = parser.parse_args()
@@ -208,21 +156,13 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     return args
 
-class BouncyWall(Dominoes):
+class Collision(Dominoes):
 
     def __init__(self,
                  port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
                  probe_lift = 0.,
-                 bouncy_axis_length=1.2,
-                 use_ramp=True,
-                 use_box_piles=True,
-                 box_piles=['cube'],
-                 box_piles_position=0.5,
-                 box_piles_scale=[2, 1, 1],
-                 box_piles_material="leather_fine",
-                 target_lift=3.0,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
@@ -230,12 +170,7 @@ class BouncyWall(Dominoes):
         self.fupforce = fupforce
         self.probe_lift = probe_lift
         self.use_obi = False
-        self.bouncy_axis_length = self.collision_axis_length = bouncy_axis_length
-        self.use_box_piles = use_box_piles
-        self.box_piles = box_piles
-        self.box_piles_position = box_piles_position
-        self.box_piles_scale = box_piles_scale
-        self.box_piles_material = box_piles_material
+
 
         self._star_types = self._target_types
         self.star_scale_range = self.target_scale_range
@@ -243,8 +178,7 @@ class BouncyWall(Dominoes):
         self.candidate_scale_range = self.probe_scale_range
 
         self.force_wait_range = [3, 3]
-        self.target_lift = target_lift
-        self.force_offset_jitter = 0.
+
 
 
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
@@ -270,8 +204,10 @@ class BouncyWall(Dominoes):
             self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
 
         # Choose, place, and push a probe object.
-        if self.use_box_piles:
-            commands.extend(self._place_box_piles())
+        #commands.extend(self._place_and_push_probe_object(interact_id))
+
+        # Build the intermediate structure that captures some aspect of "intuitive physics."
+        commands.extend(self._build_intermediate_structure(interact_id))
 
         # Teleport the avatar to a reasonable position
         if interact_id == 0:
@@ -341,7 +277,7 @@ class BouncyWall(Dominoes):
         #if not self.repeat_trial: # sample from scratch
         star_type = self.star_object["type"]
         star_scale = self.star_object["scale"]
-        star_mass = self.star_object["mass"]
+        star_mass = 1.0 #self.star_object["mass"]
         star_color = self.star_object["color"]
 
         # select an object
@@ -375,7 +311,15 @@ class BouncyWall(Dominoes):
         # Where to put the target
         pos_id = 0
         # carpet, target, middle, middle | prob
-        star_position = { "x": 0, "y": self.target_lift, "z": 0.}
+        # star_position = {
+        #     "x": self.collision_axis_length - 1.0,
+        #     "y": 0. if not self.remove_target else 10.0,
+        #     "z": 0. if not self.remove_target else 10.0
+        # }
+
+
+
+        star_position = {"x": -self.collision_axis_length, "y": self.probe_lift , "z": 0.}
 
         star_rotation = self.get_rotation(self.target_rotation_range)
 
@@ -404,15 +348,23 @@ class BouncyWall(Dominoes):
                 scale=scale,
                 material=self.target_material,
                 color=rgb,
-                mass=star_mass, #2.0,
+                mass=2.0,
                 scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
-                bounciness=1.0,
+                bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
                 make_kinematic=False
             ))
+
+        # If this scene won't have a target
+        if self.remove_target:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]
+
 
 
         # Set its collision mode
@@ -422,15 +374,24 @@ class BouncyWall(Dominoes):
             #  "id": o_id},
             {"$type": "set_object_drag",
              "id": o_id,
-             "drag": 0., "angular_drag": 0.}])
+             "drag": 0, "angular_drag": 0}])
 
-        # Apply a force to the target object
-        self.push_force = self.get_push_force(
-            scale_range=star_mass * np.array(self.force_scale_range),
-            angle_range=self.force_angle_range,
-            yforce=self.fupforce)
+        # Apply a force to the probe object
+
+        if interact_id == 0:
+            self.push_force = self.get_push_force(
+                scale_range= star_mass * np.array(self.force_scale_range) * 2,
+                angle_range=[-10, -30],
+                yforce=self.fupforce)
+        else:
+            self.push_force = self.get_push_force(
+                scale_range= star_mass * np.array(self.force_scale_range) * 2,
+                angle_range=self.force_angle_range,
+                yforce=self.fupforce)
+
+        print("push force", self.push_force)
         self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, -star_rotation['y'], degrees=True)
+            self.push_force, 0, degrees=True)
 
         self.push_position = star_position
         if self.use_ramp:
@@ -441,14 +402,16 @@ class BouncyWall(Dominoes):
             }
         else:
             self.push_position = {
-                k: v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    self.target_scale, star_rotation['y'])[k]
-                for k, v in self.push_position.items()}
-            self.push_position = {
-                k: v+random.uniform(-self.force_offset_jitter,
-                                    self.force_offset_jitter)
-                for k, v in self.push_position.items()}
+                k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                    star_scale, star_rotation['y'])[k]
+                for k,v in self.push_position.items()}
+            self.push_position['y'] -= 0.3
+            # self.push_position = {
+            #     k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+            #     for k,v in self.push_position.items()}
 
+
+            print("push position", self.push_position)
             self.push_cmd = {
                 "$type": "apply_force_at_position",
                 "force": self.push_force,
@@ -457,124 +420,17 @@ class BouncyWall(Dominoes):
             }
 
         # decide when to apply the force
-        self.force_wait = 1
-        self.is_push = False
-        #int(random.uniform(
-        #    *get_range(self.force_wait_range)))
-        print("force wait", self.force_wait)
+        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
 
-        # if self.force_wait == 0:
-        #    commands.append(self.push_cmd)
+        if self.PRINT:
+            print("force wait", self.force_wait)
 
-        # If this scene won't have a target
-        if self.remove_target:
-            commands.append(
-                {"$type": self._get_destroy_object_command_name(o_id),
-                 "id": int(o_id)})
-            self.object_ids = self.object_ids[:-1]
-
-        self.hold_cmd = {"$type": "teleport_object",
-                          "id": o_id,
-                          "position": star_position}
-
-        return commands
-
-    def get_additional_command_when_removing_curtain(self, frame=0):
-
-        if frame < 10:
-            return [self.hold_cmd]
-        elif frame == 10:
-            self.is_push = True
-            return [self.push_cmd]
-        else:
-            return []
-
-    def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
-        print("force_wait", self.force_wait, force_wait, frame)
-
-        if force_wait == None:
-            if (self.force_wait != 0) and frame < self.force_wait:
-                if self.PRINT:
-                    print("applied %s at time step %d" % (self.hold_cmd, frame))
-                output = [self.hold_cmd]
-            elif (self.force_wait != 0) and frame == self.force_wait:
-
-                output = [self.push_cmd]
-            else:
-                output = []
-        else:
-            if not self.is_push:
-                if (self.force_wait != 0) and frame < force_wait:
-                    if self.PRINT:
-                        print("applied %s at time step %d" % (self.hold_cmd, frame))
-                    output = [self.hold_cmd]
-                elif (self.force_wait != 0) and frame == force_wait:
-                    self.is_push = True
-                    output = [self.push_cmd]
-                else:
-                    output = []
-            else:
-                output = []
-
-        return output
-
-    def _place_box_piles(self) -> List[dict]:
-        """Places the box_piles on a location on the axis and fixes it in place"""
-        assert self.use_box_piles, "need to use box_piles"
-        commands = []
-
-        # add box #1 (closest to yellow zone)
-        record, data = self.random_primitive(
-            object_types=self.get_types(self.box_piles),
-            scale=self.box_piles_scale,
-            color=self.random_color(exclude=self.target_color),
-        )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-
-        pos = {
-            "x": self.box_piles_position * self.bouncy_axis_length,
-            "y": -0.5 * scale['y'],
-            "z": 0
-        }
-
-        commands.extend(self.add_physics_object(
-            record=record,
-            position=pos,
-            rotation=TDWUtils.VECTOR3_ZERO,
-            mass=1000,
-            dynamic_friction=0.0,
-            static_friction=0.0,
-            bounciness=0.9,
-            o_id=o_id,
-            add_data=True)
-        )
-
-        # Set the middle object material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.zone_material)))
-
-        # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-                "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
-                "id": o_id},
-            {"$type": "scale_object",
-                "scale_factor": scale,
-                "id": o_id}])
-
-        # make it a "kinematic" object that won't move
-        commands.extend([
-            {"$type": "set_object_collision_detection_mode",
-             "mode": "continuous_speculative",
-             "id": o_id},
-            {"$type": "set_kinematic_state",
-             "id": o_id,
-             "is_kinematic": True,
-             "use_gravity": True}])
+        if self.force_wait == 0:
+            commands.append(self.push_cmd)
 
 
         return commands
+
 
     def _place_and_push_probe_object(self, interact_id) -> List[dict]:
         """
@@ -621,7 +477,7 @@ class BouncyWall(Dominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.4,
                 static_friction=0.4,
-                bounciness=0.9,
+                bounciness=0,
                 o_id=o_id))
 
         # Set the probe material
@@ -701,9 +557,9 @@ class BouncyWall(Dominoes):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
         return {
-            "x": 0.0,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            "x": self.collision_axis_length,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+            "y": 0 if not self.remove_zone else 10.0,
+            "z": random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
         }
 
 
@@ -760,7 +616,7 @@ if __name__ == "__main__":
     #     else:
     #         os.environ["DISPLAY"] = ":0"
 
-    ColC = BouncyWall(
+    ColC = Collision(
         port=args.port,
         room=args.room,
         randomize=args.random,
@@ -790,13 +646,6 @@ if __name__ == "__main__":
         remove_zone=bool(args.remove_zone),
         zjitter = args.zjitter,
         fupforce = args.fupforce,
-        use_box_piles=args.use_box_piles,
-        box_piles=args.box_piles,
-        box_piles_position=args.box_piles_position,
-        box_piles_scale=args.box_piles_scale,
-        box_piles_material=args.box_piles_material,
-        bouncy_axis_length=args.bouncy_axis_length,
-        target_lift=args.tlift,
         ## not scenario-specific
         camera_radius=args.camera_distance,
         camera_min_angle=args.camera_min_angle,

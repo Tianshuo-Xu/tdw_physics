@@ -72,6 +72,7 @@ class Dataset(Controller, ABC):
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
+        self.obi = None
 
     def communicate(self, commands) -> list:
         '''
@@ -368,7 +369,15 @@ class Dataset(Controller, ABC):
         """
 
         # Clear the object IDs and other static data
+
         self.clear_static_data()
+
+        if self.use_obi and self.obi is None:
+            from tdw.add_ons.obi import Obi
+            obi = Obi()
+            self.add_ons = [obi] #.extend([obi])
+            self.obi = obi
+
         self._trial_num = trial_num
 
         # Create the .hdf5 file.
@@ -428,7 +437,8 @@ class Dataset(Controller, ABC):
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         self.communicate(commands)
-
+        if self.use_obi:
+            self.obi.reset()
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
             meta = OrderedDict()
@@ -738,8 +748,7 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
-
-                assert(len(self.object_ids) == nmeshes)
+                assert(len(self.object_ids) == nmeshes), f"{len(self.object_ids)} vs {nmeshes}"
                 for index in range(nmeshes):
                     o_id = meshes.get_object_id(index)
                     vertices = meshes.get_vertices(index)

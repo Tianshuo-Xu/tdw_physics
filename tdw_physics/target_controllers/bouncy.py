@@ -762,6 +762,7 @@ class Bouncy(MultiDominoes):
                 scale=self.box_piles_scale,
                 color=self.random_color(exclude=self.target_color),
             )
+
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
             pos = {
@@ -806,6 +807,7 @@ class Bouncy(MultiDominoes):
                 "is_kinematic": True,
                 "use_gravity": True}])
 
+        bouncy_zone_color = {"r": 0.0, "g": 0, "b": 1.0, "a": 1.}
         # add box #2 (second closest to yellow zone)
         record, data = self.random_primitive(
             object_types=self.get_types(self.box_piles),
@@ -840,7 +842,7 @@ class Bouncy(MultiDominoes):
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color":  {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.},
+                "color": bouncy_zone_color ,
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
@@ -941,7 +943,7 @@ class Bouncy(MultiDominoes):
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": 0.0, "g": 0.0, "b": 1.0, "a": 1.},
+                "color": bouncy_zone_color ,
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
