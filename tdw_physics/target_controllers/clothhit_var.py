@@ -321,7 +321,8 @@ class ClothHit(MultiDominoes):
         commands.extend(self._place_intermediate_object(interact_id))
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+        if interact_id == 0:
+            self.a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
@@ -329,23 +330,23 @@ class ClothHit(MultiDominoes):
                                                 y_max=self.camera_max_height,
                                                 center=TDWUtils.VECTOR3_ZERO)
 
+        self._set_avatar_attributes(self.a_pos)
+
         cam_aim = {"x": 0, "y": 0.5, "z": 0}
         commands.extend([
             {"$type": "teleport_avatar_to",
-             "position": a_pos},
+             "position": self.a_pos},
             {"$type": "look_at_position",
              "position": cam_aim},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
+             "focus_distance": TDWUtils.get_distance(self.a_pos, cam_aim)}
         ])
 
-        # Set the camera parameters
-        self._set_avatar_attributes(a_pos)
 
-        self.camera_position = a_pos
-        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
-        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
-        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+        # self.camera_position = a_pos
+        # self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        # dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        # self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
 
         # For distractor placements
         self.middle_scale = self.zone_scale
@@ -597,35 +598,35 @@ class ClothHit(MultiDominoes):
         from tdw.obi_data.cloth.cloth_material import ClothMaterial
         from tdw.obi_data.cloth.tether_particle_group import TetherParticleGroup
         from tdw.obi_data.cloth.tether_type import TetherType
-        # cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-        #                                texture_scale={"x": 1, "y": 1},
-        #                                stretching_scale=1,
-        #                                stretch_compliance=0.002,
-        #                                max_compression=0.5,
-        #                                max_bending=0.05,
-        #                                bend_compliance=1.0,
-        #                                drag=0.05,
-        #                                lift=0.05,
-        #                                visual_smoothness=0,
-        #                                mass_per_square_meter=0.005)
+        cloth_material = ClothMaterial(visual_material=self.star_object["material"],
+                                       texture_scale={"x": 1, "y": 1},
+                                       stretching_scale=1,
+                                       stretch_compliance=0.002,
+                                       max_compression=0.5,
+                                       max_bending=0.05,
+                                       bend_compliance=1.0,
+                                       drag=0.05,
+                                       lift=0.05,
+                                       visual_smoothness=0,
+                                       mass_per_square_meter=0.005)
 
 
         #material = self.get_material_name(self.target_material)
 
-        cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-                               texture_scale={"x": 1, "y": 1},
-                               stretching_scale=0.75,
-                               stretch_compliance=0,
-                               max_compression=0,
-                               max_bending=0,
-                               drag=0.05,
-                               lift=0.05,
-                               visual_smoothness=0,
-                               mass_per_square_meter=0.01) #doesn't change much
+        # cloth_material = ClothMaterial(visual_material=self.star_object["material"],
+        #                        texture_scale={"x": 1, "y": 1},
+        #                        stretching_scale=0.75,
+        #                        stretch_compliance=0,
+        #                        max_compression=0,
+        #                        max_bending=0,
+        #                        drag=0.05,
+        #                        lift=0.05,
+        #                        visual_smoothness=0,
+        #                        mass_per_square_meter=0.01) #doesn't change much
 
 
 
-        self.target_position = {"x": 0, "y": 0.35, "z": 0}
+        self.target_position = {"x": 0, "y": 0.40, "z": 0}
 
         # add the object
         commands = []
@@ -636,7 +637,7 @@ class ClothHit(MultiDominoes):
         self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                object_id=o_id,
                                position=self.target_position,
-                               rotation={"x": -15, "y": 0, "z": 0}, #-20
+                               rotation={"x": 0 if interact_id == 0 else -20, "y": 0, "z": 0}, #-20
                                tether_positions={TetherParticleGroup.west_edge: TetherType(object_id=o_id, is_static=True),
                                                  TetherParticleGroup.east_edge: TetherType(object_id=o_id, is_static=True),
                                                  TetherParticleGroup.north_edge: TetherType(object_id=o_id, is_static=True),
@@ -679,8 +680,8 @@ class ClothHit(MultiDominoes):
         self.zone_color = rgb
         self.zone_id = o_id
         self.zone_scale = scale
-        # self.zone_location = TDWUtils.VECTOR3_ZERO
-
+        self.zone_location = TDWUtils.VECTOR3_ZERO
+        self.zone_location["z"] = -1.0
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
             self.scales = self.scales[:-1]

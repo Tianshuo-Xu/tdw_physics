@@ -699,7 +699,7 @@ class Dominoes(RigidbodiesDataset):
         )
 
         self.use_test_mode_colors = use_test_mode_colors
-
+        self.use_obi = False
     def get_types(self,
                   objlist,
                   libraries=["models_flex.json"],

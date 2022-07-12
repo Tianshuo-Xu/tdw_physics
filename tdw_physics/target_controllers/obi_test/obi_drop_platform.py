@@ -15,6 +15,15 @@ Pour water into a receptacle.
 """
 ## dict_keys(['water', 'ink', 'oil', 'honey', 'glycerin', 'chocolate'])
 
+
+
+from tdw.obi_data.fluids.fluid import FLUIDS
+
+fluid = FLUIDS["water"]
+for k in fluid.__dict__:
+    print(f'{k}={fluid.__dict__[k]}')
+
+import ipdb; ipdb.set_trace()
 class CustomModelLoader():
     def __init__(self, asset_dir):
         """

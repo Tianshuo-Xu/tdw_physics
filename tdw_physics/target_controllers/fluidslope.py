@@ -300,7 +300,7 @@ class FluidSlope(MultiDominoes):
                 self.ramp_base, self.ramp_base_id, self.get_material_name(self.ramp_material)))
         cmds.extend([
             {"$type": "scale_object",
-             "scale_factor": self.ramp_base_scale,
+             "scale_factor": {"x": self.ramp_base_scale['x'], "y": self.ramp_base_scale['y'], "z": 2.0},
              "id": self.ramp_base_id},
             {"$type": "set_color",
              "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
@@ -535,8 +535,8 @@ class FluidSlope(MultiDominoes):
             # self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
             self.ramp_physics_info = {
                     'mass': 500,
-                    'dynamic_friction': 0.3, #self.zone_friction, 0.40 for sticky object, 0.30 for water
-                    'static_friction': 0.3, #self.zone_friction,
+                    'dynamic_friction': 0.30, #self.zone_friction, 0.40 for sticky object, 0.30 for water
+                    'static_friction': 0.30, #self.zone_friction,
                     'bounciness': 0}
 
             old_ramp_scale_x = copy.deepcopy(self.ramp_scale['x'])
@@ -547,7 +547,7 @@ class FluidSlope(MultiDominoes):
                     record = self.ramp,
                     position=self.ramp_pos,
                     rotation=self.ramp_rot,
-                    scale={'x': 1.5, 'y': self.ramp_scale['y'], 'z': self.ramp_scale['z']},
+                    scale={'x': 2.0, 'y': self.ramp_scale['y'], 'z': self.ramp_scale['z']},
                     material=self.ramp_material,
                     color=rgb,#vedang
                     o_id=self.ramp_id,
@@ -901,7 +901,7 @@ class FluidSlope(MultiDominoes):
         return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 600
+        return frame > 800
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
@@ -913,7 +913,8 @@ class FluidSlope(MultiDominoes):
                 return self._get_zone_second_location(scale)
 
         return {
-            "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+            #"x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+            "x": self.zone_scale_range['x']/2 + 0.8,
             "y": 0.0 if not self.remove_zone else 10.0,
             "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
         }
@@ -924,8 +925,8 @@ class FluidSlope(MultiDominoes):
         else:
             SHIFT = self.ramp_scale['z']*0.07
         return {
-            "x": SHIFT, #n_axis_length+ SHIFT,# + 0.5 * self.zone_scale_range['x'] + SHIFT,
-            "y": self.zone_scale['x']/8. if not self.remove_zone else 10.0,
+            "x": SHIFT - 0.5, #n_axis_length+ SHIFT,# + 0.5 * self.zone_scale_range['x'] + SHIFT,
+            "y": 0.0 if not self.remove_zone else 10.0,
             "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
         }
 

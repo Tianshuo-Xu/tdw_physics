@@ -460,7 +460,7 @@ class ClothHit(MultiDominoes):
         return frame, objs, tr, sleeping and frame_num < 300
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 150
+        return frame > 200
 
     def get_rotation(self, rot_range):
         if rot_range is None:
@@ -608,35 +608,35 @@ class ClothHit(MultiDominoes):
         from tdw.obi_data.cloth.cloth_material import ClothMaterial
         from tdw.obi_data.cloth.tether_particle_group import TetherParticleGroup
         from tdw.obi_data.cloth.tether_type import TetherType
-        cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-                                       texture_scale={"x": 1, "y": 1},
-                                       stretching_scale=1,
-                                       stretch_compliance=0.002,
-                                       max_compression=0.5,
-                                       max_bending=0.05,
-                                       bend_compliance=1.0,
-                                       drag=0.05,
-                                       lift=0.05,
-                                       visual_smoothness=0,
-                                       mass_per_square_meter=0.01)
+        # cloth_material = ClothMaterial(visual_material=self.star_object["material"],
+        #                                texture_scale={"x": 1, "y": 1},
+        #                                stretching_scale=1,
+        #                                stretch_compliance=0.002,
+        #                                max_compression=0.5,
+        #                                max_bending=0.05,
+        #                                bend_compliance=1.0,
+        #                                drag=0.05,
+        #                                lift=0.05,
+        #                                visual_smoothness=0,
+        #                                mass_per_square_meter=0.02)
 
 
         #material = self.get_material_name(self.target_material)
 
-        # cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-        #                        texture_scale={"x": 1, "y": 1},
-        #                        stretching_scale=0.75,
-        #                        stretch_compliance=0.002,
-        #                        max_compression=0,
-        #                        max_bending=0,
-        #                        drag=0.05,
-        #                        lift=0.05,
-        #                        visual_smoothness=0,
-        #                        mass_per_square_meter=0.01) #doesn't change much
+        cloth_material = ClothMaterial(visual_material=self.star_object["material"],
+                               texture_scale={"x": 1, "y": 1},
+                               stretching_scale=0.75,
+                               stretch_compliance=0,
+                               max_compression=0,
+                               max_bending=0,
+                               drag=0.05,
+                               lift=0.05,
+                               visual_smoothness=0,
+                               mass_per_square_meter=0.01) #doesn't change much
 
 
 
-        self.target_position = {"x": 0.5, "y": 1.05, "z": 0} #1.2 for soft
+        #self.target_position = {"x": 0.5, "y": 0.55, "z": 0} #1.2 for soft 1.05 for soft
 
         # add the object
         commands = []
@@ -646,7 +646,7 @@ class ClothHit(MultiDominoes):
         o_id = self.get_unique_id()
 
         if interact_id == 0:
-            self.target_position = {"x": 0.5, "y": 1.05, "z": 0} #1.2 for soft
+            self.target_position = {"x": 0.5, "y": 0.90, "z": 0} #1.2 for soft
             self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                    object_id=o_id,
                                    position=self.target_position,

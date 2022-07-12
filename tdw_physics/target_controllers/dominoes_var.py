@@ -175,10 +175,14 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default=None,
                         help="comma-separated R,G,B values for the middle object color. None is random.")
-    parser.add_argument("--collision_axis_length",
+    # parser.add_argument("--collision_axis_length",
+    #                     type=float,
+    #                     default=2.0,
+    #                     help="Length of spacing between probe and target objects at initialization.")
+    parser.add_argument("--spacing",
                         type=float,
-                        default=2.0,
-                        help="Length of spacing between probe and target objects at initialization.")
+                        default=0.5,
+                        help="Length of spacing between each parit of dominoes at initialization.")
     parser.add_argument("--spacing_jitter",
                         type=float,
                         default=0.2,
@@ -889,8 +893,9 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     def get_additional_command_when_removing_curtain(self, frame=0):
+        if frame == self.force_wait:
+           return [self.push_cmd]
         return []
-
     def generate_static_object_info(self):
 
         # color for "star object"
@@ -908,7 +913,7 @@ class Dominoes(RigidbodiesDataset):
         self.star_object["type"] = random.choice(self._star_types)
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 20 #2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
@@ -1063,7 +1068,7 @@ class Dominoes(RigidbodiesDataset):
             #print(frame, interact_id, self.force_wait, self.force_wait+before_start_frame)
             force_wait_time = 0 if not self.force_wait else self.force_wait
 
-            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=force_wait_time+before_start_frame))
+            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=force_wait_time))
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
@@ -1116,7 +1121,7 @@ class Dominoes(RigidbodiesDataset):
                 labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
 
             # #curtain stays
-            for i in range(10):
+            for i in range(20):
                 frame += 1
                 resp = self.communicate([])
                 frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
@@ -1443,99 +1448,101 @@ class Dominoes(RigidbodiesDataset):
             except (AttributeError,TypeError):
                 pass
 
-    def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
 
-        # randomization
-        try:
-            static_group.create_dataset("room", data=self.room)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("seed", data=self.seed)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("randomize", data=self.randomize)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("trial_seed", data=self.trial_seed)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("trial_num", data=self._trial_num)
-        except (AttributeError,TypeError):
-            pass
 
-        ## which objects are the zone, target, and probe
-        try:
-            static_group.create_dataset("zone_id", data=self.zone_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("target_id", data=self.target_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_id", data=self.probe_id)
-        except (AttributeError,TypeError):
-            pass
+    # def _write_static_data(self, static_group: h5py.Group) -> None:
+    #     super()._write_static_data(static_group)
 
-        try:
-            static_group.create_dataset("star_id", data=self.star_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("curtain_id", data=self.curtain_id)
-        except (AttributeError,TypeError):
-            pass
+    #     # randomization
+    #     try:
+    #         static_group.create_dataset("room", data=self.room)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("seed", data=self.seed)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("randomize", data=self.randomize)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("trial_seed", data=self.trial_seed)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("trial_num", data=self._trial_num)
+    #     except (AttributeError,TypeError):
+    #         pass
 
-        if self.use_ramp:
-            static_group.create_dataset("ramp_id", data=self.ramp_id)
-            if self.ramp_base_height > 0.0:
-                static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
-                static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
+    #     ## which objects are the zone, target, and probe
+    #     try:
+    #         static_group.create_dataset("zone_id", data=self.zone_id)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("target_id", data=self.target_id)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("probe_id", data=self.probe_id)
+    #     except (AttributeError,TypeError):
+    #         pass
 
-        ## color and scales of primitive objects
-        try:
-            static_group.create_dataset("target_type", data=self.target_type)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_type", data=self.probe_type)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_mass", data=self.probe_mass)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_time", data=int(self.force_wait))
-        except (AttributeError,TypeError):
-            pass
+    #     try:
+    #         static_group.create_dataset("star_id", data=self.star_id)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("curtain_id", data=self.curtain_id)
+    #     except (AttributeError,TypeError):
+    #         pass
 
-        # distractors and occluders
-        try:
-            static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
-        except (AttributeError,TypeError):
-            pass
+    #     if self.use_ramp:
+    #         static_group.create_dataset("ramp_id", data=self.ramp_id)
+    #         if self.ramp_base_height > 0.0:
+    #             static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
+    #             static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
+
+    #     ## color and scales of primitive objects
+    #     try:
+    #         static_group.create_dataset("target_type", data=self.target_type)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("probe_type", data=self.probe_type)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("probe_mass", data=self.probe_mass)
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("push_time", data=int(self.force_wait))
+    #     except (AttributeError,TypeError):
+    #         pass
+
+    #     # distractors and occluders
+    #     try:
+    #         static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
+    #     except (AttributeError,TypeError):
+    #         pass
+    #     try:
+    #         static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
+    #     except (AttributeError,TypeError):
+    #         pass
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -1552,7 +1559,9 @@ class Dominoes(RigidbodiesDataset):
         if frame_num <= 1:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
-            target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
+
+            object_pos = self.get_object_position(self.target_id, resp)
+            target_position_new = object_pos if object_pos is not None else self.target_position
             try:
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
@@ -1806,8 +1815,8 @@ class Dominoes(RigidbodiesDataset):
 
             #self.target_pos_id = random.choice(range(self.total_num_dominoes))
         else:
-            #self.target_pos_id = self.total_num_dominoes - 1
-            pos_id = random.choice(range(self.total_num_dominoes))
+            self.target_pos_id = self.total_num_dominoes - 1
+            #pos_id = random.choice(range(self.total_num_dominoes))
         # carpet, target, middle, middle | prob
         star_position = {
             "x": pos_id * self.spacing - 0.5,
@@ -1996,7 +2005,6 @@ class Dominoes(RigidbodiesDataset):
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
         if self.PRINT:
             print("force wait", self.force_wait)
-
         if self.force_wait == 0:
             commands.append(self.push_cmd)
 
@@ -2532,6 +2540,7 @@ class MultiDominoes(Dominoes):
                  middle_rotation_range=None,
                  middle_mass_range=[2.,7.],
                  horizontal=False,
+                 spacing=0.5,
                  spacing_jitter=0.2,
                  lateral_jitter=0.2,
                  middle_material=None,
@@ -2563,7 +2572,7 @@ class MultiDominoes(Dominoes):
 
         # How many middle objects and their spacing
         self.num_middle_objects = num_middle_objects
-        self.spacing = self.collision_axis_length / (self.num_middle_objects + 1.)
+        self.spacing = spacing #self.collision_axis_length / (self.num_middle_objects + 1.)
         self.spacing_jitter = spacing_jitter
         self.lateral_jitter = lateral_jitter
 
@@ -2596,6 +2605,32 @@ class MultiDominoes(Dominoes):
         if self.randomize_colors_across_trials:
             self.middle_color = None
 
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+
+        try:
+            static_group.create_dataset("num_dominoes", data=self.total_num_dominoes)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("remove_dominoes", data=self.remove_middle)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_object["color"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_scale", data=self.star_object["scale"])
+        except (AttributeError,TypeError):
+            pass
+
+
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
         static_group.create_dataset("distinct_ids", data=self.distinct_ids)
@@ -2615,6 +2650,8 @@ class MultiDominoes(Dominoes):
         if self.middle_type is not None:
             static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])
             static_group.create_dataset("middle_type", data=self.middle_type)
+        self._write_class_specific_data(static_group)
+
 
     @staticmethod
     def get_controller_label_funcs(classname = 'MultiDominoes'):
@@ -2758,11 +2795,12 @@ if __name__ == "__main__":
 
     args = get_args("dominoes")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    print("gpu", args.gpu)
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     DomC = MultiDominoes(
         port=args.port,
@@ -2789,12 +2827,12 @@ if __name__ == "__main__":
         target_color=args.tcolor,
         probe_color=args.pcolor,
         middle_color=args.mcolor,
-        collision_axis_length=args.collision_axis_length,
         force_scale_range=args.fscale,
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
         force_wait=args.fwait,
+        spacing=args.spacing,
         spacing_jitter=args.spacing_jitter,
         lateral_jitter=args.lateral_jitter,
         middle_scale_range=args.mscale,

@@ -3,7 +3,8 @@
 #### mass ###
 controller="tdw_physics/target_controllers/dominoes_var.py"
 ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 512 --width 512
+python $controller @$ARGS_PATH/mass_dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128
+
 
 
 # controller="tdw_physics/target_controllers/waterpush_var.py"
@@ -55,16 +56,15 @@ python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwr
 #### viscosity ###
 # controller="tdw_physics/target_controllers/fluidhit_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# #python $controller @$ARGS_PATH/fluidhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidhit_pp/_pppilot_it2_drop_simple_box --height 512 --width 512
-# python $controller @$ARGS_PATH/fluidhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /home/htung/Downloads/tdw_physics/dump/fluidhit_pp/_pppilot_it2_drop_simple_box --height 256 --width 256
+# python $controller @$ARGS_PATH/fluidhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidhit_pp2/_pppilot_it2_drop_simple_box --height 512 --width 512
+# #python $controller @$ARGS_PATH/fluidhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /home/htung/Downloads/tdw_physics/dump/fluidhit_pp/_pppilot_it2_drop_simple_box --height 256 --width 256
 
 
 ### fluid with slop, no reset
 # controller="tdw_physics/target_controllers/fluidslope.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/fluidslope_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidslope_pp/_pppilot_it2_drop_simple_box --height 256 --width 256
-# 0.40 for sticy object, 0.3 for water
-#
+# python $controller @$ARGS_PATH/fluidslope_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidslope_pp/_pppilot_it2_drop_simple_box --height 512 --width 512
+#0.40 for sticy object, 0.3 for water
 
 
 #### cloth ####
@@ -74,12 +74,18 @@ python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwr
 
 # controller="tdw_physics/target_controllers/clothhit_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/clothhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhit/pilot_it2_drop_simple_box --height 256 --width 256
+# python $controller @$ARGS_PATH/clothhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhit/pilot_it2_drop_simple_box --height 512 --width 512
 
 # controller="tdw_physics/target_controllers/clothhang_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/clothhang_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhang/pilot_it2_drop_simple_box --height 256 --width 256
+# python $controller @$ARGS_PATH/clothhang_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhang/pilot_it2_drop_simple_box --height 512 --width 512
 
+
+
+
+
+
+######## not used ########
 
 # controller="tdw_physics/target_controllers/waterhitwall_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
@@ -88,9 +94,6 @@ python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwr
 
 
 
-
-
-######## not used ########
 
 # controller="tdw_physics/target_controllers/masspush_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"

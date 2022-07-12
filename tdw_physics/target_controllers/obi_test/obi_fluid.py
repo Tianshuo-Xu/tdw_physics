@@ -10,10 +10,10 @@ Pour water into a receptacle.
 c = Controller()
 c.communicate(Controller.get_add_scene(scene_name="tdw_room"))
 camera = ThirdPersonCamera(position={"x": -3.75, "y": 1.5, "z": -0.5},
-                           look_at={"x": 0, "y": 0, "z": 0})
+                           look_at={"x": 0, "y": 1.0, "z": 0})
 obi = Obi()
 c.add_ons.extend([camera, obi])
-obi.create_fluid(fluid="water",
+obi.create_fluid(fluid="honey",
                  shape=DiskEmitter(),
                  object_id=Controller.get_unique_id(),
                  position={"x": 0, "y": 2.35, "z": -1.5},
@@ -25,6 +25,10 @@ c.communicate(Controller.get_add_physics_object(model_name="fluid_receptacle1x1"
                                                 kinematic=True,
                                                 gravity=False,
                                                 scale_factor={"x": 2, "y": 2, "z": 2}))
+
+
+
+
 for i in range(500):
     c.communicate([])
 c.communicate({"$type": "terminate"})

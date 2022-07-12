@@ -516,9 +516,10 @@ class Drop(MultiDominoes):
         o_id = self._get_next_object_id() + self.obi_unique_ids * 5
         self.obi_unique_ids += 1
 
-        vis = [1.5, 0.00001, 0.001, 0.01, 1.0] #water
+        #vis = [1.5, 0.00001, 0.001, 0.01, 1.0] #water
         #vis = [2.2, 2.0, 0.001, 0.01, 1.0]
         #vis = [3.0, 3.0, 0.001, 0.01, 1.0]
+        vis = [3.0, 3.0, 1.2, 0.01, 1.0]
         fluid = Fluid(
         capacity=1500,
         resolution=1.0,
@@ -531,8 +532,8 @@ class Drop(MultiDominoes):
         surface_tension=1.0,
         viscosity= vis[1], #0.001, #1.5
         vorticity=vis[4], #0.7
-        reflection=0.25,
-        transparency=0.2,
+        reflection=0.25, ######0.25
+        transparency=0.85, #0.85, #####0.2
         refraction=-0.034,
         buoyancy=-1,
         diffusion=0,
@@ -544,7 +545,7 @@ class Drop(MultiDominoes):
         thickness_downsample=2,
         blur_radius=0.02,
         surface_downsample=1,
-        render_smoothness=0.8,
+        render_smoothness=0.8, #######0.8
         metalness=0,
         ambient_multiplier=1,
         absorption=5,
@@ -555,7 +556,7 @@ class Drop(MultiDominoes):
         self.fluid_stop_step = 100
         self.obi.set_solver(substeps=4)
         self.obi.create_fluid(object_id = o_id,
-                 fluid=fluid,
+                 fluid="water",
                  shape=DiskEmitter(),
                  position={"x": -0.1, "y": 2.3, "z": 0.1}, # y is height
                  rotation={"x": 85, "y": 90, "z": 0},
