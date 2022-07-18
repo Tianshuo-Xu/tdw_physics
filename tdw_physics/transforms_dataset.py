@@ -145,7 +145,7 @@ class TransformsDataset(Dataset, ABC):
         # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         # print(frame_num, r_types)
 
-        write_data = frame_num in [5, 6]
+        write_data = frame_num < 20 and frame_num >= 5
         save_occlusion = False
 
         for r in resp[:-1]:

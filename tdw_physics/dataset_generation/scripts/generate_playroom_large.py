@@ -109,6 +109,9 @@ def get_args(dataset_dir: str):
     parser.add_argument("--validation_set",
                         action="store_true",
                         help="Create the validation set using the objectmodels")
+    parser.add_argument("--correction_set",
+                        action="store_true",
+                        help="Create the correction set using the objectmodels")
     parser.add_argument("--testing_set",
                         action="store_true",
                         help="Create the validation set using the remaining models")
@@ -179,11 +182,9 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     rng = np.random.RandomState(seed=seed)
     model_splits = OrderedDict()
     cat_split_ind = 0
-
     for i,num in enumerate(num_models_per_split):
         models_here = []
         while (len(models_here) < num) and (cat_split_ind < len(category_splits.keys())):
-
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
                 models_here.extend(MODELS_PER_CATEGORY[cat])
@@ -335,7 +336,7 @@ def main(args):
         all_static_models.extend(s)
 
     ## create the scenarios
-    if args.validation_set:
+    if args.validation_set or args.correction_set:
 
         selected = [
             'labrador_retriever_puppy', 'b05_grizzly', 'b04_horse_body_mesh', 'b03_zebra_body', 'b03_calf',
@@ -370,14 +371,17 @@ def main(args):
 
 
     scenarios = build_scenarios(moving_models, static_models,
-                                args.num_trials_per_model, seed=args.category_seed,
+                                args.num_trials_per_model,
+                                seed=args.category_seed if not args.correction_set else 99,
                                 room = args.room,
                                 group_order=args.group_order,
-                                randomize_moving_object=args.randomize_moving_object
+                                randomize_moving_object=args.randomize_moving_object,
                                 )
+
+
     scale_dict = SCALE_DICT
-
-
+    print('Split: ', args.split)
+    print('GPU: ', args.gpu)
 
     # models_simple = ['b06_train', 'emeco_su_bar', '699264_shoppingcart_2013', 'set_of_towels_roll']
     # models_simple = ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
@@ -477,7 +481,6 @@ def main(args):
 
     start, end = args.start, (args.end or len(scenarios))
 
-
     # for i,sc in enumerate(scenarios[start:end]):
     #     print(i, sc)
 
@@ -492,6 +495,8 @@ def main(args):
 
     if args.validation_set:
         suffix = 'val'
+    elif args.correction_set:
+        suffix = 'correct'
     elif args.testing_set:
         suffix = 'test'
     else:

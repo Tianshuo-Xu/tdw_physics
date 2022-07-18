@@ -394,8 +394,6 @@ class Dataset(Controller, ABC):
 
                 # Do the trial.
                 with timeout(seconds=320):
-
-
                     self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=trial_num,

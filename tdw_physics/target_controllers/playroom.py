@@ -474,7 +474,8 @@ class Playroom(Collision):
 
         # # Choose and place the target zone.
         self.zone_id = None
-        # commands.extend(self._place_target_zone())
+
+        commands.extend(self._place_target_zone())
 
         radius = 1.3
         min_distance = 1.3
