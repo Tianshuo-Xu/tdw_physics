@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict, Optional
 from abc import ABC
 import h5py
+import io
 import numpy as np
 import random
 from tdw.tdw_utils import TDWUtils
@@ -11,6 +12,7 @@ from tdw_physics.dataset import Dataset
 from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
 
 from PIL import Image
+from PIL import ImageOps
 
 class TransformsDataset(Dataset, ABC):
     """
@@ -166,10 +168,14 @@ class TransformsDataset(Dataset, ABC):
                         filename = pass_mask[1:] + "_" + TDWUtils.zero_padding(frame_num, 4) + "." + im.get_extension(i)
                         path = self.png_dir.joinpath(filename)
                         if pass_mask in ["_depth", "_depth_simple"]:
-                            Image.fromarray(TDWUtils.get_shaped_depth_pass(images=im, index=i)).save(path)
+                            ImageOps.mirror(Image.fromarray(TDWUtils.get_shaped_depth_pass(images=im, index=i))).save(path)
+                            #Image.fromarray(TDWUtils.get_shaped_depth_pass(images=im, index=i)).save(path)
                         else:
-                            with open(path, "wb") as f:
-                                f.write(im.get_image(i))
+                            #with open(path, "wb") as f:
+                            image = Image.open(io.BytesIO(im.get_image(i)))
+                            ImageOps.mirror(image).save(path)
+                            #f.write()
+                            #f.write(im.get_image(i))
             elif r_id == "boun":
                 bo = Bounds(r)
                 bo_dict = dict()

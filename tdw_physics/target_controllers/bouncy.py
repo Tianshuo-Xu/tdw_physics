@@ -221,6 +221,8 @@ class Bouncy(MultiDominoes):
         self.target_bounciness = target_bounciness
         self.force_offset_jitter = 0.
 
+        self.start_frame_for_prediction = 105
+
         self.use_obi = False
 
     def get_trial_initialization_commands(self) -> List[dict]:
@@ -295,8 +297,6 @@ class Bouncy(MultiDominoes):
 
         return commands
 
-
-
     def _place_and_push_target_object(self) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
@@ -313,7 +313,7 @@ class Bouncy(MultiDominoes):
         self.target_type = data["name"]
         self.target_color = rgb
         #scale = {'x': 0.5, 'y': 0.5, 'z': 0.5}
-        self.target_scale = self.middle_scale = scale
+
         self.target_id = o_id
 
 
@@ -352,6 +352,19 @@ class Bouncy(MultiDominoes):
         #         bounciness=0,
         #         o_id=o_id))
         self.star_bouncy = random.uniform(*self.target_bounciness)
+        self.star_mass = self.probe_mass
+        self.star_color = rgb
+        self.star_type = self.target_type
+        self.star_scale = scale
+
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
+        self.target_scale = self.middle_scale = scale
+        print("star scale", self.star_scale)
+        print("scale", scale)
         commands.extend(
             self.add_primitive(
                 record=record,
@@ -439,76 +452,35 @@ class Bouncy(MultiDominoes):
 
         return commands
 
-    # def _place_target_object(self) -> List[dict]:
-        """
-        Place a primitive object at one end of the collision axis.
-        """
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
 
-        # create a target object
-        record, data = self.random_primitive(self._target_types,
-                                             scale=self.target_scale_range,
-                                             color=self.target_color,
-                                             add_data=(not self.remove_target)
-                                             )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.target = record
-        self.target_type = data["name"]
-        self.target_color = rgb
-        self.target_scale = self.middle_scale = scale
-        self.target_id = o_id
+        try:
+            static_group.create_dataset("use_blocker_with_hole", data=self.use_blocker_with_hole)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_bouncy", data=self.star_bouncy)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_mass)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_color", data=self.star_color)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_type)
+        except (AttributeError,TypeError):
+            pass
 
-        if any((s <= 0 for s in scale.values())):
-            self.remove_target = True
+        try:
+            static_group.create_dataset("star_size", data=xyz_to_arr(self.star_scale))
+        except (AttributeError,TypeError):
+            pass
 
-        # Where to put the target
-        if self.target_rotation is None:
-            self.target_rotation = self.get_rotation(
-                self.target_rotation_range)
-
-        if self.target_position is None:
-            self.target_position = {
-                "x": 0.5 * self.collision_axis_length,
-                "y": 0. if not self.remove_target else 10.0,
-                "z": 0. if not self.remove_target else 10.0
-            }
-
-        # Commands for adding hte object
-        commands = []
-        commands.extend(
-            self.add_physics_object(
-                record=record,
-                position=self.target_position,
-                rotation=self.target_rotation,
-                mass=2.0,
-                dynamic_friction=0.0,
-                static_friction=0.0,
-                bounciness=0.8,
-                o_id=o_id,
-                add_data=(not self.remove_target)
-            ))
-
-        # Set the object material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.target_material)))
-
-        # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale if not self.remove_target else TDWUtils.VECTOR3_ZERO,
-             "id": o_id}])
-
-        # If this scene won't have a target
-        if self.remove_target:
-            commands.append(
-                {"$type": self._get_destroy_object_command_name(o_id),
-                 "id": int(o_id)})
-            self.object_ids = self.object_ids[:-1]
-
-        return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame >= 300

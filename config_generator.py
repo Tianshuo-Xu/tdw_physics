@@ -2,7 +2,7 @@
 import os
 
 
-scenario_name = "mass_waterpush"
+scenario_name = "bouncy_platform"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
@@ -16,9 +16,10 @@ variables["mass_dominoes"]["num_middle_objects"] = [0, 1, 2, 3, 4]
 variables["mass_waterpush"] = dict()
 variables["mass_waterpush"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
 variables["mass_waterpush"]["tscale"] = ["0.5,0.5,0.5","0.45,0.5,0.45","0.4,0.5,0.4","0.35,0.5,0.35", "0.3,0.5,0.3"]
+variables["bouncy_platform"] = dict()
 variables["bouncy_platform"]['use_blocker_with_hole'] = ["0", "1"]
 variables["bouncy_platform"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
-variables["bouncy_platform"]["tscale"] = ["0.2,0.2,0.2", "0.3,0.3,0.3", "0.4,0.4,0.4", "0.5,0.5,0.5"]
+variables["bouncy_platform"]["tscale"] = ["0.15,0.15,0.15", "0.2,0.2,0.2", "0.25,0.25,0.25", "0.3,0.3,0.3"]
 
 
 
@@ -36,7 +37,7 @@ def name_generator(vark, varv, cur_var_id, pfx, vars):
 
     nvar = len(varv)
     for value in varv[cur_var_id]:
-        cur_pfx = pfx + "-" + vark[cur_var_id] + "_" + f"{value}"
+        cur_pfx = pfx + "-" + vark[cur_var_id] + "=" + f"{value}"
         cur_list = vars + [(vark[cur_var_id], value)]
         if cur_var_id == nvar - 1: #end
             print(cur_pfx)

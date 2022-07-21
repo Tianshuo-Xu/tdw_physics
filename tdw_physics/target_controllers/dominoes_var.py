@@ -475,7 +475,7 @@ def get_args(dataset_dir: str, parse=True):
 
             # only save out the RGB images and the segmentation masks
             args.write_passes = "_img,_id"
-            args.save_passes = "_img,_id"
+            args.save_passes = "_img,_id,"
             args.save_movies = True
             args.save_meshes = True
             args.save_labels = True

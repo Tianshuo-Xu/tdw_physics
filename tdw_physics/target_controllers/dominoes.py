@@ -1,12 +1,19 @@
 from argparse import ArgumentParser
 import sys
+import subprocess
 import h5py
 import json
 import copy
 import importlib
 import numpy as np
 from enum import Enum
+from PIL import Image
 import random
+import imageio
+import pickle
+import os
+from tqdm import tqdm
+from pathlib import Path
 from typing import List, Dict, Tuple
 from collections import OrderedDict
 from weighted_collection import WeightedCollection
@@ -22,11 +29,15 @@ from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
-
-from tdw_physics.postprocessing.labels import get_all_label_funcs
+from tdw_physics.postprocessing.stimuli import pngs_to_mp4
+from tdw_physics.postprocessing.labels import (get_all_label_funcs,
+                                               get_labels_from)
 
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
 FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -455,8 +466,8 @@ def get_args(dataset_dir: str, parse=True):
 
             # only save out the RGB images and the segmentation masks
             args.write_passes = "_img,_id,_depth"
-            args.save_passes = ""
-            args.save_movies = False
+            args.save_passes = "_img,_id,_depth"
+            args.save_movies = True
             args.save_meshes = True
             args.use_test_mode_colors = False
 
@@ -877,6 +888,19 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
+
+    def _post_write_static_data(self, static_group: h5py.Group, meta) -> None:
+        # write start_frame_id and red_hits_yellow label
+        # randomization
+        key_from_meta = ["does_target_contact_zone", 'first_target_contact_zone_frame']
+
+        for key in key_from_meta:
+            try:
+                static_group.create_dataset(key, data=meta[key])
+            except (AttributeError,TypeError):
+                pass
+
+
     def trial_loop(self,
                    num: int,
                    output_dir: str,
@@ -897,7 +921,7 @@ class Dominoes(RigidbodiesDataset):
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
-        for f in output_dir.glob("*.hdf5"):
+        for f in output_dir.glob("*.pkl"):
             if int(f.stem) > exists_up_to:
                 exists_up_to = int(f.stem)
 
@@ -911,6 +935,9 @@ class Dominoes(RigidbodiesDataset):
 
             if not filepath.exists():
 
+                temp_path_f = h5py.File(str(temp_path.resolve()), "a")
+                self.stframe_whole_video = 0
+
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
@@ -920,34 +947,211 @@ class Dominoes(RigidbodiesDataset):
 
                 # Do the trial.
                 self.trial(filepath=filepath,
-                           temp_path=temp_path,
+                           temp_path_f=temp_path_f,
                            trial_num=i)
+
+                # Close the file.
+                def dfs_hdf5(hf, data):
+                    for attr in hf:
+                        data_ = hf[attr]
+                        if isinstance(data_, h5py.Group):
+                            data[attr] = dict()
+                            dfs_hdf5(data_, data[attr])
+                        else:
+                            data[attr] = data_[()]
+
+                output = dict()
+                dfs_hdf5(temp_path_f, output)
+
+                output_file = str(filepath).replace(".hdf5", ".pkl")
+                with open(output_file, 'wb') as outfile:
+                    pickle.dump(output, outfile)
+
+                temp_path_f.close()
+                os.remove(temp_path)
+
+
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
 
                     for pass_mask in self.save_passes:
-                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
-                        cmd, stdout, stderr = pngs_to_mp4(
-                            filename=mp4_filename,
-                            image_stem=pass_mask[1:]+'_',
-                            png_dir=self.png_dir,
-                            size=[self._height, self._width],
-                            overwrite=True,
-                            remove_pngs=True,
-                            use_parent_dir=False)
+                        if pass_mask not in ["_depth", "_id"]:
+                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                            cmd, stdout, stderr = pngs_to_mp4(
+                                filename=mp4_filename,
+                                image_stem=pass_mask[1:]+'_',
+                                png_dir=self.png_dir,
+                                size=[self._height, self._width],
+                                overwrite=True,
+                                remove_pngs=True,
+                                use_parent_dir=False)
+                        elif pass_mask in ["_id"]:
+                            from pycocotools import mask as cocomask
+                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                            files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                            out_dict = {}
+                            seg_colors = output["static"]["video_object_segmentation_colors"]
+                            nobjs = seg_colors.shape[0]
+                            for file in files:
+                                seg_img = imageio.imread(file)
+                                frm_id = file[-8:-4]
 
 
-                if self.save_meshes:
-                    for o_id in self.object_ids:
-                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                        vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
+                                rels_list = []
+                                for idx in range(nobjs):
+                                    color_dist = np.linalg.norm(seg_img.astype(np.float32) - seg_colors[idx][np.newaxis, np.newaxis, :].astype(np.float32), axis=2)
+                                    #seg[color_dist == 0] = 255
+                                    n_nonzeros = np.sum(color_dist == 0)
+                                    if n_nonzeros == 0:
+                                        continue
+                                    bi_mask = np.asfortranarray(color_dist == 0)
+                                    rels = cocomask.encode(bi_mask)
+                                    rels['counts'] = rels['counts'].decode('utf8')
+                                    rels['idx'] = idx
+                                    rels_list.append(rels)
+                                out_dict[frm_id] = rels_list
+                                #if int(frm_id) % 20 ==0:
+                                #    print('%d/%d\n'%(int(frm_id), len(files)))
+                                    #break
+                            with open(mp4_filename + ".json", 'w') as fh:
+                                json.dump(out_dict, fh)
+                    mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+
+                #if self.save_meshes:
+                #    for o_id in self.object_ids:
+                #        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                #        vertices, faces = self.object_meshes[o_id]
+                #        save_obj(vertices, faces, obj_filename)
             pbar.update(1)
         pbar.close()
 
+
+    def trial(self,
+              filepath: Path,
+              temp_path_f: Path,
+              trial_num: int) -> None:
+        """
+        Run a trial. Write static and per-frame data to disk until the trial is done.
+
+        :param filepath: The path to this trial's hdf5 file.
+        :param temp_path: The path to the temporary file.
+        :param trial_num: The number of the current trial.
+        """
+
+        # Clear the object IDs and other static data
+
+        self.clear_static_data()
+
+        if self.use_obi and self.obi is None:
+            from tdw.add_ons.obi import Obi
+            obi = Obi()
+            self.add_ons = [obi] #.extend([obi])
+            self.obi = obi
+
+        self._trial_num = trial_num
+
+        # Create the .hdf5 file.
+
+        commands = []
+        # Remove asset bundles (to prevent a memory leak).
+        if trial_num % 100 == 0:
+            commands.append({"$type": "unload_asset_bundles"})
+
+        # Add commands to start the trial.
+        commands.extend(self.get_trial_initialization_commands())
+        # Add commands to request output data.
+        commands.extend(self._get_send_data_commands())
+
+        # Send the commands and start the trial.
+        r_types = ['']
+        count = 0
+        resp = self.communicate(commands)
+
+        self._set_segmentation_colors(resp)
+        self.video_object_segmentation_colors = self.object_segmentation_colors
+
+        self._get_object_meshes(resp)
+        frame = 0
+        # Write static data to disk.
+        static_group = temp_path_f.create_group("static")
+        self._write_static_data(static_group)
+
+        # Add the first frame.
+        done = False
+        frames_grp = temp_path_f.create_group("frames")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        self._write_frame_labels(frame_grp, resp, -1, False)
+
+        # Continue the trial. Send commands, and parse output data.
+        while not done:
+            frame += 1
+            # print('frame %d' % frame)
+            resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
+            # Sometimes the build freezes and has to reopen the socket.
+            # This prevents such errors from throwing off the frame numbering
+            if ('imag' not in r_ids) or ('tran' not in r_ids):
+                print("retrying frame %d, response only had %s" % (frame, r_ids))
+                frame -= 1
+                continue
+
+            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            # Write whether this frame completed the trial and any other trial-level data
+            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+        # Cleanup.
+        commands = []
+        for o_id in self.object_ids:
+            commands.append({"$type": self._get_destroy_object_command_name(o_id),
+                             "id": int(o_id)})
+        self.communicate(commands)
+        if self.use_obi:
+            self.obi.reset()
+        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        if self.save_labels:
+            meta = OrderedDict()
+            meta = get_labels_from(temp_path_f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            self.trial_metadata.append(meta)
+            self._post_write_static_data(static_group, meta)
+
+            # Save the trial-level metadata
+            json_str =json.dumps(self.trial_metadata, indent=4)
+            self.meta_file.write_text(json_str, encoding='utf-8')
+            print("TRIAL %d LABELS" % self._trial_num)
+            print(json.dumps(self.trial_metadata[-1], indent=4))
+
+        # Save out the target/zone segmentation mask
+        static_group.create_dataset("num_reset", data=self.num_interactions - 1)
+
+        frame_id = self.start_frame_for_prediction
+        id_filename = os.path.join(str(filepath.parent).split('.hdf5')[0], "pngs_" + str(filepath).split("/")[-1][:4], f"id_{frame_id:04}.png")
+        #_id = f['frames']['0000']['images']['_id']
+        #get PIL image
+        #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        _id_map = imageio.imread(id_filename)
+        #get colors
+        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        #get individual maps
+        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        #colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        #as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        #save image
+        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
@@ -1043,6 +1247,11 @@ class Dominoes(RigidbodiesDataset):
         except (AttributeError,TypeError):
             pass
 
+        self._write_class_specific_data(static_group)
+        static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
+        static_group.create_dataset("start_frame_for_prediction", data=self.start_frame_for_prediction)
+
+
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
@@ -1051,6 +1260,7 @@ class Dominoes(RigidbodiesDataset):
         frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
                                                          frame_num=frame_num)
+
         # If this is a stable structure, disregard whether anything is actually moving.
         return frame, objs, tr, sleeping and not (frame_num < 150)
 
@@ -1058,12 +1268,18 @@ class Dominoes(RigidbodiesDataset):
         if frame_num <= 0:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
-            target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
+
+            #print("get object position target", self.target_id)
+            #print(self.get_object_position(self.target_id, resp))
+            #print("target position", self.target_position)
+            object_position = self.get_object_position(self.target_id, resp)
+            target_position_new = object_position if object_position is not None else self.target_position
             try:
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
             except TypeError:
                 print("Failed to get a new object position, %s" % target_position_new)
+                import ipdb; ipdb.set_trace()
 
     def _write_frame_labels(self,
                             frame_grp: h5py.Group,
@@ -1948,13 +2164,13 @@ class MultiDominoes(Dominoes):
         if self.randomize_colors_across_trials:
             self.middle_color = None
 
-    def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
-
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
         static_group.create_dataset("remove_middle", data=self.remove_middle)
         if self.middle_type is not None:
             static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
             static_group.create_dataset("middle_type", data=self.middle_type)
+
+
 
     @staticmethod
     def get_controller_label_funcs(classname = 'MultiDominoes'):

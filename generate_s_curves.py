@@ -13,15 +13,15 @@ def split_info(filename):
     infos = filename.split("-")[1:]
     info_dict = dict()
     for info in infos:
-        arg_name, arg_value = info.split("_")
+        arg_name, arg_value = info.split("=")
         info_dict[arg_name] = arg_value
     return info_dict
-folder = "/media/htung/Extreme SSD/fish/tdw_physics/dump/mass_waterpush_pp"
+folder = "/media/htung/Extreme SSD/fish/tdw_physics/dump/bouncy_platform_pp"
 filenames = os.listdir(folder)
 restrict = "" #"target_bowl" #"target_cone-tscale_0.35,0.5,0.35"
 filenames = [filename for filename in filenames if restrict in filename]
 
-target_varname = "star_mass"
+target_varname = "star_bouncy" #"star_mass"
 #merge_by = "target"
 merge_by = "tscale"
 
@@ -57,8 +57,10 @@ for set_id, merge_var_name in enumerate(set_dict):
     """
     print(target_params)
 
-
-    target_params = [math.log10(param) for param in target_params]
+    if target_varname in ["star_mass"]:
+        target_params = [math.log10(param) for param in target_params]
+    else:
+        target_params = [param for param in target_params]
     import matplotlib.pyplot as plt
     #scatter plot
     for oid, param in enumerate(target_params):
@@ -66,7 +68,10 @@ for set_id, merge_var_name in enumerate(set_dict):
             print("heavy object with negative outcome", oid)
 
     plt.scatter(target_params, labels)
-    plt.xlabel("log(mass)")
+    if target_varname in ["star_mass"]:
+        plt.xlabel(f"log({target_varname})")
+    else:
+        plt.xlabel(f"{target_varname}")
     plt.ylabel("red hits yellow")
 
 
