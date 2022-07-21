@@ -1,6 +1,10 @@
 #!/bin/bash
 #python tdw_physics/target_controllers/drop.py
 
+controller="tdw_physics/target_controllers/dominoes.py"
+ARGS_PATH="/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+python $controller @$ARGS_PATH/dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir /media/htung/Extreme SSD/fish/tdw_physics/dump/dominoes_origin --num 10 --height 128 --width 128
+
 
 
 
@@ -31,9 +35,9 @@
 
 
 ######################################### dominoes ###############################################
-controller="tdw_physics/target_controllers/dominoes.py"
-ARGS_PATH="/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-python $controller @$ARGS_PATH/dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir log2/ --num 10 --height 128 --width 128
+# controller="tdw_physics/target_controllers/dominoes.py"
+# ARGS_PATH="/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+# python $controller @$ARGS_PATH/dominoes/pilot_dominoes_1mid_J025R45_boxroom/commandline_args.txt --dir /media/htung/Extreme SSD/fish/tdw_physics/dump/dominoes_origin --num 10 --height 128 --width 128
 
 #controller="tdw_physics/target_controllers/dominoes_var.py"
 #ARGS_PATH="/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"

@@ -98,7 +98,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--tscale",
                         type=str,
-                        default="0.3,0.5,0.3",
+                        default="0.5,0.5,0.5",
                         help="scale of target objects")
 
     ### layout
@@ -197,7 +197,7 @@ class WaterPush(Dominoes):
         self.star_object["type"] = random.choice(self._star_types)
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 0.5 #2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["mass"] = 10 ** random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
@@ -313,6 +313,7 @@ class WaterPush(Dominoes):
         star_scale = self.star_object["scale"]
         star_mass = self.star_object["mass"]
         star_color = self.star_object["color"]
+        self.star_scale = star_scale
 
         # select an object
         # record, data = self.random_primitive(self._target_types,
@@ -326,8 +327,15 @@ class WaterPush(Dominoes):
                                              color=star_color,
                                              add_data=False
         )
+
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+
+        print(record.name, record_size)
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
         assert(o_id == 2), "make sure the star object is always with the same id"
         self.star_id = o_id
 
@@ -350,6 +358,7 @@ class WaterPush(Dominoes):
             "y": 0. if not self.remove_target else 10.0,
             "z": 0. if not self.remove_target else 10.0
         }
+        self.star_position = star_position
         star_rotation = self.get_rotation(self.target_rotation_range)
 
         self.star_pos_id = pos_id
@@ -456,11 +465,75 @@ class WaterPush(Dominoes):
                  fluid=fluid,
                  shape=DiskEmitter(),
                  position=fluid_start_position, # y is height,
-                 rotation={"x": 160, "y": -90, "z": 0}, #150, -90, 0
+                 rotation={"x": 150+  np.random.uniform(0,1) * 5.0 , "y": -90, "z": 0}, #150, -90, 0 #+  np.random.uniform(0,1) * 5.0
                  lifespan=1000,
-                 speed=10)
-
+                 speed=12)
         commands = []
+
+        """
+        record, data = self.random_primitive(self.get_types(["sphere"]),
+                                             scale=[0.2, 0.2, 0.2],
+                                             color=self.target_color)
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.drop_type = data["name"]
+        self.target_color = rgb
+        self.target_id = o_id # this is the target object as far as we're concerned for collision detection
+
+        # Choose the drop position and pose.
+        height = random.uniform(1.5, 2.0)
+        self.drop_jitter = 0.05
+        self.drop_height = height
+        if True: #interact_id == self.num_interactions:
+
+            self.drop_position = {
+                "x": random.uniform(-self.drop_jitter, self.drop_jitter) + self.star_position['x'],
+                "y": height,
+                "z": random.uniform(-self.drop_jitter, self.drop_jitter) + self.star_position['z'],
+            }
+        self.drop_rotation = TDWUtils.VECTOR3_ZERO
+
+        # Add the object with random physics values.
+
+        self.probe_mass = random.uniform(20, 20)
+        commands.extend(
+            self.add_physics_object(
+                record=record,
+                position=self.drop_position,
+                rotation=self.drop_rotation,
+                mass=self.probe_mass,
+                dynamic_friction=0.4, #increased friction
+                static_friction=0.4,
+                bounciness=0,
+                o_id=o_id))
+
+        # Set the object material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.target_material)))
+
+        # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+             "id": o_id},
+            {"$type": "scale_object",
+             "scale_factor": scale,
+             "id": o_id}])
+
+        self.push_force = self.get_push_force(
+            scale_range= self.probe_mass * np.array([0.5, 0.5]),
+            angle_range=[180,180],
+            yforce=[0,0])
+
+        self.push_cmd = {
+            "$type": "apply_force_to_object",
+            "force": self.push_force,
+            "id": int(o_id)
+        }
+        commands.append(self.push_cmd)
+        """
+
+
         return commands
 
 
@@ -486,6 +559,26 @@ class WaterPush(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
+        self._write_class_specific_data(static_group)
+
+
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+
+        try:
+            static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.target_type)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_size", data=xyz_to_arr(self.star_scale))
+        except (AttributeError,TypeError):
+            pass
+
     @staticmethod
     def get_controller_label_funcs(classname = "Collision"):
 
@@ -494,7 +587,7 @@ class WaterPush(Dominoes):
         return funcs
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 200 # End after X frames even if objects are still moving.
+        return frame - self.stframe_whole_video > 200 # End after X frames even if objects are still moving.
 
     def _set_distractor_attributes(self) -> None:
 

@@ -101,15 +101,17 @@ class TransformsDataset(Dataset, ABC):
 
         return commands
 
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, noimg_in_hdf5=True) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(self.object_ids)
 
         # Create a group for this frame.
         frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        #print("create_group", TDWUtils.zero_padding(frame_num, 4))
 
         # Create a group for images.
-        images = frame.create_group("images")
+        if not noimg_in_hdf5:
+            images = frame.create_group("images")
 
         # Transforms data.
         positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
@@ -156,8 +158,8 @@ class TransformsDataset(Dataset, ABC):
                     else:
                         image_data = im.get_image(i)
 
-
-                    images.create_dataset(pass_mask, data=image_data, compression="gzip")
+                    if not noimg_in_hdf5:
+                        images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
                     if pass_mask in self.save_passes:

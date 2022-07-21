@@ -877,6 +877,78 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str) -> None:
+
+
+        output_dir = Path(output_dir)
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True)
+        temp_path = Path(temp_path)
+        if not temp_path.parent.exists():
+            temp_path.parent.mkdir(parents=True)
+        # Remove an incomplete temp path.
+        if temp_path.exists():
+            temp_path.unlink()
+        self.num_interactions = 1
+
+        pbar = tqdm(total=num)
+        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+        exists_up_to = 0
+        for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+
+        pbar.update(exists_up_to)
+        for i in range(exists_up_to, num):
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+            if not filepath.exists():
+
+                # Save out images
+                self.png_dir = None
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists():
+                        self.png_dir.mkdir(parents=True)
+
+                # Do the trial.
+                self.trial(filepath=filepath,
+                           temp_path=temp_path,
+                           trial_num=i)
+
+                # Save an MP4 of the stimulus
+                if self.save_movies:
+
+                    for pass_mask in self.save_passes:
+                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        cmd, stdout, stderr = pngs_to_mp4(
+                            filename=mp4_filename,
+                            image_stem=pass_mask[1:]+'_',
+                            png_dir=self.png_dir,
+                            size=[self._height, self._width],
+                            overwrite=True,
+                            remove_pngs=True,
+                            use_parent_dir=False)
+
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+
+
+                if self.save_meshes:
+                    for o_id in self.object_ids:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
+            pbar.update(1)
+        pbar.close()
+
+
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
 
         if (self.force_wait != 0) and frame == self.force_wait:

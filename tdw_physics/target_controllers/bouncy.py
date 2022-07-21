@@ -220,6 +220,7 @@ class Bouncy(MultiDominoes):
         self.target_lift = target_lift
         self.target_bounciness = target_bounciness
         self.force_offset_jitter = 0.
+
         self.use_obi = False
 
     def get_trial_initialization_commands(self) -> List[dict]:
@@ -239,9 +240,11 @@ class Bouncy(MultiDominoes):
         # Choose and place a target object.
         commands.extend(self._place_and_push_target_object())
 
+
         # Place box_piles between target and zone
         if self.use_box_piles:
             commands.extend(self._place_box_piles())
+
 
         # # Set the probe color
         # if self.probe_color is None:
@@ -348,7 +351,7 @@ class Bouncy(MultiDominoes):
         #         static_friction=0.4,
         #         bounciness=0,
         #         o_id=o_id))
-
+        self.star_bouncy = random.uniform(*self.target_bounciness)
         commands.extend(
             self.add_primitive(
                 record=record,
@@ -364,7 +367,7 @@ class Bouncy(MultiDominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.0,
                 static_friction=0.0,
-                bounciness=random.uniform(*self.target_bounciness),
+                bounciness=self.star_bouncy,
                 o_id=o_id,
                 add_data=True
             ))
@@ -506,94 +509,6 @@ class Bouncy(MultiDominoes):
             self.object_ids = self.object_ids[:-1]
 
         return commands
-
-        cmds = []
-
-        # ramp params
-        self.ramp = random.choice(self.DEFAULT_RAMPS)
-        rgb = self.ramp_color or np.array([0.75, 0.75, 1.0])
-        ramp_pos = copy.deepcopy(self.probe_initial_position)
-        # don't intersect w zone
-        ramp_pos['y'] += self.zone_scale['y'] if not self.remove_zone else 0.0
-        ramp_rot = self.get_y_rotation([180, 180])
-        ramp_id = self._get_next_object_id()
-
-        # figure out scale
-        r_len, r_height, r_dep = self.get_record_dimensions(self.ramp)
-        scale_x = (0.75 * self.collision_axis_length) / r_len
-        if self.ramp_scale is None:
-            self.ramp_scale = arr_to_xyz(
-                [scale_x, self.scale_to(r_height, 1.5), 0.75 * scale_x])
-
-        # optionally add base
-        self.ramp_base_height = random.uniform(
-            *get_range(self.ramp_base_height_range))
-        if self.ramp_base_height > 0.01:
-            self.ramp_base = self.CUBE
-            self.ramp_base_scale = arr_to_xyz([
-                float(scale_x * r_len), float(self.ramp_base_height), float(0.75 * scale_x * r_dep)])
-            self.ramp_base_id = self._get_next_object_id()
-            cmds.extend(
-                self.add_physics_object(
-                    record=self.ramp_base,
-                    position=copy.deepcopy(ramp_pos),
-                    rotation=TDWUtils.VECTOR3_ZERO,
-                    mass=500,
-                    dynamic_friction=0.0,
-                    static_friction=0.0,
-                    bounciness=0.0,
-                    o_id=self.ramp_base_id,
-                    add_data=True))
-            _, rb_height, _ = self.get_record_dimensions(self.ramp_base)
-            ramp_pos['y'] += self.ramp_base_scale['y']
-
-            # scale it, color it, fix it
-            cmds.extend(
-                self.get_object_material_commands(
-                    self.ramp_base, self.ramp_base_id, self.get_material_name(self.zone_material)))
-            cmds.extend([
-                {"$type": "scale_object",
-                 "scale_factor": self.ramp_base_scale,
-                 "id": self.ramp_base_id},
-                {"$type": "set_color",
-                 "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-                 "id": self.ramp_base_id},
-                {"$type": "set_object_collision_detection_mode",
-                 "mode": "continuous_speculative",
-                 "id": self.ramp_base_id},
-                {"$type": "set_kinematic_state",
-                 "id": self.ramp_base_id,
-                 "is_kinematic": True,
-                 "use_gravity": True}])
-
-        cmds.extend(
-            self.add_ramp(
-                record=self.ramp,
-                position=ramp_pos,
-                rotation=ramp_rot,
-                scale=self.ramp_scale,
-                o_id=ramp_id,
-                add_data=True))
-
-        # give the ramp a texture and color
-        cmds.extend(
-            self.get_object_material_commands(
-                self.ramp, ramp_id, self.get_material_name(self.zone_material)))
-
-        cmds.append(
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": ramp_id})
-        print("ramp commands")
-        print(cmds)
-
-        # need to adjust probe height as a result of ramp placement
-        self.probe_initial_position['x'] -= 0.5 * \
-            self.ramp_scale['x'] * r_len - 0.15
-        self.probe_initial_position['y'] = self.ramp_scale['y'] * \
-            r_height + self.ramp_base_height
-
-        return cmds
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame >= 300
@@ -1007,11 +922,11 @@ if __name__ == "__main__":
 
     args = get_bouncy_args("bouncy")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     ColC = Bouncy(
         room=args.room,
