@@ -53,6 +53,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         default=0.35,
                         help="amount of z jitter applied to the target zone")
 
+    parser.add_argument("--zld",
+                        type=int,
+                        default=-1,
+                        help="discrete zone location")
+
     ### probe
     parser.add_argument("--probe",
                         type=str,
@@ -108,6 +113,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.0,
                         help="Lift the target object off the floor/ramp. Useful for rotated objects")
+
+    parser.add_argument("--tbounce",
+                        type=str,
+                        default="[0.01, 1.0]",
+                        help="range of bounciness setted for the target object")
 
     ### layout
     parser.add_argument("--collision_axis_length",
@@ -186,6 +196,7 @@ def get_collision_args(dataset_dir: str, parse=True):
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
+        args.tbounce = handle_random_transform_args(args.tbounce)
         # box_piles
         args.use_box_piles = bool(args.use_box_piles)
 
@@ -214,8 +225,10 @@ class BouncyWall(Dominoes):
                  port: int = None,
                  zjitter = 0,
                  fupforce = [0.,0.],
+                 target_bounciness=[0., 0.],
                  probe_lift = 0.,
                  bouncy_axis_length=1.2,
+                 zone_location_d=-1,
                  use_ramp=True,
                  use_box_piles=True,
                  box_piles=['cube'],
@@ -245,13 +258,50 @@ class BouncyWall(Dominoes):
         self.force_wait_range = [3, 3]
         self.target_lift = target_lift
         self.force_offset_jitter = 0.
+        self.zone_location_d = zone_location_d
+
+        self.target_bounciness = target_bounciness
+
+
+    def generate_static_object_info(self):
+
+        # color for "star object"
+        colors = [[0.01844594, 0.208636, 0.12749255]
+                   ]
+        non_star_color = [246/255, 234/255, 224/255]
+
+        self.repeat_trial = False
+        # sample distinct objects
+        self.candidate_dict = dict()
+        self.star_object = dict()
+        self.star_object["type"] = random.choice(self._star_types)
+        self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+        #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
+        self.star_object["mass"] = 2.0
+        self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
+        self.star_object["bouncy"] = random.uniform(*self.target_bounciness)
+
+        print("====star object bounciness", self.star_object["bouncy"])
+
+        #distinct_masses = [0.1, 2.0, 10.0]
+        mass = 2.0
+        self.normal_mass = 2.0
+        random.shuffle(colors)
+        #random.shuffle(distinct_masses)
+        ## add the non-star objects have the same weights
+        for distinct_id in range(1):
+            self.candidate_dict[distinct_id] = dict()
+            self.candidate_dict[distinct_id]["type"] = random.choice(self._candidate_types)
+            self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.candidate_scale_range)
+            self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
+            self.candidate_dict[distinct_id]["mass"] = mass
 
 
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
         # return super().get_trial_initialization_commands()
         commands = []
-
+        self.interact_id = interact_id
         # randomization across trials
         if not(self.randomize):
             self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
@@ -314,6 +364,9 @@ class BouncyWall(Dominoes):
 
         return commands
 
+    def get_stframe_pred(self):
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+        return frame_id
 
     def _build_intermediate_structure(self, interact_id) -> List[dict]:
 
@@ -393,6 +446,21 @@ class BouncyWall(Dominoes):
         if self.target_position is None:
             self.target_position = star_position
 
+
+        self.star_mass = self.probe_mass
+        self.star_color = rgb
+        self.star_type = self.target_type
+        self.star_scale = scale
+        self.star_bouncy = self.star_object["bouncy"]
+
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
+
+        self.target_scale = self.middle_scale = scale
+
         # Commands for adding hte object
         commands = []
 
@@ -408,7 +476,7 @@ class BouncyWall(Dominoes):
                 scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
-                bounciness=1.0,
+                bounciness=self.star_bouncy,
                 o_id=o_id,
                 add_data=(not self.remove_target),
                 make_kinematic=False
@@ -461,7 +529,7 @@ class BouncyWall(Dominoes):
         self.is_push = False
         #int(random.uniform(
         #    *get_range(self.force_wait_range)))
-        print("force wait", self.force_wait)
+        #print("force wait", self.force_wait)
 
         # if self.force_wait == 0:
         #    commands.append(self.push_cmd)
@@ -490,7 +558,7 @@ class BouncyWall(Dominoes):
             return []
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
-        print("force_wait", self.force_wait, force_wait, frame)
+        #print("force_wait", self.force_wait, force_wait, frame)
 
         if force_wait == None:
             if (self.force_wait != 0) and frame < self.force_wait:
@@ -544,7 +612,7 @@ class BouncyWall(Dominoes):
             mass=1000,
             dynamic_friction=0.0,
             static_friction=0.0,
-            bounciness=0.9,
+            bounciness=0.2,
             o_id=o_id,
             add_data=True)
         )
@@ -557,7 +625,7 @@ class BouncyWall(Dominoes):
         # Scale the object and set its color.
         commands.extend([
             {"$type": "set_color",
-                "color": {"r": 0.0, "g": 0.5, "b": 0.0, "a": 1.},
+                "color": {"r": 0.99, "g": 0.78, "b": 0.611, "a": 1.},
                 "id": o_id},
             {"$type": "scale_object",
                 "scale_factor": scale,
@@ -674,6 +742,7 @@ class BouncyWall(Dominoes):
             self.push_position = {
                 k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
                 for k,v in self.push_position.items()}
+            #self.push_position['y'] += 0.1
 
 
             print("push position", self.push_position)
@@ -695,17 +764,73 @@ class BouncyWall(Dominoes):
             commands.append(self.push_cmd)
 
         return commands
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
 
+        try:
+            static_group.create_dataset("zone_location_d", data=self.zone_location_d)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_bouncy", data=self.star_bouncy)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_mass)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_color", data=self.star_color)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_type)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("star_size", data=xyz_to_arr(self.star_scale))
+        except (AttributeError,TypeError):
+            pass
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
-        BUFFER = 0
-        return {
-            "x": 0.0,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
-        }
 
+        BUFFER = 0
+
+        if self.interact_id == 0:
+
+            self.zone_location_d = 1
+            return {
+                "x": 0.0,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z": 1.5 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            }
+
+        else:
+            self.zone_location_d = 2
+            if self.zone_location_d == 0:
+                return {
+                    "x": 0.5,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 0.0 if not self.remove_zone else 10.0,
+                    "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            elif self.zone_location_d == 3:
+
+                return {
+                    "x": 0.0,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 0.0 if not self.remove_zone else 10.0,
+                    "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            elif self.zone_location_d == 2:
+                return {
+                    "x": - 1.2,  #* self.zone_scale_range['x'] + BUFFER,
+                    "y": 0.0 if not self.remove_zone else 10.0,
+                    "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            else:
+                raise ValueError
 
 
     def clear_static_data(self) -> None:
@@ -727,7 +852,7 @@ class BouncyWall(Dominoes):
         return funcs
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 200 # End after X frames even if objects are still moving.
+        return frame - self.stframe_whole_video > 200 # End after X frames even if objects are still moving.
 
     def _set_distractor_attributes(self) -> None:
 
@@ -754,11 +879,12 @@ if __name__ == "__main__":
 
     args = get_collision_args("collision")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    print("gpu", args.gpu)
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     ColC = BouncyWall(
         port=args.port,
@@ -770,11 +896,13 @@ if __name__ == "__main__":
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
         zone_material=args.zmaterial,
+        zone_location_d=args.zld,
         zone_friction=args.zfriction,
         target_objects=args.target,
         probe_objects=args.probe,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,
+        target_bounciness=args.tbounce,
         probe_rotation_range=args.prot,
         probe_scale_range=args.pscale,
         probe_mass_range=args.pmass,

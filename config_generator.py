@@ -2,7 +2,7 @@
 import os
 
 
-scenario_name = "bouncy_platform"
+scenario_name = "bouncy_wall"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
@@ -16,11 +16,16 @@ variables["mass_dominoes"]["num_middle_objects"] = [0, 1, 2, 3, 4]
 variables["mass_waterpush"] = dict()
 variables["mass_waterpush"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
 variables["mass_waterpush"]["tscale"] = ["0.5,0.5,0.5","0.45,0.5,0.45","0.4,0.5,0.4","0.35,0.5,0.35", "0.3,0.5,0.3"]
+
 variables["bouncy_platform"] = dict()
 variables["bouncy_platform"]['use_blocker_with_hole'] = ["0", "1"]
 variables["bouncy_platform"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
 variables["bouncy_platform"]["tscale"] = ["0.15,0.15,0.15", "0.2,0.2,0.2", "0.25,0.25,0.25", "0.3,0.3,0.3"]
 
+variables["bouncy_wall"] = dict()
+variables["bouncy_wall"]['zld'] = ["0", "2"]
+variables["bouncy_wall"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
+variables["bouncy_wall"]["tscale"] = ["0.25,0.25,0.25", "0.35,0.35,0.35", "0.45,0.45,0.45"]
 
 
 

@@ -475,7 +475,7 @@ def get_args(dataset_dir: str, parse=True):
 
             # only save out the RGB images and the segmentation masks
             args.write_passes = "_img,_id"
-            args.save_passes = "_img,_id,"
+            args.save_passes = "_img,_id"
             args.save_movies = True
             args.save_meshes = True
             args.save_labels = True
@@ -532,6 +532,8 @@ def get_args(dataset_dir: str, parse=True):
 
     args = parser.parse_args()
     args = postprocess(args)
+
+    import ipdb; ipdb.set_trace()
 
     return args
 
@@ -886,6 +888,8 @@ class Dominoes(RigidbodiesDataset):
                             with open(mp4_filename + ".json", 'w') as fh:
                                 json.dump(out_dict, fh)
 
+                            [os.remove(file) for file in files]
+
 
                         # else:
                         #     #save depth as pkl
@@ -904,7 +908,10 @@ class Dominoes(RigidbodiesDataset):
 
                         #     import ipdb; ipdb.set_trace()
                         #     print("hello")
-                    mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+                    if "_depth" in self.save_passes:
+                        mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+                    else:
+                        os.rmdir(str(self.png_dir))
                     #rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                     #os.rmdir(self.png_dir)
 
@@ -1266,7 +1273,11 @@ class Dominoes(RigidbodiesDataset):
 
         if interact_id == self.num_interactions - 1:
             # Save out the target/zone segmentation mask
-            frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+            #frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+            self.start_frame_for_prediction = self.get_stframe_pred()
+            frame_id = self.start_frame_for_prediction
+
+            static_group.create_dataset("start_frame_for_prediction", data=self.start_frame_for_prediction)
 
             #_id = temp_path_f['frames'][f'{frame_id:04}']['images']['_id']
             static_group.create_dataset("num_reset", data=self.num_interactions - 1)
@@ -1300,7 +1311,9 @@ class Dominoes(RigidbodiesDataset):
 
         return len(frames_grp)
 
-
+    def get_stframe_pred(self):
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+        return frame_id
 
     def get_types(self,
                   objlist,
@@ -2145,6 +2158,55 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+        static_group.create_dataset("remove_middle", data=self.remove_middle)
+        if self.middle_type is not None:
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])
+            static_group.create_dataset("middle_type", data=self.middle_type)
+        try:
+            static_group.create_dataset("num_dominoes", data=self.total_num_dominoes)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("remove_dominoes", data=self.remove_middle)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_object["color"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_scale", data=self.star_object["scale"])
+        except (AttributeError,TypeError):
+            pass
+
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+        static_group.create_dataset("distinct_ids", data=self.distinct_ids)
+
+        # about the distinct_objects
+        distinct_group = static_group.create_group("distinct_objects")
+        colors = np.stack([self.candidate_dict[id_]["color"] for id_ in range(self.num_distinct_objects)], axis=0)
+
+        distinct_scales = [self.candidate_dict[id_]["scale"] for id_ in range(self.num_distinct_objects)]
+        scales = np.stack([xyz_to_arr(_s) for _s in distinct_scales])
+        distinct_group.create_dataset("scales", data=scales)
+        distinct_group.create_dataset("colors", data=colors)
+        distinct_group.create_dataset("masses", data=[self.candidate_dict[id_]["mass"] for id_ in range(self.num_distinct_objects)])
+
+
+        self._write_class_specific_data(static_group)
+        static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
+
+
+
     def _place_ramp_under_probe(self) -> List[dict]:
 
         cmds = []
@@ -2739,56 +2801,6 @@ class MultiDominoes(Dominoes):
 
         if self.randomize_colors_across_trials:
             self.middle_color = None
-
-
-    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
-        variables = static_group.create_group("variables")
-
-        try:
-            static_group.create_dataset("num_dominoes", data=self.total_num_dominoes)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("remove_dominoes", data=self.remove_middle)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("star_mass", data=self.star_object["mass"])
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("star_type", data=self.star_object["color"])
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("star_scale", data=self.star_object["scale"])
-        except (AttributeError,TypeError):
-            pass
-
-
-    def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
-        static_group.create_dataset("distinct_ids", data=self.distinct_ids)
-
-        # about the distinct_objects
-        distinct_group = static_group.create_group("distinct_objects")
-        colors = np.stack([self.candidate_dict[id_]["color"] for id_ in range(self.num_distinct_objects)], axis=0)
-
-        distinct_scales = [self.candidate_dict[id_]["scale"] for id_ in range(self.num_distinct_objects)]
-        scales = np.stack([xyz_to_arr(_s) for _s in distinct_scales])
-        distinct_group.create_dataset("scales", data=scales)
-        distinct_group.create_dataset("colors", data=colors)
-        distinct_group.create_dataset("masses", data=[self.candidate_dict[id_]["mass"] for id_ in range(self.num_distinct_objects)])
-
-
-        static_group.create_dataset("remove_middle", data=self.remove_middle)
-        if self.middle_type is not None:
-            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])
-            static_group.create_dataset("middle_type", data=self.middle_type)
-        self._write_class_specific_data(static_group)
-
-        static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
-
 
 
     @staticmethod

@@ -7,6 +7,10 @@ elif [[ "$HOSTNAME" == *"ccncluster" ]]; then
     printf '%s\n'$HOSTNAME
     PHYSICS_HOME="$HOME"/2021
     DUMP_DIR="/mnt/fs4/hsiaoyut/physion++/mini_v2"
+elif [[ "$HOSTNAME" == *"ccncluster" ]]; then
+    printf '%s\n'$HOSTNAME
+    PHYSICS_HOME="$HOME"/2021
+    DUMP_DIR="/mnt/fs4/hsiaoyut/physion++/mini_v2"
 else
 	printf "unknown hostname"
 fi

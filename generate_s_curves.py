@@ -1,9 +1,11 @@
 import os
+import socket
 import glob
 import h5py
 import math
 import numpy as np
 import pickle
+
 import collections
 
 #folder = "/media/htung/Extreme SSD/fish/tdw_physics/dump/mass_dominoes_pp/mass_dominoes_num_middle_objects_3"
@@ -16,14 +18,21 @@ def split_info(filename):
         arg_name, arg_value = info.split("=")
         info_dict[arg_name] = arg_value
     return info_dict
-folder = "/media/htung/Extreme SSD/fish/tdw_physics/dump/bouncy_platform_pp"
+
+if "ccncluster" in socket.gethostname():
+    data_root = "/mnt/fs4/hsiaoyut/physion++/analysis"
+else:
+    data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump"
+
+folder = os.path.join(data_root, "bouncy_platform_pp")
+import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "" #"target_bowl" #"target_cone-tscale_0.35,0.5,0.35"
+restrict = "bouncy_platform-use_blocker_with_hole=0-target=pipe-tscale=0.2,0.2,0.2" #-tscale_0.5,0.5,0.5" #"target_bowl" #"target_cone-tscale_0.35,0.5,0.35"
 filenames = [filename for filename in filenames if restrict in filename]
 
 target_varname = "star_bouncy" #"star_mass"
-#merge_by = "target"
-merge_by = "tscale"
+merge_by =  "" #"target"
+#merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
 
@@ -73,6 +82,8 @@ for set_id, merge_var_name in enumerate(set_dict):
     else:
         plt.xlabel(f"{target_varname}")
     plt.ylabel("red hits yellow")
+    ax = plt.gca()
+    ax.set_ylim([-0.1, 1.5])
 
 
     nbins = 10
@@ -84,7 +95,8 @@ for set_id, merge_var_name in enumerate(set_dict):
     plt.errorbar((_[1:] + _[:-1])/2, mean, yerr=std, fmt='-', label=merge_var_name)
 
     #hist plot
-plt.legend(loc="lower left")
+#plt.legend(loc="lower left")
+plt.legend(loc="upper left")
 plt.show()
 plt.savefig("s_curve.png")
 

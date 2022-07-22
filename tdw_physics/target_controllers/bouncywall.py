@@ -97,6 +97,12 @@ def get_bouncy_args(dataset_dir: str, parse=True):
                         default=2.0,
                         help="Lift the target object off the floor/ramp. Useful for rotated objects")
 
+    parser.add_argument("--tbounce",
+                        type=str,
+                        default="[0.01, 1.0]",
+                        help="range of bounciness setted for the target object")
+
+
     # layout
     parser.add_argument("--bouncy_axis_length",
                         type=float,
@@ -178,6 +184,7 @@ class BouncyWall(MultiDominoes):
                  port: int = None,
                  zjitter=0.,
                  fupforce=[0., 0.],
+                 target_bounciness=[0., 0.],
                  ramp_scale=[0.2, 0.25, 0.5],
                  bouncy_axis_length=1.2,
                  use_ramp=True,
@@ -205,6 +212,8 @@ class BouncyWall(MultiDominoes):
         self.target_lift = target_lift
         self.force_offset_jitter = 0.
         self.use_obi = False
+
+        self.target_bounciness = target_bounciness
 
     def get_trial_initialization_commands(self) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -291,7 +300,7 @@ class BouncyWall(MultiDominoes):
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
-        self.target_scale = self.middle_scale = scale
+
         self.target_id = o_id
 
         # Where to put the target
@@ -329,6 +338,20 @@ class BouncyWall(MultiDominoes):
         #         bounciness=0,
         #         o_id=o_id))
 
+        self.star_bouncy = random.uniform(*self.target_bounciness)
+        self.star_mass = self.probe_mass
+        self.star_color = rgb
+        self.star_type = self.target_type
+        self.star_scale = scale
+
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
+
+        self.target_scale = self.middle_scale = scale
+
         commands.extend(
             self.add_primitive(
                 record=record,
@@ -344,7 +367,7 @@ class BouncyWall(MultiDominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.0,
                 static_friction=0.0,
-                bounciness=0.1,
+                bounciness=self.star_bouncy,
                 o_id=o_id,
                 add_data=True
             ))
@@ -479,6 +502,37 @@ class BouncyWall(MultiDominoes):
 
         return commands
 
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+
+        try:
+            static_group.create_dataset("zone_location_d", data=self.zone_location_d)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_bouncy", data=self.star_bouncy)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_mass)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_color", data=self.star_color)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_type)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("star_size", data=xyz_to_arr(self.star_scale))
+        except (AttributeError,TypeError):
+            pass
+
+
+
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
@@ -529,6 +583,7 @@ if __name__ == "__main__":
         zone_material=args.zmaterial,
         zone_friction=args.zfriction,
         target_objects=args.target,
+        target_bounciness=args.tbounce,
         probe_objects=args.probe,
         target_scale_range=args.tscale,
         target_rotation_range=args.trot,

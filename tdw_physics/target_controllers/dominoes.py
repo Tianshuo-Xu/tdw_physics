@@ -465,8 +465,8 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id,_depth"
-            args.save_passes = "_img,_id,_depth"
+            args.write_passes = "_img,_id"#,_depth"
+            args.save_passes = "_img,_id" #,_depth"
             args.save_movies = True
             args.save_meshes = True
             args.use_test_mode_colors = False
@@ -1017,7 +1017,12 @@ class Dominoes(RigidbodiesDataset):
                                     #break
                             with open(mp4_filename + ".json", 'w') as fh:
                                 json.dump(out_dict, fh)
-                    mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+                            [os.remove(file) for file in files]
+                    if "_depth" in self.save_passes:
+                        mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+                    else:
+                        os.rmdir(str(self.png_dir))
+                        #rm = subprocess.run('rm -rf ' + str(self.png_dir).replace(" ", "\ "), shell=True)
 
                 #if self.save_meshes:
                 #    for o_id in self.object_ids:
