@@ -141,7 +141,7 @@ class Dataset(Controller, ABC):
 
     def get_initialization_commands(self,
                                     width: int,
-                                    height: int) -> None:
+                                    height: int) -> List:
         # Global commands for all physics datasets.
         commands = [{"$type": "set_screen_size",
                      "width": width,
