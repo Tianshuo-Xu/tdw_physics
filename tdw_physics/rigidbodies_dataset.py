@@ -9,6 +9,7 @@ import json
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from tdw.librarian import ModelRecord
 from tdw.tdw_utils import TDWUtils
+import tdw_physics
 from tdw_physics.transforms_dataset import TransformsDataset
 from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 
@@ -70,29 +71,58 @@ class PhysicsInfo:
         self.dynamic_friction = dynamic_friction
         self.static_friction = static_friction
         self.bounciness = bounciness
+        # self.library = library
+
+class MyPhysicsInfo:
+    """
+    Physics info for an object.
+    """
+
+    def __init__(self,
+                 record: ModelRecord,
+                 mass: float,
+                 dynamic_friction: float,
+                 static_friction: float,
+                 bounciness: float,
+                 library: str):
+        """
+        :param record: The model's metadata record.
+        :param mass: The mass of the object.
+        :param dynamic_friction: The dynamic friction.
+        :param static_friction: The static friction.
+        :param bounciness: The object's bounciness.
+        """
+
+        self.record = record
+        self.mass = mass
+        self.dynamic_friction = dynamic_friction
+        self.static_friction = static_friction
+        self.bounciness = bounciness
+        self.library = library
 
 
-def _get_default_physics_info() -> Dict[str, PhysicsInfo]:
+def _get_default_physics_info() -> Dict[str, MyPhysicsInfo]:
     """
     :return: The default object physics info from `data/physics_info.json`.
     """
 
-    info: Dict[str, PhysicsInfo] = {}
+    info: Dict[str, MyPhysicsInfo] = {}
 
     with io.open(pkg_resources.resource_filename(__name__, "data/physics_info.json"), "rt", encoding="utf-8") as f:
         _data = json.load(f)
         for key in _data:
             obj = _data[key]
-            info[key] = PhysicsInfo(record=MODEL_LIBRARIES[obj["library"]].get_record(obj["name"]),
+            info[key] = MyPhysicsInfo(record=MODEL_LIBRARIES[obj["library"]].get_record(obj["name"]),
                                     mass=obj["mass"],
                                     bounciness=obj["bounciness"],
                                     dynamic_friction=obj["dynamic_friction"],
-                                    static_friction=obj["static_friction"])
+                                    static_friction=obj["static_friction"],
+                                    library = obj["library"])
     return info
 
 
 # The default physics info
-PHYSICS_INFO: Dict[str, PhysicsInfo] = _get_default_physics_info()
+PHYSICS_INFO: Dict[str, MyPhysicsInfo] = _get_default_physics_info()
 
 
 def get_range(scl):
@@ -324,7 +354,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                       scale_mass: Optional[bool] = True,
                       make_kinematic: Optional[bool] = False,
                       obj_list: Optional[list] = [],
-                      apply_texture: Optional[bool] = True
+                      apply_texture: Optional[bool] = True,
+                      default_physics_values: Optional[bool] = True,
                       ) -> List[dict]:
 
         cmds = []
@@ -332,27 +363,56 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         if o_id is None:
             o_id = self._get_next_object_id()
 
-        if scale_mass:
-            mass = mass * np.prod(xyz_to_arr(scale))
 
+        lib = PHYSICS_INFO[record.name] if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+
+        # print("default_physics_values", default_physics_values)
+
+        # default_physics_values = True
+
+        commands, mass = TransformsDataset.get_add_physics_object(model_name=record.name,
+                                                 object_id=o_id,
+                                                 position=position,
+                                                 rotation=rotation,
+                                                 library=lib,
+                                                 scale_factor=scale,
+                                                 kinematic=make_kinematic,
+                                                 gravity=make_kinematic,
+                                                 default_physics_values=default_physics_values,
+                                                 mass=mass,
+                                                 dynamic_friction=dynamic_friction,
+                                                 static_friction=static_friction,
+                                                 bounciness=bounciness,
+                                                 scale_mass=True)
         # add the physics stuff
-        cmds.extend(
-            self.add_physics_object(
-                record = record,
-                position = position,
-                rotation = rotation,
-                mass = mass,
-                dynamic_friction = dynamic_friction,
-                static_friction = static_friction,
-                bounciness = bounciness,
-                o_id = o_id,
-                add_data = add_data))
+        cmds.extend(commands)
 
-        # scale the object
-        cmds.append(
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id})
+        if scale_mass:
+            # print("mass", mass)
+            mass = mass * np.prod(xyz_to_arr(scale))
+            # print("mass", mass)
+        # print("commands", commands)
+
+        cds_old = self.add_physics_object(
+            record=record,
+            position=position,
+            rotation=rotation,
+            mass=mass,
+            dynamic_friction=dynamic_friction,
+            static_friction=static_friction,
+            bounciness=bounciness,
+            o_id=o_id,
+            add_data=add_data)
+        #
+        # print("commands", cds_old)
+        # cmds.extend(cds_old)
+        #
+        # # scale the object
+        # cmds.append(
+        #     {"$type": "scale_object",
+        #      "scale_factor": scale,
+        #      "id": o_id})
+
 
         # set the material and color
         if apply_texture:
@@ -386,7 +446,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             self._add_name_scale_color(record, data)
             obj_list.append((record, data))
 
-        return cmds
+        return cmds, mass
 
 
     def add_ramp(self,

@@ -74,6 +74,8 @@ class TransformsDataset(Dataset, ABC):
         # Log the static data.
         self.object_ids = np.append(self.object_ids, o_id)
 
+        # print("appended id", o_id)
+
         if add_data:
             self.initial_positions = np.append(self.initial_positions, position)
             self.initial_rotations = np.append(self.initial_rotations, rotation)

@@ -11,7 +11,7 @@ import h5py, json
 from collections import OrderedDict
 import numpy as np
 import random
-from tdw.controller import Controller
+from .my_controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
@@ -896,7 +896,7 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
-
+                # print("len(self.object_ids)", len(self.object_ids), nmeshes)
                 assert(len(self.object_ids) == nmeshes)
                 for index in range(nmeshes):
                     o_id = meshes.get_object_id(index)
