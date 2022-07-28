@@ -12,7 +12,7 @@ class PhysicsInfo:
     """
 
     def __init__(self, record: ModelRecord, mass: float, dynamic_friction: float, static_friction: float,
-                 bounciness: float):
+                 bounciness: float, library: str):
         """
         :param record: The model's metadata record.
         :param mass: The mass of the object.
@@ -26,6 +26,7 @@ class PhysicsInfo:
         self.dynamic_friction = dynamic_friction
         self.static_friction = static_friction
         self.bounciness = bounciness
+        self.library = library
 
 
 def __get_default_physics_info() -> Dict[str, PhysicsInfo]:

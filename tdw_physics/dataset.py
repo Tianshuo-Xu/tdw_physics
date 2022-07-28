@@ -1,13 +1,37 @@
+import sys, os, copy, subprocess, glob, logging, time
+import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tqdm import tqdm
-import h5py
+import stopit
+from PIL import Image
+import io
+import h5py, json
+from collections import OrderedDict
 import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
+from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
+from tdw.librarian import ModelRecord, MaterialLibrarian
 
+from tdw_physics.postprocessing.stimuli import pngs_to_mp4
+from tdw_physics.postprocessing.labels import (get_labels_from,
+                                               get_all_label_funcs,
+                                               get_across_trial_stats_from)
+from tdw_physics.util_geom import save_obj
+import shutil
+import tdw_physics.util as util
+PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
+M = MaterialLibrarian()
+MATERIAL_TYPES = M.get_material_types()
+MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
+                  for mtype in MATERIAL_TYPES}
+
+# colors for the target/zone overlay
+ZONE_COLOR = [255,255,0]
+TARGET_COLOR = [255,0,0]
 
 class Dataset(Controller, ABC):
     """
@@ -24,10 +48,152 @@ class Dataset(Controller, ABC):
     # IDs of the objects in the current trial.
     OBJECT_IDS: np.array = np.empty(dtype=int, shape=0)
 
-    def __init__(self, port: int = 1071):
-        super().__init__(port=port, launch_build=False)
+    def __init__(self, port: int = 1071, check_version: bool=False,
+                 launch_build: bool=True,
+                 randomize: int=0,
+                 seed: int=0,
+                 save_args=True,
+                 **kwargs):
 
-    def run(self, num: int, output_dir: str, temp_path: str, width: int, height: int) -> None:
+        # save the command-line args
+        self.save_args = save_args
+        self._trial_num = None
+        self.command_log = None
+
+        super().__init__(port=port,
+                        check_version=check_version,
+                         launch_build=launch_build)
+
+        # set random state
+        self.randomize = randomize
+        self.seed = seed
+        if not bool(self.randomize):
+            random.seed(self.seed)
+            print("SET RANDOM SEED: %d" % self.seed)
+
+        # fluid actors need to be handled separately
+        self.fluid_object_ids = []
+        self.num_views = kwargs.get('num_views', 1)
+
+
+    def communicate(self, commands) -> list:
+        '''
+        Save a log of the commands so that they can be rerun
+        '''
+        if self.command_log is not None:
+            with open(str(self.command_log), "at") as f:
+                f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+        return super().communicate(commands)
+
+    def clear_static_data(self) -> None:
+        Dataset.OBJECT_IDS = np.empty(dtype=int, shape=0)
+        self.model_names = []
+        self._initialize_object_counter()
+
+    @staticmethod
+    def get_controller_label_funcs(classname='Dataset'):
+        """
+        A list of funcs with signature func(f: h5py.File) -> JSON-serializeable data
+        """
+
+        def stimulus_name(f):
+            try:
+                stim_name = str(np.array(f['static']['stimulus_name'], dtype=str))
+            except TypeError:
+                # happens if we have an empty stimulus name
+                stim_name = "None"
+            return stim_name
+
+        def controller_name(f):
+            return classname
+
+        def git_commit(f):
+            try:
+                return str(np.array(f['static']['git_commit'], dtype=str))
+            except TypeError:
+                # happens when no git commit
+                return "None"
+
+        return [stimulus_name, controller_name, git_commit]
+
+    def save_command_line_args(self, output_dir: str) -> None:
+        if not self.save_args:
+            return
+
+        # save all the args, including defaults
+        self._save_all_args(output_dir)
+
+        # save just the commandline args
+        output_dir = Path(output_dir)
+        filepath = output_dir.joinpath("commandline_args.txt")
+        if not filepath.exists():
+            with open(filepath, 'w') as f:
+                f.write('\n'.join(sys.argv[1:]))
+
+        return
+
+    def _save_all_args(self, output_dir: str) -> None:
+        writelist = []
+        for k,v in self.args_dict.items():
+            writelist.extend(["--"+str(k),str(v)])
+
+        self._script_args = writelist
+
+        output_dir = Path(output_dir)
+        filepath = output_dir.joinpath("args.txt")
+        if not filepath.exists():
+            with open(filepath, 'w') as f:
+                f.write('\n'.join(writelist))
+        return
+
+    def get_initialization_commands(self,
+                                    width: int,
+                                    height: int) -> List:
+        # Global commands for all physics datasets.
+        commands = [{"$type": "set_screen_size",
+                     "width": width,
+                     "height": height},
+                    {"$type": "set_render_quality",
+                     "render_quality": 5},
+                    {"$type": "set_physics_solver_iterations",
+                     "iterations": 32},
+                    {"$type": "set_vignette",
+                     "enabled": False},
+                    {"$type": "set_shadow_strength",
+                     "strength": 1.0},
+                    {"$type": "set_sleep_threshold",
+                     "sleep_threshold": 0.01}]
+
+        commands.extend(self.get_scene_initialization_commands())
+        # Add the avatar.
+        commands.extend([{"$type": "create_avatar",
+                          "type": "A_Img_Caps_Kinematic",
+                          "id": "a"},
+                         {"$type": "set_target_framerate",
+                          "framerate": self._framerate},
+                         {"$type": "set_pass_masks",
+                          "pass_masks": self.write_passes},
+                         {"$type": "set_field_of_view",
+                          "field_of_view": self.get_field_of_view()},
+                         {"$type": "send_images",
+                          "frequency": "always"},
+                         {"$type": "set_anti_aliasing",
+                          "mode": "subpixel"}
+                         ])
+        return commands
+
+    def run(self, num: int, output_dir: str,
+            temp_path: str,
+            width: int,
+            height: int,
+            framerate: int = 30,
+            write_passes: List[str] = PASSES,
+            save_passes: List[str] = [],
+            save_movies: bool = False,
+            save_labels: bool = False,
+            save_meshes: bool = False,
+            terminate: bool = True,
+            args_dict: dict={}) -> None:
         """
         Create the dataset.
 
@@ -36,9 +202,18 @@ class Dataset(Controller, ABC):
         :param temp_path: Temporary path to a file being written.
         :param width: Screen width in pixels.
         :param height: Screen height in pixels.
+        :param save_passes: a list of which passes to save out as PNGs (or convert to MP4)
+        :param save_movies: whether to save out a movie of each trial
+        :param save_labels: whether to save out JSON labels for the full trial set.
         """
 
-        pbar = tqdm(total=num)
+        # If no temp_path given, place in local folder to prevent conflicts with other builds
+
+        if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
+
+        self._height, self._width, self._framerate = height, width, framerate
+        print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
+
         output_dir = Path(output_dir)
         if not output_dir.exists():
             output_dir.mkdir(parents=True)
@@ -49,51 +224,153 @@ class Dataset(Controller, ABC):
         if temp_path.exists():
             temp_path.unlink()
 
-        # Global commands for all physics datasets.
-        commands = [{"$type": "set_screen_size",
-                     "width": width,
-                     "height": height},
-                    {"$type": "set_render_quality",
-                     "render_quality": 5},
-                    {"$type": "set_physics_solver_iterations",
-                     "iterations": 32},
-                    {"$type": "set_shadow_strength",
-                     "strength": 1.0},
-                    {"$type": "set_sleep_threshold",
-                     "sleep_threshold": 0.1}]
+        # save a log of the commands send to TDW build
+        self.command_log = Path(output_dir).joinpath('tdw_commands.json')
 
-        commands.extend(self.get_scene_initialization_commands())
-        # Add the avatar.
-        commands.extend([{"$type": "create_avatar",
-                          "type": "A_Img_Caps_Kinematic",
-                          "id": "a"},
-                         {"$type": "set_pass_masks",
-                          "pass_masks": ["_img", "_id", "_depth", "_normals", "_flow"]},
-                         {"$type": "set_field_of_view",
-                          "field_of_view": self.get_field_of_view()},
-                         {"$type": "send_images",
-                          "frequency": "always"}])
+        # which passes to write to the HDF5
+        self.write_passes = write_passes
+        print("self.write_passes", self.write_passes)
+        if isinstance(self.write_passes, str):
+            self.write_passes = self.write_passes.split(',')
+        self.write_passes = [p for p in self.write_passes if (p in PASSES)]
 
+        # which passes to save as an MP4
+        self.save_passes = save_passes
+        if isinstance(self.save_passes, str):
+            self.save_passes = self.save_passes.split(',')
+        self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
+        self.save_movies = save_movies
+
+        # whether to send and save meshes
+        self.save_meshes = save_meshes
+
+        print("write passes", self.write_passes)
+        print("save passes", self.save_passes)
+        print("save movies", self.save_movies)
+        print("save meshes", self.save_meshes)
+
+        if self.save_movies and len(self.save_passes) == 0:
+            self.save_movies = False
+            print('Not saving movies since save_passes has len {}'.format(len(self.save_passes)))
+
+        # whether to save a JSON of trial-level labels
+        self.save_labels = save_labels
+        if self.save_labels:
+            self.meta_file = Path(output_dir).joinpath('metadata.json')
+            if self.meta_file.exists():
+                self.trial_metadata = json.loads(self.meta_file.read_text())
+            else:
+                self.trial_metadata = []
+
+        initialization_commands = self.get_initialization_commands(width=width, height=height)
+
+        # Initialize the scene.
+        self.communicate(initialization_commands)
+
+        self.trial_loop(num, output_dir, temp_path)
+
+        # Terminate TDW
+        # Windows doesn't know signal timeout
+        if terminate:
+            if platform.system() == 'Windows':
+                end = self.communicate({"$type": "terminate"})
+            else:  # Unix systems can use signal to timeout
+                with stopit.SignalTimeout(
+                        5) as to_ctx_mgr:  # since TDW sometimes doesn't acknowledge being stopped we only *try* to close it
+                    assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+                    end = self.communicate({"$type": "terminate"})
+                if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
+                    print("tdw closed successfully")
+                elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
+                    print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
+
+        # Save the command line args
+        if self.save_args:
+            self.args_dict = copy.deepcopy(args_dict)
+        self.save_command_line_args(output_dir)
+
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str,
+                   save_frame: int=None,
+                   unload_assets_every: int = 10,
+                   update_kwargs: List[dict] = {},
+                   do_log: bool = False) -> None:
+
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * num
+
+        pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
         for f in output_dir.glob("*.hdf5"):
             if int(f.stem) > exists_up_to:
                 exists_up_to = int(f.stem)
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+
         pbar.update(exists_up_to)
-
-        # Initialize the scene.
-        self.communicate(commands)
-
         for i in range(exists_up_to, num):
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+            ## update the controller state
+            # self.update_controller_state(**update_kwargs[i])
+
             if not filepath.exists():
+                if do_log:
+                    start = time.time()
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+                # Save out images
+                self.png_dir = None
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists():
+                        self.png_dir.mkdir(parents=True)
+
                 # Do the trial.
-                self.trial(filepath=filepath, temp_path=temp_path, trial_num=i)
+                self.trial(filepath=filepath,
+                           temp_path=temp_path,
+                           trial_num=i,
+                           unload_assets_every=unload_assets_every)
+
+                # Save an MP4 of the stimulus
+                if self.save_movies:
+                    for pass_mask in self.save_passes:
+                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        cmd, stdout, stderr = pngs_to_mp4(
+                            filename=mp4_filename,
+                            image_stem=pass_mask[1:]+'_',
+                            png_dir=self.png_dir,
+                            size=[self._height, self._width],
+                            overwrite=True,
+                            remove_pngs=(True if save_frame is None else False),
+                            use_parent_dir=False)
+
+                    if save_frame is not None:
+                        frames = os.listdir(str(self.png_dir))
+                        sv = sorted(frames)[save_frame]
+                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+
+
+                if self.save_meshes:
+                    for o_id in Dataset.OBJECT_IDS:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
+
+                if do_log:
+                    end = time.time()
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
             pbar.update(1)
         pbar.close()
-        self.communicate({"$type": "terminate"})
 
-    def trial(self, filepath: Path, temp_path: Path, trial_num: int) -> None:
+    def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int=10) -> None:
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
 
@@ -102,40 +379,86 @@ class Dataset(Controller, ABC):
         :param trial_num: The number of the current trial.
         """
 
-        # Clear the object IDs.
-        Dataset.OBJECT_IDS = np.empty(dtype=int, shape=0)
+        # Clear the object IDs and other static data
+        self.clear_static_data()
+        self._trial_num = trial_num
 
         # Create the .hdf5 file.
         f = h5py.File(str(temp_path.resolve()), "a")
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 100 == 0:
+        if trial_num % unload_assets_every == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
         commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
         commands.extend(self._get_send_data_commands())
+
+        # Send the commands and start the trial.
+        r_types = ['']
+        count = 0
+        resp = self.communicate(commands)
+
+        self._set_segmentation_colors(resp)
+
+        self._get_object_meshes(resp)
+        frame = 0
         # Write static data to disk.
         static_group = f.create_group("static")
         self._write_static_data(static_group)
 
-        # Send the commands and start the trial.
-        resp = self.communicate(commands)
-        frame = 0
-
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
-        self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+        # print("Hello***")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
+        self._write_frame_labels(frame_grp, resp, -1, False)
+
+        # print("num views", self.num_views)
 
         # Continue the trial. Send commands, and parse output data.
+        if self.num_views > 1:
+            azimuth_grp = f.create_group("azimuth")
+            # TODO: set as flag
+            multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=False)
+
         while not done:
             frame += 1
+            # print('frame %d' % frame)
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
-            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-            done = done or self.is_done(resp, frame)
+            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
+            # Sometimes the build freezes and has to reopen the socket.
+            # This prevents such errors from throwing off the frame numbering
+            # if ('imag' not in r_ids) or ('tran' not in r_ids):
+            #     print("retrying frame %d, response only had %s" % (frame, r_ids))
+            #     frame -= 1
+            #     continue
+
+            # print()
+
+            if self.num_views > 1:
+                for view_num in range(self.num_views):
+                    # if view_num == 0 or frame == view_num:
+                    camera_position = multi_camera_positions[view_num]
+                    commands = self.move_camera_commands(camera_position, [])
+                    _resp = self.communicate(commands)
+                    # print('\tview %d' % view_num)
+                    frame_grp, objs_grp, tr_dict, done = self._write_frame(
+                        frames_grp=frames_grp if view_num == 0 else frame_grp,
+                        resp=_resp, frame_num=frame, view_num=view_num)
+
+            else:
+                frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp,
+                                                                       frame_num=frame, view_num=0)
+
+            # Write whether this frame completed the trial and any other trial-level data
+            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+            # if frame > 5:
+            #     break
 
         # Cleanup.
         commands = []
@@ -143,14 +466,121 @@ class Dataset(Controller, ABC):
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         self.communicate(commands)
+
+        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        if self.save_labels:
+            meta = OrderedDict()
+            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            self.trial_metadata.append(meta)
+
+            # Save the trial-level metadata
+            json_str = json.dumps(self.trial_metadata, indent=4)
+            self.meta_file.write_text(json_str, encoding='utf-8')
+            print("TRIAL %d LABELS" % self._trial_num)
+            print(json.dumps(self.trial_metadata[-1], indent=4))
+
+        # Save out the target/zone segmentation mask
+        if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
+            try:
+                _id = f['frames']['0000']['images']['_id']
+            except:
+                # print("inside cam0")
+                _id = f['frames']['0000']['images']['_id_cam0']
+            # get PIL image
+            _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+            # get colors
+            zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
+            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
+            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+            # get individual maps
+            zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+            target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+            # colorize
+            zone_map = zone_map * ZONE_COLOR
+            target_map = target_map * TARGET_COLOR
+            joint_map = zone_map + target_map
+            # add alpha
+            alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+            joint_map = np.dstack((joint_map, alpha))
+            # as image
+            map_img = Image.fromarray(np.uint8(joint_map))
+            # save image
+            map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
+
         # Close the file.
         f.close()
         # Move the file.
-        temp_path.replace(filepath)
+        try:
+            temp_path.replace(filepath)
+        except OSError:
+            shutil.move(temp_path, filepath)
+
+    def generate_multi_camera_positions(self, azimuth_grp, add_noise=True):
+        '''
+        Generate multiple camera positions based on azimuth rotation
+        '''
+
+        azimuth_delta = 2 * np.pi / self.num_views  # delta rotation angle
+        init_pos_cart = self.camera_position # initial camera position (cartesian coordinate)
+        init_pos_sphe = util.cart2sphe(init_pos_cart) # initial camera position (spherical coordinate)
+        new_pos_sphe = copy.deepcopy(init_pos_sphe)
+
+        camera_pos_list = []
+        for i in range(self.num_views):
+            noise = (random.random() - 0.5) * azimuth_delta if add_noise else 0. # add noise to the azimuth rotation angles
+            azimuth = init_pos_sphe['azimuth'] + i * azimuth_delta + noise # rotation for a new camera view
+            new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
+            new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
+            camera_pos_list.append(new_pos_cart)
+
+            # save azimuth rotation matrix (for uORF training)
+            az_ori = azimuth + np.pi  # since cam faces world origin, its orientation azimuth differs by pi
+            az_rot_mat_2d = np.array([[np.cos(az_ori), - np.sin(az_ori)],
+                                      [np.sin(az_ori), np.cos(az_ori)]])
+            az_rot_mat = np.eye(3)
+            az_rot_mat[:2, :2] = az_rot_mat_2d
+            azimuth_grp.create_dataset(f"cam{i}", data=az_rot_mat)
+
+        return camera_pos_list
+
+    def move_camera_commands(self, camera_pos, commands):
+        self._set_avatar_attributes(camera_pos)
+
+        commands.extend([
+            {"$type": "teleport_avatar_to", "position": camera_pos},
+            {"$type": "look_at_position", "position": self.camera_aim},
+            {"$type": "set_focus_distance", "focus_distance": TDWUtils.get_distance(camera_pos, self.camera_aim)},
+            # {"$type": "set_camera_clipping_planes", "near": 2., "far": 12}
+        ])
+        return commands
+
+    @staticmethod
+    def rotate_vector_parallel_to_floor(
+            vector: Dict[str, float],
+            theta: float,
+            degrees: bool = True) -> Dict[str, float]:
+
+        v_x = vector['x']
+        v_z = vector['z']
+        if degrees:
+            theta = np.radians(theta)
+
+        v_x_new = np.cos(theta) * v_x - np.sin(theta) * v_z
+        v_z_new = np.sin(theta) * v_x + np.cos(theta) * v_z
+
+        return {'x': v_x_new, 'y': vector['y'], 'z': v_z_new}
+
+
+    @staticmethod
+    def scale_vector(
+            vector: Dict[str, float],
+            scale: float) -> Dict[str, float]:
+        return {k:vector[k] * scale for k in ['x','y','z']}
 
     @staticmethod
     def get_random_avatar_position(radius_min: float, radius_max: float, y_min: float, y_max: float,
-                                   center: Dict[str, float], angle_min: float = 0,
+                                   center: Dict[str, float], angle_min: float = 0, reflections: bool = False,
                                    angle_max: float = 360) -> Dict[str, float]:
         """
         :param radius_min: The minimum distance from the center.
@@ -168,8 +598,12 @@ class Dataset(Controller, ABC):
         a_x = center["x"] + a_r
         a_z = center["z"] + a_r
         theta = np.radians(random.uniform(angle_min, angle_max))
+        if reflections:
+            theta2 = random.uniform(angle_min+180, angle_max+180)
+            theta = random.choice([theta, theta2])
+
         a_x = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
-        a_y = random.uniform(y_min, y_max)
+        a_y = random.uniform(y_min, y_max) + center["y"]
         a_z = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
 
         return {"x": a_x, "y": a_y, "z": a_z}
@@ -217,10 +651,20 @@ class Dataset(Controller, ABC):
         :param static_group: The static data group.
         """
 
+        self.commit = ""  # res.stdout.strip()
+        static_group.create_dataset("git_commit", data=self.commit)
+
+        # stimulus name
+        static_group.create_dataset("stimulus_name", data=self.stimulus_name)
         static_group.create_dataset("object_ids", data=Dataset.OBJECT_IDS)
 
+        static_group.create_dataset("model_names", data=[s.encode('utf8') for s in self.model_names])
+
+        if self.object_segmentation_colors is not None:
+            static_group.create_dataset("object_segmentation_colors", data=self.object_segmentation_colors)
+
     @abstractmethod
-    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         """
         Write a frame to the hdf5 file.
@@ -233,6 +677,48 @@ class Dataset(Controller, ABC):
         """
 
         raise Exception()
+
+    def _initialize_object_counter(self) -> None:
+        self._object_id_counter = int(0)
+        self._object_id_increment = int(1)
+
+    def _write_frame_labels(self,
+                            frame_grp: h5py.Group,
+                            resp: List[bytes],
+                            frame_num: int,
+
+                            sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
+        """
+        Writes the trial-level data for this frame.
+
+        :param frame_grp: The hdf5 group for a single frame.
+        :param resp: The response from the build.
+        :param frame_num: The frame number.
+        :param sleeping: Whether this trial timed out due to objects falling asleep.
+
+        :return: Tuple(h5py.Group labels, bool done): the labels data and whether this is the last frame of the trial.
+        """
+        labels = frame_grp.create_group("labels")
+
+        if frame_num > 0:
+            complete = self.is_done(resp, frame_num)
+        else:
+            complete = False
+
+        # If the trial is over, one way or another
+        done = sleeping or complete
+
+        # Write labels indicate whether and why the trial is over
+        labels.create_dataset("trial_end", data=done)
+        labels.create_dataset("trial_timeout", data=(sleeping and not complete))
+        labels.create_dataset("trial_complete", data=(complete and not sleeping))
+
+        # if done:
+        #     print("Trial Ended: timeout? %s, completed? %s" % \
+        #           ("YES" if sleeping and not complete else "NO",\
+        #            "YES" if complete and not sleeping else "NO"))
+
+        return labels, resp, frame_num, done
 
     def _get_destroy_object_command_name(self, o_id: int) -> str:
         """
@@ -261,3 +747,135 @@ class Dataset(Controller, ABC):
         """
 
         raise Exception()
+
+    def add_object(self, model_name: str, position={"x": 0, "y": 0, "z": 0}, rotation={"x": 0, "y": 0, "z": 0},
+                   library: str = "") -> int:
+        raise Exception("Don't use this function; see README for functions that supersede it.")
+
+    def get_add_object(self, model_name: str, object_id: int, position={"x": 0, "y": 0, "z": 0},
+                       rotation={"x": 0, "y": 0, "z": 0}, library: str = "") -> dict:
+        raise Exception("Don't use this function; see README for functions that supersede it.")
+
+    def _initialize_object_counter(self) -> None:
+        self._object_id_counter = int(0)
+        self._object_id_increment = int(1)
+
+    def _increment_object_id(self) -> None:
+        self._object_id_counter = int(self._object_id_counter + self._object_id_increment)
+
+    def _get_next_object_id(self) -> int:
+        self._increment_object_id()
+        return int(self._object_id_counter)
+
+    def add_room_center(self, vector):
+        return {k: vector[k] + self.room_center[k] for k in vector.keys()}
+
+    def get_material_name(self, material):
+
+        if material is not None:
+            if material in MATERIAL_TYPES:
+                mat = random.choice(MATERIAL_NAMES[material])
+            else:
+                assert any((material in MATERIAL_NAMES[mtype] for mtype in self.material_types)), \
+                    (material, self.material_types)
+                mat = material
+        else:
+            mtype = random.choice(self.material_types)
+            mat = random.choice(MATERIAL_NAMES[mtype])
+
+        return mat
+
+    def get_object_material_commands(self, record, object_id, material):
+        commands = TDWUtils.set_visual_material(
+            self, record.substructure, object_id, material, quality="high")
+        return commands
+
+    def _set_segmentation_colors(self, resp: List[bytes]) -> None:
+
+        self.object_segmentation_colors = None
+
+        if len(Dataset.OBJECT_IDS) == 0:
+            self.object_segmentation_colors = []
+            return
+
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'segm':
+                seg = SegmentationColors(r)
+                colors = {}
+                for i in range(seg.get_num()):
+                    try:
+                        colors[seg.get_object_id(i)] = seg.get_object_color(i)
+                    except:
+                        print("No object id found for seg", i)
+
+                self.object_segmentation_colors = []
+                for o_id in Dataset.OBJECT_IDS:
+                    if o_id in colors.keys():
+                        self.object_segmentation_colors.append(
+                            np.array(colors[o_id], dtype=np.uint8).reshape(1, 3))
+                    else:
+                        self.object_segmentation_colors.append(
+                            np.array([0, 0, 0], dtype=np.uint8).reshape(1, 3))
+
+                self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+
+    def _is_object_in_view(self, resp, o_id, pix_thresh=10) -> bool:
+
+        id_map = None
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_id":
+                        id_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height,
+                                                                                                     self._width, 3)
+
+        if id_map is None:
+            return True
+
+        obj_index = [i for i, _o_id in enumerate(Dataset.OBJECT_IDS) if _o_id == o_id]
+        if not len(obj_index):
+            return True
+        else:
+            obj_index = obj_index[0]
+
+        obj_seg_color = self.object_segmentation_colors[obj_index]
+        obj_map = (id_map == obj_seg_color).min(axis=-1, keepdims=True)
+        in_view = obj_map.sum() >= pix_thresh
+        return in_view
+
+    def _max_optical_flow(self, resp):
+
+        flow_map = None
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "imag":
+                im = Images(r)
+                for i in range(im.get_num_passes()):
+                    pass_mask = im.get_pass_mask(i)
+                    if pass_mask == "_flow":
+                        flow_map = np.array(Image.open(io.BytesIO(np.array(im.get_image(i))))).reshape(self._height, self._width, 3)
+
+        if flow_map is None:
+            return float(0)
+
+        else:
+            return flow_map.sum(-1).max().astype(float)
+
+    def _get_object_meshes(self, resp: List[bytes]) -> None:
+
+        self.object_meshes = dict()
+        # {object_id: (vertices, faces)}
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'mesh':
+                meshes = Meshes(r)
+                nmeshes = meshes.get_num()
+                # print("len(Dataset.OBJECT_IDS)", len(Dataset.OBJECT_IDS), nmeshes)
+                assert (len(Dataset.OBJECT_IDS) == nmeshes)
+                for index in range(nmeshes):
+                    o_id = meshes.get_object_id(index)
+                    vertices = meshes.get_vertices(index)
+                    faces = meshes.get_triangles(index)
+                    self.object_meshes[o_id] = (vertices, faces)
