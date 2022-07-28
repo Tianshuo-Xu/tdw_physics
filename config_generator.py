@@ -2,13 +2,14 @@
 import os
 
 
-scenario_name = "bouncy_wall"
+scenario_name = "friction_platform"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
 
 
 variables = dict()
+exclude = dict()
 variables["mass_dominoes"] = dict()
 variables["mass_dominoes"]["num_middle_objects"] = [0, 1, 2, 3, 4]
 
@@ -16,6 +17,15 @@ variables["mass_dominoes"]["num_middle_objects"] = [0, 1, 2, 3, 4]
 variables["mass_waterpush"] = dict()
 variables["mass_waterpush"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
 variables["mass_waterpush"]["tscale"] = ["0.5,0.5,0.5","0.45,0.5,0.45","0.4,0.5,0.4","0.35,0.5,0.35", "0.3,0.5,0.3"]
+variables["mass_waterpush"]["zdloc"] = ["1","2","3"]
+exclude["mass_waterpush"] = [{"target": ["cone"], "tscale":["0.5,0.5,0.5", "0.45,0.5,0.45","0.4,0.5,0.4"]}]
+
+
+variables["mass_collision"] = dict()
+variables["mass_collision"]["target"] = ["cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
+variables["mass_collision"]["tscale"] = ["0.7,0.5,0.7", "0.6,0.5,0.6","0.5,0.5,0.5","0.4,0.5,0.4"]
+variables["mass_collision"]["zdloc"] = ["1","2"]
+exclude["mass_collision"] = []
 
 variables["bouncy_platform"] = dict()
 variables["bouncy_platform"]['use_blocker_with_hole'] = ["0", "1"]
@@ -29,6 +39,14 @@ variables["bouncy_wall"]["tscale"] = ["0.25,0.25,0.25", "0.35,0.35,0.35", "0.45,
 
 
 
+variables["friction_platform"] = dict()
+variables["friction_platform"]["target"] = ["cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
+variables["friction_platform"]["is_single_ramp"] = ["0","1"]
+variables["friction_platform"]["zdloc"] = ["1","2"]
+exclude["friction_platform"] = []
+
+
+
 f = open(template_config, 'r')
 template_content = f.read()
 
@@ -38,15 +56,37 @@ var_keys =  [*variables[scenario_name].keys()]
 print("number of variables", len(var_keys))
 
 
-def name_generator(vark, varv, cur_var_id, pfx, vars):
+def is_exclude(cur_list, ex_list):
+    cur = dict()
+    for key, val in cur_list:
+        cur[key] = val
+    for ex in ex_list:
+        to_exclude = True
+        for k, v in ex.items():
+            if k not in cur:
+                to_exclude = False
+                break
+            elif cur[k] not in v:
+                to_exclude = False
+                break
+        if to_exclude:
+            return True
+
+def name_generator(vark, varv, cur_var_id, pfx, vars, ex):
 
     nvar = len(varv)
     for value in varv[cur_var_id]:
         cur_pfx = pfx + "-" + vark[cur_var_id] + "=" + f"{value}"
         cur_list = vars + [(vark[cur_var_id], value)]
         if cur_var_id == nvar - 1: #end
-            print(cur_pfx)
-            print(cur_list)
+            #print(cur_pfx)
+            #print(cur_list)
+            is_ex = is_exclude(cur_list, ex)
+            if is_ex:
+                print("excluding", cur_pfx)
+                print(cur_list)
+                continue
+
 
             os.mkdir(cur_pfx)
             output_file = os.path.join(cur_pfx, "commandline_args.txt")
@@ -59,9 +99,9 @@ def name_generator(vark, varv, cur_var_id, pfx, vars):
             fw.close()
 
         else:
-            name_generator(vark, varv, cur_var_id + 1, cur_pfx, cur_list)
+            name_generator(vark, varv, cur_var_id + 1, cur_pfx, cur_list, ex)
 
-name_generator(var_keys, var_values, 0, os.path.join("/".join(template_config.split("/")[:-1]), prefix ), [])
+name_generator(var_keys, var_values, 0, os.path.join("/".join(template_config.split("/")[:-1]), prefix ), [], exclude[scenario_name])
 
 
 # modify to dfs

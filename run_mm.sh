@@ -7,13 +7,13 @@
 
 
 
-controller="tdw_physics/target_controllers/waterpush_var.py"
-ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-python $controller @$ARGS_PATH/waterpush_pp/pilot_it2_collision_simple_box/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_waterpush/pilot_it2_collision_simple_box  --height 256 --width 256
+# controller="tdw_physics/target_controllers/waterpush_var.py"
+# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+# python $controller @$ARGS_PATH/waterpush_pp/pilot_it2_collision_simple_box/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_waterpush/pilot_it2_collision_simple_box2  --height 256 --width 256 --num 40
 
 # controller="tdw_physics/target_controllers/collision_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/collide_pp/pilot_it2_collision_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes2/pilot_it2_collision_simple_box  --height 256 --width 256
+# python $controller @$ARGS_PATH/collide_pp/pilot_it2_collision_simple_box/commandline_args.txt --training_data_mode  --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_collision/pilot_it2_collision_simple_box5  --height 256 --width 256 --num 20
 
 
 
@@ -35,13 +35,13 @@ python $controller @$ARGS_PATH/waterpush_pp/pilot_it2_collision_simple_box/comma
 # no reset
 # controller="tdw_physics/target_controllers/fricramp.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/fricramp_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricramp/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp --height 512 --width 512
+# python $controller @$ARGS_PATH/fricramp_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricramp/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp5 --height 256 --width 256 --num 20
 
 # no rest -- friction cloth
-# controller="tdw_physics/target_controllers/fricrampcloth.py"
-# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# #python $controller @$ARGS_PATH/fricrampcloth_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricrampcloth/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp --height 256 --width 256
-# python $controller @$ARGS_PATH/fricrampcloth_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricrampcloth/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp --height 256 --width 256
+controller="tdw_physics/target_controllers/fricrampcloth.py"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+#python $controller @$ARGS_PATH/fricrampcloth_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricrampcloth/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp --height 256 --width 256
+python $controller @$ARGS_PATH/fricrampcloth_pp/pilot_it2_rollingSliding_simple_ramp_box_2distinct/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fricrampcloth/pilot_it2_rollingSliding_simple_ramp_box_2distinct_singleramp --height 256 --width 256
 
 
 # controller="tdw_physics/target_controllers/collisionfric_var.py"

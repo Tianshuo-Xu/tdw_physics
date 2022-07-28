@@ -53,6 +53,11 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
                         default=0.,
                         help="amount of z jitter applied to the target zone")
 
+    parser.add_argument("--zdloc",
+                        type=int,
+                        default="-1",
+                        help="comma-separated list of possible target zone shapes")
+
     ### force
     parser.add_argument("--fscale",
                         type=str,
@@ -84,12 +89,6 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
                         type=float,
                         default=0.,
                         help="create single ramp scenario-specific")
-
-    parser.add_argument("--add_second_ramp",
-                        type=float,
-                        default=1,
-                        help="create stacking ramp scene with 2 ramps")
-
 
 
     ###target
@@ -181,6 +180,7 @@ class FricRamp(MultiDominoes):
     def __init__(self,
                  port: int = None,
                  zjitter = 0,
+                 zone_dloc = -1,
                  fupforce = [0.,0.],
                  ramp_scale = [0.2,0.25,0.5],
                  rolling_sliding_axis_length = 1.15,
@@ -190,7 +190,6 @@ class FricRamp(MultiDominoes):
                  ledge_position = 0.5,
                  ledge_scale = [100,0.1,0.1],
                  is_single_ramp = False,
-                 add_second_ramp = True,
                 #  ledge_color = None,
                 target_lift = 0,
 
@@ -214,7 +213,7 @@ class FricRamp(MultiDominoes):
         #[MODEL_LIBRARIES["models_full.json"].get_record("ramp_with_platform_weld")]
         self.target_lift = target_lift
 
-
+        self.zone_dloc = zone_dloc
 
         """
         How by what factor should the y and z dimensions should be smaller than the original ramp
@@ -229,17 +228,22 @@ class FricRamp(MultiDominoes):
         Vedang's janky way of randomizing the friction and the size of the ramp
         """
 
-        self.fric_range= [0.01, 0.01] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
+        self.start_frame_for_prediction = 90
+        self.fric_range= [0.01, 0.2] #0.65] #0.01 ~ 0.2
         self.ramp_y_range=[0.7,0.95]
 
+
         self.is_single_ramp = is_single_ramp
-        self.add_second_ramp = add_second_ramp
         self.num_interactions = 1
 
 
         if self.is_single_ramp:
+            self.add_second_ramp = False
             self.ramp_base_height = 0
+            self.camera_aim = {"x": 0.2, "y": 0.5, "z": 0.} # fixed aim
         else:
+            self.add_second_ramp = True
+            self.camera_aim = {"x": 0.5, "y": 0.5, "z": 0.} # fixed aim
             self.ramp_base_height_range = self.ramp_scale['y']
             self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
 
@@ -323,7 +327,7 @@ class FricRamp(MultiDominoes):
             self.ramp = random.choice(self.DEFAULT_RAMPS)
             rgb = self.ramp_color or self.random_color(exclude=self.target_color)
             ramp_pos = copy.deepcopy(self.probe_initial_position)
-            ramp_pos['y'] = self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
+            ramp_pos['y'] = 0.01 #self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
             ramp_rot = self.get_y_rotation([90,90])
 
             self.ramp_pos = ramp_pos
@@ -337,7 +341,7 @@ class FricRamp(MultiDominoes):
             self.ramp_end_x = self.ramp
 
             second_ramp_pos = copy.deepcopy(self.ramp_pos)
-            second_ramp_pos['y'] = self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
+            second_ramp_pos['y'] = 0.01 * 1.1 #self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
             rgb = self.ramp_color or self.random_color(exclude=self.target_color)
 
             ramp_rot = self.get_y_rotation([90,90])
@@ -370,13 +374,14 @@ class FricRamp(MultiDominoes):
             ))
             self.probe_initial_position['x'] += self.ramp_scale['z']*0.1
             self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height + self.probe_initial_position['y']
+            #self.probe_initial_position['z'] += 0.25
 
         else:
             # ramp params
             self.ramp = random.choice(self.DEFAULT_RAMPS)
             rgb = self.ramp_color or self.random_color(exclude=self.target_color)
             ramp_pos = copy.deepcopy(self.probe_initial_position)
-            ramp_pos['y'] = self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
+            ramp_pos['y'] = 0.01 # self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
             ramp_rot = self.get_y_rotation([90,90])
 
             ramp_id = self._get_next_object_id()
@@ -426,7 +431,7 @@ class FricRamp(MultiDominoes):
 
             if self.add_second_ramp:
                 second_ramp_pos = copy.deepcopy(self.ramp_pos)
-                second_ramp_pos['y'] = self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
+                second_ramp_pos['y'] = 0.01 * 1.1 #self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
 
 
                 second_ramp_id = self._get_next_object_id()
@@ -559,8 +564,17 @@ class FricRamp(MultiDominoes):
         self.target = record
         self.target_type = data["name"]
         self.target_color = rgb
+        self.target_size = scale
+
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
+
+
         self.target_scale = self.middle_scale = scale
         self.target_id = o_id
+        self.star_id  = o_id
 
         # Where to put the target
         if self.target_rotation is None:
@@ -570,8 +584,8 @@ class FricRamp(MultiDominoes):
         commands = []
 
         ### TODO: better sampling of random physics values
-        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -self.rolling_sliding_axis_length, "y": self.target_lift, "z": 0.}
+        self.target_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
+        self.probe_initial_position = {"x": -self.rolling_sliding_axis_length, "y": self.target_lift, "z": 0}
         rot = self.get_rotation(self.target_rotation_range)
 
         #tune_param
@@ -612,7 +626,7 @@ class FricRamp(MultiDominoes):
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
-                mass=self.probe_mass,
+                mass=self.target_mass,
                 material=self.target_material,
                 color=rgb,
                 scale=scale,
@@ -655,7 +669,7 @@ class FricRamp(MultiDominoes):
 
         # Apply a force to the target object
         self.push_force = self.get_push_force(
-            scale_range=self.probe_mass * np.array(self.force_scale_range),
+            scale_range=self.target_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range,
             yforce=self.fupforce)
         self.push_force = self.rotate_vector_parallel_to_floor(
@@ -750,20 +764,126 @@ class FricRamp(MultiDominoes):
 
         return commands
 
+
+    def _place_target_zone(self) -> List[dict]:
+        if self.add_second_ramp:
+            cmd = super()._place_target_zone()
+            self.force_wait_zone = 0
+            return cmd
+        else:
+            #self.zone_scale_range = {'x': 0.3, 'y':0.3, 'z':0.3}
+
+            # create a target zone (usually flat, with same texture as room)
+
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale={'x': 0.4, 'y':0.1, 'z':0.5},
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
+
+            if any((s <= 0 for s in scale.values())):
+                self.remove_zone = True
+                self.scales = self.scales[:-1]
+                self.colors = self.colors[:-1]
+                self.model_names = self.model_names[:-1]
+
+            # place it just beyond the target object with an effectively immovable mass and high friction
+            commands = []
+            self.zone_location =  self._get_zone_location(scale)
+            commands.extend(
+                self.add_primitive(
+                    record=record,
+                    position=self.zone_location,
+                    rotation=TDWUtils.VECTOR3_ZERO,
+                    scale=scale,
+                    material=self.zone_material,
+                    color=rgb,
+                    mass=500,
+                    scale_mass=False,
+                    dynamic_friction=self.zone_friction,
+                    static_friction=(10.0 * self.zone_friction),
+                    bounciness=0,
+                    o_id=o_id,
+                    add_data=(not self.remove_zone),
+                    make_kinematic=False # zone shouldn't move
+                ))
+
+            # get rid of it if not using a target object
+            if self.remove_zone:
+                commands.append(
+                    {"$type": self._get_destroy_object_command_name(o_id),
+                     "id": int(o_id)})
+                self.object_ids = self.object_ids[:-1]
+
+            self.force_wait_zone = 80
+            self.hold_cmd = {"$type": "teleport_object",
+                          "id": o_id,
+                          "position": self.zone_location}
+
+            return commands
+
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+
+
+        if (self.force_wait_zone != 0) and frame <= self.force_wait_zone:
+            if self.PRINT:
+                print("applied %s at time step %d" % (self.hold_cmd, frame))
+            output = [self.hold_cmd]
+        else:
+            output = []
+
+        #print("frame", output)
+
+        return output
+
+
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         # 0.1 for the probe shift, 0.01 to put under ramp
         if self.add_second_ramp:
-            rnd = random.uniform(0, 1)
 
-            if rnd < 0.5:
+            if self.zone_dloc == -1:
+                rnd = random.uniform(0, 1)
+
+                if rnd < 0.5:
+                    return self._get_zone_second_location(scale)
+            elif self.zone_dloc == 1:
                 return self._get_zone_second_location(scale)
 
-        return {
-            "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
-        }
+            elif self.zone_dloc == 2:
+                print("zone dloc 2")
+
+            else:
+                raise ValueError
+
+            return {
+                "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            }
+        else:
+
+            if self.zone_dloc == 1:
+                return {
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 -3.2, #3.1
+                    "y": 2.3 if not self.remove_zone else 10.0,
+                    "z": 0.35 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            elif self.zone_dloc == 2:
+                return {
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+                    "y": 2.3 if not self.remove_zone else 10.0,
+                    "z": -0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            else:
+                raise ValueError
     def _get_zone_second_location(self, scale):
         print(self.zone_scale)
         if self.add_second_ramp:
@@ -775,7 +895,8 @@ class FricRamp(MultiDominoes):
             "y": self.zone_scale['x']/8. if not self.remove_zone else 10.0,
             "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
         }
-
+    def is_done(self, resp: List[bytes], frame: int) -> bool:
+        return frame > 350
     def clear_static_data(self) -> None:
         Dominoes.clear_static_data(self)
         self.distinct_ids = np.empty(dtype=np.int32, shape=0)
@@ -788,6 +909,39 @@ class FricRamp(MultiDominoes):
         Dominoes._write_static_data(self, static_group)
 
         # static_group.create_dataset("bridge_height", data=self.bridge_height)
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+
+        try:
+            static_group.create_dataset("use_blocker_with_hole", data=self.is_single_ramp)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_friction", data=self.zone_friction)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_id", data=self.star_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_mass_", data=self.target_mass)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_color_", data=self.target_color)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("target_type_", data=self.target_type)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("target_size_", data=xyz_to_arr(self.target_size))
+        except (AttributeError,TypeError):
+            pass
 
     @staticmethod
     def get_controller_label_funcs(classname = "Rolling_Sliding"):
@@ -802,11 +956,11 @@ if __name__ == "__main__":
 
     args = get_rolling_sliding_args("rolling_sliding")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     ColC = FricRamp(
         room=args.room,
@@ -818,6 +972,7 @@ if __name__ == "__main__":
         zone_color=args.zcolor,
         zone_material=args.zmaterial,
         zone_friction=args.zfriction,
+        zone_dloc = args.zdloc,
         target_objects=args.target,
         probe_objects=args.probe,
         target_scale_range=args.tscale,
@@ -842,7 +997,6 @@ if __name__ == "__main__":
         ledge = args.ledge,
         ledge_position = args.ledge_position,
         ledge_scale = args.ledge_scale,
-        add_second_ramp = args.add_second_ramp,
         is_single_ramp = args.is_single_ramp,
         ## not scenario-specific
         camera_radius=args.camera_distance,

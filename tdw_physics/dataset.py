@@ -730,6 +730,8 @@ class Dataset(Controller, ABC):
                     except:
                         print("No object id found for seg", i)
 
+                import ipdb; ipdb.set_trace()
+
                 self.object_segmentation_colors = []
                 for o_id in self.object_ids:
                     if o_id in colors.keys():
@@ -748,7 +750,8 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
-                assert(len(self.object_ids) == nmeshes), f"{len(self.object_ids)} vs {nmeshes}"
+                if not self.use_obi:
+                    assert(len(self.object_ids) == nmeshes), f"{len(self.object_ids)} vs {nmeshes}"
                 for index in range(nmeshes):
                     o_id = meshes.get_object_id(index)
                     vertices = meshes.get_vertices(index)

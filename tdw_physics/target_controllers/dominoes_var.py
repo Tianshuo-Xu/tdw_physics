@@ -2160,7 +2160,7 @@ class Dominoes(RigidbodiesDataset):
 
 
     def _write_class_specific_data(self, static_group: h5py.Group) -> None:
-        variables = static_group.create_group("variables")
+        #variables = static_group.create_group("variables")
         static_group.create_dataset("remove_middle", data=self.remove_middle)
         if self.middle_type is not None:
             static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])

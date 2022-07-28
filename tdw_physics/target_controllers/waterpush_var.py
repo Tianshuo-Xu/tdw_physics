@@ -40,7 +40,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     ### zone
     parser.add_argument("--zscale",
                         type=str,
-                        default="1.0,0.01,1.0",
+                        default="0.2,0.2,0.2",
                         help="scale of target zone")
 
     parser.add_argument("--zone",
@@ -48,9 +48,15 @@ def get_collision_args(dataset_dir: str, parse=True):
                         default="cube",
                         help="comma-separated list of possible target zone shapes")
 
+    parser.add_argument("--zdloc",
+                        type=int,
+                        default="-1",
+                        help="comma-separated list of possible target zone shapes")
+
+
     parser.add_argument("--zjitter",
                         type=float,
-                        default=0.35,
+                        default=0.2,
                         help="amount of z jitter applied to the target zone")
 
     ### probe
@@ -63,6 +69,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=str,
                         default="0.35,0.35,0.35",
                         help="scale of probe objects")
+
+    parser.add_argument("--zone",
+                        type=str,
+                        default="cube",
+                        help="comma-separated list of possible target zone shapes")
 
     parser.add_argument("--plift",
                         type=float,
@@ -104,7 +115,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     ### layout
     parser.add_argument("--collision_axis_length",
                         type=float,
-                        default=2.0,
+                        default=0,
                         help="Length of spacing between probe and target objects at initialization.")
 
     ## collision specific arguments
@@ -161,6 +172,7 @@ class WaterPush(Dominoes):
     def __init__(self,
                  port: int = None,
                  zjitter = 0,
+                 zone_dloc = -1,
                  fupforce = [0.,0.],
                  probe_lift = 0.,
                  **kwargs):
@@ -170,6 +182,7 @@ class WaterPush(Dominoes):
         self.fupforce = fupforce
         self.probe_lift = probe_lift
         self.use_obi = True
+        self.zone_dloc = zone_dloc
 
 
         self._star_types = self._target_types
@@ -179,6 +192,7 @@ class WaterPush(Dominoes):
 
         self.force_wait_range = [3, 3]
         self.obi_unique_ids = 0
+        self.camera_aim = {"x": 0., "y": 0.7, "z": 0.} # fixed aim
 
     def generate_static_object_info(self):
 
@@ -228,7 +242,7 @@ class WaterPush(Dominoes):
             self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
-        commands.extend(self._place_target_zone())
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
         commands.extend(self._place_star_object(interact_id))
@@ -285,6 +299,26 @@ class WaterPush(Dominoes):
         return commands
 
 
+
+
+    def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
+        if frame == self.fluid_stop_step:
+            self.obi.set_fluid_speed(self.f_id, speed=0)
+
+
+        return []
+
+    def get_additional_command_when_removing_curtain(self, frame=0):
+        #print("curtain", frame, self.fluid_start_step)
+        if frame == self.fluid_start_step:
+            self.obi.set_fluid_speed(self.f_id, speed=self.fluid_speed)
+
+        return [self.hold_cmd]
+
+        if frame == self.force_wait:
+           return [self.push_cmd]
+        return []
+
     def _build_intermediate_structure(self, interact_id) -> List[dict]:
 
         # print("middle color", self.middle_color)
@@ -299,6 +333,9 @@ class WaterPush(Dominoes):
 
         return commands
 
+    def get_stframe_pred(self):
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video +15
+        return frame_id
 
 
     def _place_star_object(self, interact_id) -> List[dict]:
@@ -427,7 +464,7 @@ class WaterPush(Dominoes):
         fluid = Fluid(
         capacity=1500,
         resolution=1.0,
-        color={'a': 0.5, 'b': 0.995, 'g': 0.2, 'r': 0.2},
+        color={'a': 0.5, 'b': 1.0, 'g': 0.4, 'r': 0.4},
         rest_density=1.0,
         radius_scale=1.6, #2.0
         random_velocity=vis[3],
@@ -436,7 +473,7 @@ class WaterPush(Dominoes):
         viscosity= vis[1], #0.001, #1.5
         vorticity=vis[4], #0.7
         reflection=0.25,
-        transparency=0.2,
+        transparency=1.0,
         refraction=-0.034,
         buoyancy=-1,
         diffusion=0,
@@ -449,12 +486,16 @@ class WaterPush(Dominoes):
         blur_radius=0.02,
         surface_downsample=1,
         render_smoothness=0.8,
-        metalness=0,
+        metalness=0.5,
         ambient_multiplier=1,
         absorption=5,
         refraction_downsample=1,
         foam_downsample=1,
         )
+        self.f_id = o_id
+        self.fluid_stop_step = 100
+        self.fluid_start_step = 30
+        self.fluid_speed = 12
 
         fluid_start_position = {
             "x": self.collision_axis_length - 3.0,
@@ -467,7 +508,7 @@ class WaterPush(Dominoes):
                  position=fluid_start_position, # y is height,
                  rotation={"x": 150+  np.random.uniform(0,1) * 5.0 , "y": -90, "z": 0}, #150, -90, 0 #+  np.random.uniform(0,1) * 5.0
                  lifespan=1000,
-                 speed=12)
+                 speed=0 if interact_id >0 else self.fluid_speed)
         commands = []
 
         """
@@ -537,14 +578,114 @@ class WaterPush(Dominoes):
         return commands
 
 
-    def _get_zone_location(self, scale):
+    def _place_target_zone(self, interact_id) -> List[dict]:
+
+        # create a target zone (usually flat, with same texture as room)
+        if not self.repeat_trial: # sample from scratch
+
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale=self.zone_scale_range,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
+        else:
+            # dry pass to get the obj id counter correct
+            record, data = self.random_primitive([self.zone],
+                                                 scale=self.zone_scale,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            assert(record == self.zone)
+            assert(o_id == self.zone_id)
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(np.array_equal(rgb, self.zone_color))
+
+
+        if any((s <= 0 for s in scale.values())):
+            self.remove_zone = True
+            self.scales = self.scales[:-1]
+            self.colors = self.colors[:-1]
+            self.model_names = self.model_names[:-1]
+        self.distinct_ids = np.append(self.distinct_ids, -1)
+        # place it just beyond the target object with an effectively immovable mass and high friction
+
+        self.zone_location = self._get_zone_location(scale, islast=interact_id==(self.num_interactions-1))
+        commands = []
+        commands.extend(
+            self.add_primitive(
+                record=record,
+                position=(self.zone_location),
+                rotation=TDWUtils.VECTOR3_ZERO,
+                scale=scale,
+                material=self.zone_material,
+                color=rgb,
+                mass=10,
+                scale_mass=False,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
+                bounciness=0,
+                o_id=o_id,
+                add_data=(not self.remove_zone),
+                make_kinematic=False # zone shouldn't move
+            ))
+        # get rid of it if not using a target object
+        if self.remove_zone:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]
+
+        self.hold_cmd = {"$type": "teleport_object",
+                          "id": o_id,
+                          "position": self.zone_location}
+
+
+        return commands
+
+
+    def _get_zone_location(self, scale, islast):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
-        return {
-            "x": self.collision_axis_length,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
-        }
+
+        if not islast:
+            return {
+                "x": random.uniform(self.collision_axis_length - 1.5, self.collision_axis_length - 1.7),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                "y": random.uniform(1.0, 1.5) if not self.remove_zone else 10.0,
+                "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            }
+        else:
+            if self.zone_dloc == 3:
+                return {
+                    "x": random.uniform(self.collision_axis_length , self.collision_axis_length + 0.2),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            elif self.zone_dloc == 2:
+                #right after the object
+                return {
+                   "x": random.uniform(self.collision_axis_length -0.6 , self.collision_axis_length-0.4),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                   "y": 2.5 if not self.remove_zone else 10.0,
+                   "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            elif self.zone_dloc == 1:
+                # zone location at the right boundary
+                return {
+                    "x": random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            else:
+                raise ValueError(f"zloc needs to be [1,2,3], but get {self.zone_dloc}")
 
 
 
@@ -559,12 +700,9 @@ class WaterPush(Dominoes):
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
 
-        self._write_class_specific_data(static_group)
-
-
 
     def _write_class_specific_data(self, static_group: h5py.Group) -> None:
-        variables = static_group.create_group("variables")
+        #variables = static_group.create_group("variables")
 
         try:
             static_group.create_dataset("star_mass", data=self.star_object["mass"])
@@ -576,6 +714,10 @@ class WaterPush(Dominoes):
             pass
         try:
             static_group.create_dataset("star_size", data=xyz_to_arr(self.star_scale))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("zdloc", data=self.zone_dloc)
         except (AttributeError,TypeError):
             pass
 
@@ -614,11 +756,11 @@ if __name__ == "__main__":
 
     args = get_collision_args("collision")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     ColC = WaterPush(
         port=args.port,
@@ -627,6 +769,7 @@ if __name__ == "__main__":
         seed=args.seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
+        zone_dloc = args.zdloc,
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
         zone_material=args.zmaterial,

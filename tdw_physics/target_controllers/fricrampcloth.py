@@ -193,7 +193,6 @@ class FricRamp(MultiDominoes):
                  ledge_position = 0.5,
                  ledge_scale = [100,0.1,0.1],
                  is_single_ramp = False,
-                 add_second_ramp = True,
                 #  ledge_color = None,
                 target_lift = 0,
 
@@ -234,17 +233,18 @@ class FricRamp(MultiDominoes):
         """
 
 
-        self.fric_range= [0.20, 0.20] #[0.01, 0.25] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
+        self.fric_range= [0.01, 0.20] #[0.01, 0.25] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
         self.ramp_y_range=[1.3, 1.3]
 
         self.is_single_ramp = is_single_ramp
-        self.add_second_ramp = add_second_ramp
         self.num_interactions = 1
 
 
         if self.is_single_ramp:
+            self.add_second_ramp = False
             self.ramp_base_height = 0
         else:
+            self.add_second_ramp = True
             self.ramp_base_height_range = self.ramp_scale['y']
             self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
 
@@ -256,6 +256,7 @@ class FricRamp(MultiDominoes):
              all_material += librarian.get_all_materials_of_type(mtype)
         #import ipdb; ipdb.set_trace()
         self.all_material_names  = [m.name for m in all_material]
+        self.start_frame_for_prediction = 120
 
 
     def _add_ramp_base_to_ramp(self, color=None, sample_ramp_base_height=True) -> None:
@@ -648,13 +649,16 @@ class FricRamp(MultiDominoes):
         #                        visual_smoothness=0,
         #                        mass_per_square_meter=1.5)
 
-        o_id = self.get_unique_id()
+        o_id = self._get_next_object_id()
         self.target_id = o_id
+        #self.object_ids = np.append(self.object_ids, o_id)
+
         self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                object_id=o_id,
                                position=self.probe_initial_position,
                                rotation={"x": 0, "y": 0, "z": 0})
         self.obi.set_solver(scale_factor=0.6, substeps=2)
+
 
         print("o_id ==============", o_id)
 
@@ -821,17 +825,45 @@ class FricRamp(MultiDominoes):
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         # 0.1 for the probe shift, 0.01 to put under ramp
+        self.zone_dloc = 1
         if self.add_second_ramp:
-            rnd = random.uniform(0, 1)
 
-            if rnd < 0.5:
+            if self.zone_dloc == -1:
+                rnd = random.uniform(0, 1)
+
+                if rnd < 0.5:
+                    return self._get_zone_second_location(scale)
+            elif self.zone_dloc == 1:
                 return self._get_zone_second_location(scale)
 
-        return {
-            "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
-        }
+            elif self.zone_dloc == 2:
+                print("zone dloc 2")
+
+            else:
+                raise ValueError
+
+            return {
+                "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            }
+        else:
+
+            if self.zone_dloc == 1:
+                return {
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 -3.2, #3.1
+                    "y": 2.3 if not self.remove_zone else 10.0,
+                    "z": 0.35 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            elif self.zone_dloc == 2:
+                return {
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
+                    "y": 2.3 if not self.remove_zone else 10.0,
+                    "z": -0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            else:
+                raise ValueError
     def _get_zone_second_location(self, scale):
         print(self.zone_scale)
         if self.add_second_ramp:
@@ -863,6 +895,7 @@ class FricRamp(MultiDominoes):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
+
 
 
 if __name__ == "__main__":

@@ -24,30 +24,38 @@ if "ccncluster" in socket.gethostname():
 else:
     data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump"
 
-folder = os.path.join(data_root, "bouncy_platform_pp")
+folder = os.path.join(data_root, "fricramp") #"bouncy_platform_pp")
 import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "bouncy_platform-use_blocker_with_hole=0-target=pipe-tscale=0.2,0.2,0.2" #-tscale_0.5,0.5,0.5" #"target_bowl" #"target_cone-tscale_0.35,0.5,0.35"
+restrict = "singleramp5" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+remove = "" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
-target_varname = "star_bouncy" #"star_mass"
-merge_by =  "" #"target"
+target_varname = "star_friction" #"star_mass"
+merge_by =  "" #"all""tscale"
 #merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
 
 for filename in filenames:
     info_dict = split_info(filename)
-    if merge_by:
+    if merge_by == "all":
+        set_dict["all"].append(filename)
+    elif merge_by:
         set_dict[info_dict[merge_by]].append(filename)
     else:
         set_dict[filename].append(filename)
+
 
 for set_id, merge_var_name in enumerate(set_dict):
     target_params = []
     labels = []
 
     for filename in set_dict[merge_var_name]:
+        if remove and remove in filename:
+            continue
+
+
         for pkl_file in glob.glob(os.path.join(folder, filename) + "/*.pkl"):
             print(pkl_file)
             with open(pkl_file, "rb") as f:
@@ -64,7 +72,7 @@ for set_id, merge_var_name in enumerate(set_dict):
     	target_params.append(f["static"][target_varname][()])
     	labels.append(float(f["static"]["does_target_contact_zone"][()]))
     """
-    print(target_params)
+    import ipdb; ipdb.set_trace()
 
     if target_varname in ["star_mass"]:
         target_params = [math.log10(param) for param in target_params]
@@ -86,7 +94,7 @@ for set_id, merge_var_name in enumerate(set_dict):
     ax.set_ylim([-0.1, 1.5])
 
 
-    nbins = 10
+    nbins = 8
     n, _ = np.histogram(target_params, bins=nbins)
     sy, _ = np.histogram(target_params, bins=nbins, weights=labels)
     sy2, _ = np.histogram(target_params, bins=nbins, weights=labels)
