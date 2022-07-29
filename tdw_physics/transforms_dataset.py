@@ -82,11 +82,19 @@ class TransformsDataset(Dataset, ABC):
             self.initial_positions = np.append(self.initial_positions, position)
             self.initial_rotations = np.append(self.initial_rotations, rotation)
 
+        return {"$type": "add_object",
+                "name": record.name,
+                "url": record.get_url(),
+                "scale_factor": record.scale_factor,
+                "position": position,
+                "rotation": rotation,
+                "category": record.wcategory,
+                "id": o_id}
 
-
-        commands = Dataset.get_add_object(model_name=record.name, object_id=o_id, position=position, rotation=rotation, library=library)
-
-        return commands
+        #
+        # commands = Dataset.get_add_object(model_name=record.name, object_id=o_id, position=position, rotation=rotation, library=library)
+        #
+        # return commands
 
 
     @staticmethod
@@ -119,7 +127,7 @@ class TransformsDataset(Dataset, ABC):
                     {"$type": "send_bounds",
                      "frequency": "always"},
                     {"$type": "send_segmentation_colors",
-                     "ids": [int(oid) for oid in Dataset.object_ids],
+                     "ids": [int(oid) for oid in Dataset.OBJECT_IDS],
                      "frequency": "once"}]
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
@@ -205,7 +213,7 @@ class TransformsDataset(Dataset, ABC):
                                                    "top": bo.get_top(i),
                                                    "bottom": bo.get_bottom(i),
                                                    "center": bo.get_center(i)}})
-                for o_id, i in zip(Dataset.object_ids, range(num_objects)):
+                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
                     for bound_type in bounds.keys():
                         try:
                             bounds[bound_type][i] = bo_dict[o_id][bound_type]

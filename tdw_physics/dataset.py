@@ -289,88 +289,13 @@ class Dataset(Controller, ABC):
             self.args_dict = copy.deepcopy(args_dict)
         self.save_command_line_args(output_dir)
 
-    def trial_loop(self,
-                   num: int,
-                   output_dir: str,
-                   temp_path: str,
-                   save_frame: int=None,
-                   unload_assets_every: int = 10,
-                   update_kwargs: List[dict] = {},
-                   do_log: bool = False) -> None:
+    # def trialx(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
+    #
+    #     return None
 
-        if not isinstance(update_kwargs, list):
-            update_kwargs = [update_kwargs] * num
+    def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
 
-        pbar = tqdm(total=num)
-        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-        exists_up_to = 0
-        for f in output_dir.glob("*.hdf5"):
-            if int(f.stem) > exists_up_to:
-                exists_up_to = int(f.stem)
-
-        if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
-
-        pbar.update(exists_up_to)
-        for i in range(exists_up_to, num):
-            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
-
-            ## update the controller state
-            # self.update_controller_state(**update_kwargs[i])
-
-            if not filepath.exists():
-                if do_log:
-                    start = time.time()
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
-                # Save out images
-                self.png_dir = None
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists():
-                        self.png_dir.mkdir(parents=True)
-
-                # Do the trial.
-                self.trial(filepath=filepath,
-                           temp_path=temp_path,
-                           trial_num=i,
-                           unload_assets_every=unload_assets_every)
-
-                # Save an MP4 of the stimulus
-                if self.save_movies:
-                    for pass_mask in self.save_passes:
-                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
-                        cmd, stdout, stderr = pngs_to_mp4(
-                            filename=mp4_filename,
-                            image_stem=pass_mask[1:]+'_',
-                            png_dir=self.png_dir,
-                            size=[self._height, self._width],
-                            overwrite=True,
-                            remove_pngs=(True if save_frame is None else False),
-                            use_parent_dir=False)
-
-                    if save_frame is not None:
-                        frames = os.listdir(str(self.png_dir))
-                        sv = sorted(frames)[save_frame]
-                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
-                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
-
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
-
-
-                if self.save_meshes:
-                    for o_id in Dataset.OBJECT_IDS:
-                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                        vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
-
-                if do_log:
-                    end = time.time()
-                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
-            pbar.update(1)
-        pbar.close()
-
-    def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int=10) -> None:
+        # return None
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
 
@@ -515,6 +440,89 @@ class Dataset(Controller, ABC):
             temp_path.replace(filepath)
         except OSError:
             shutil.move(temp_path, filepath)
+
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str,
+                   save_frame: int = None,
+                   unload_assets_every: int = 10,
+                   update_kwargs: List[dict] = {},
+                   do_log: bool = False) -> None:
+
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * num
+
+        pbar = tqdm(total=num)
+        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+        exists_up_to = 0
+        for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+
+        pbar.update(exists_up_to)
+        for i in range(exists_up_to, num):
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+            ## update the controller state
+            # self.update_controller_state(**update_kwargs[i])
+
+            if not filepath.exists():
+                if do_log:
+                    start = time.time()
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+                # Save out images
+                self.png_dir = None
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists():
+                        self.png_dir.mkdir(parents=True)
+
+                # breakpoint()
+
+                # Do the trial.
+                self.trial(filepath,
+                           temp_path,
+                           i,
+                           unload_assets_every)
+
+                # Save an MP4 of the stimulus
+                if self.save_movies:
+                    for pass_mask in self.save_passes:
+                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        cmd, stdout, stderr = pngs_to_mp4(
+                            filename=mp4_filename,
+                            image_stem=pass_mask[1:] + '_',
+                            png_dir=self.png_dir,
+                            size=[self._height, self._width],
+                            overwrite=True,
+                            remove_pngs=(True if save_frame is None else False),
+                            use_parent_dir=False)
+
+                    if save_frame is not None:
+                        frames = os.listdir(str(self.png_dir))
+                        sv = sorted(frames)[save_frame]
+                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+
+                if self.save_meshes:
+                    for o_id in Dataset.OBJECT_IDS:
+                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                        vertices, faces = self.object_meshes[o_id]
+                        save_obj(vertices, faces, obj_filename)
+
+                if do_log:
+                    end = time.time()
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
+                    i, self.trial_seed, int(end - start)))
+            pbar.update(1)
+        pbar.close()
 
     def generate_multi_camera_positions(self, azimuth_grp, add_noise=True):
         '''

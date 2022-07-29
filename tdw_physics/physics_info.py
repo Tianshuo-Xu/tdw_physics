@@ -47,7 +47,8 @@ def __get_default_physics_info() -> Dict[str, PhysicsInfo]:
                                     mass=obj["mass"],
                                     bounciness=obj["bounciness"],
                                     dynamic_friction=obj["dynamic_friction"],
-                                    static_friction=obj["static_friction"])
+                                    static_friction=obj["static_friction"],
+                                    library=obj["library"])
     return info
 
 
