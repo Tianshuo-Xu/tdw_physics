@@ -198,12 +198,20 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            add_data: Optional[bool] = True
                            ) -> List[dict]:
 
+        if o_id is None:
+            o_id: int = self.get_unique_id()
+
+        lib = PHYSICS_INFO[record.name] if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+
+        if add_data:
+            self.add_transforms_data(position, rotation)
 
         return self.get_add_physics_object(model_name=record.name,
                                            object_id=o_id,
                                            position=position,
                                            rotation=rotation,
                                            mass=mass,
+                                           library=lib,
                                            dynamic_friction=dynamic_friction,
                                            static_friction=static_friction,
                                            bounciness=bounciness)
@@ -338,6 +346,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # default_physics_values = True
 
         # breakpoint()
+
+        if add_data:
+            self.add_transforms_data(position, rotation)
 
         commands, mass = self.get_add_physics_object(model_name=record.name,
                                                  object_id=o_id,

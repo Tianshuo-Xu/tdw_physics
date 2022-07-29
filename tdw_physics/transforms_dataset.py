@@ -49,6 +49,10 @@ class TransformsDataset(Dataset, ABC):
 
         return obj_record, obj_data
 
+    def add_transforms_data(self, position, rotation):
+        self.initial_positions = np.append(self.initial_positions, position)
+        self.initial_rotations = np.append(self.initial_rotations, rotation)
+
     def add_transforms_object(self,
                               record: ModelRecord,
                               position: Dict[str, float],
