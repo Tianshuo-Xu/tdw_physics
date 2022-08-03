@@ -460,6 +460,9 @@ class WaterPush(Dominoes):
         o_id = self._get_next_object_id() + self.obi_unique_ids * 5
         self.obi_unique_ids += 1
 
+        self.obi_object_ids = np.append(self.obi_object_ids, o_id)
+        self.obi_object_type = [(o_id, 'fluid')]
+
         vis = [1.5, 0.00001, 0.001, 0.01, 1.0]
         fluid = Fluid(
         capacity=1500,

@@ -2,7 +2,7 @@
 import os
 
 
-scenario_name = "friction_platform"
+scenario_name = "friction_collision"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
@@ -44,6 +44,23 @@ variables["friction_platform"]["target"] = ["cone","cube","cylinder","dumbbell",
 variables["friction_platform"]["is_single_ramp"] = ["0","1"]
 variables["friction_platform"]["zdloc"] = ["1","2"]
 exclude["friction_platform"] = []
+
+variables["friction_cloth"] = dict()
+#platform height
+# cloth size
+variables["friction_cloth"]["is_single_ramp"] = ["0","1"]
+variables["friction_cloth"]["zdloc"] = ["1","2"]
+variables["friction_cloth"]["pheight"] = ["0.65","0.7","0.8", "0.85"]
+variables["friction_cloth"]["csize"] = ["0.4", "0.5","0.6"]
+exclude["friction_cloth"] = []
+
+
+variables["friction_collision"] = dict()
+variables["friction_collision"]["zdloc"] = ["1","3"]
+variables["friction_collision"]["target"] = ["cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
+variables["friction_collision"]["tscale"] = ["0.8,0.4,0.8", "0.7,0.4,0.7","0.5,0.4,0.5","0.4,0.4,0.4"]
+exclude["friction_collision"] = []
+
 
 
 

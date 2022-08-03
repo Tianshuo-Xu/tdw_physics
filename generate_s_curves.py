@@ -24,10 +24,10 @@ if "ccncluster" in socket.gethostname():
 else:
     data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump"
 
-folder = os.path.join(data_root, "fricramp") #"bouncy_platform_pp")
+folder = os.path.join(data_root, "collidefric_pp") #"bouncy_platform_pp")
 import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "singleramp5" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+restrict = "pilot_it2_collision_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
 remove = "" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
@@ -60,8 +60,12 @@ for set_id, merge_var_name in enumerate(set_dict):
             print(pkl_file)
             with open(pkl_file, "rb") as f:
                 f = pickle.load(f)
+
+            #print(f['static']['cloth_material'])
             target_params.append(f["static"][target_varname])
             labels.append(float(f["static"]["does_target_contact_zone"]))
+
+        print(labels)
     """
 
     for hdf5_file in glob.glob(folder + "/*_001.hdf5"):
@@ -72,7 +76,6 @@ for set_id, merge_var_name in enumerate(set_dict):
     	target_params.append(f["static"][target_varname][()])
     	labels.append(float(f["static"]["does_target_contact_zone"][()]))
     """
-    import ipdb; ipdb.set_trace()
 
     if target_varname in ["star_mass"]:
         target_params = [math.log10(param) for param in target_params]

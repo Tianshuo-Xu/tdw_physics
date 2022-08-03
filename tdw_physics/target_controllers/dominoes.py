@@ -900,6 +900,18 @@ class Dominoes(RigidbodiesDataset):
             except (AttributeError,TypeError):
                 pass
 
+    def write_static_obi_data(self, static_group: h5py.Group, resp) -> None:
+        if self.use_obi:
+            print("use_obi", self.obi.actors)
+            actor_list = [k for k, v in self.obi.actors.items()]
+            assert(len(actor_list) == self.obi_object_ids.shape[0])
+            for i, v in enumerate(actor_list):
+                assert(v == self.obi_object_ids[i])
+
+            static_group.create_dataset("obi_object_ids", data=actor_list)
+            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type])
+        if self.use_obi and self.obi_object_segmentation_colors is not None:
+            static_group.create_dataset("video_obi_object_segmentation_colors", data=self.video_obi_object_segmentation_colors)
 
     def trial_loop(self,
                    num: int,
@@ -993,6 +1005,8 @@ class Dominoes(RigidbodiesDataset):
                             files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
                             out_dict = {}
                             seg_colors = output["static"]["video_object_segmentation_colors"]
+                            if self.use_obi:
+                                seg_colors = np.concatenate([seg_colors, output["static"]["video_obi_object_segmentation_colors"]])
                             nobjs = seg_colors.shape[0]
                             for file in files:
                                 seg_img = imageio.imread(file)
@@ -1072,6 +1086,7 @@ class Dominoes(RigidbodiesDataset):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
+
         resp = self.communicate(commands)
 
         self._set_segmentation_colors(resp)
@@ -1090,10 +1105,25 @@ class Dominoes(RigidbodiesDataset):
         self._write_frame_labels(frame_grp, resp, -1, False)
 
         # Continue the trial. Send commands, and parse output data.
+        found_obi_seg = False
         while not done:
             frame += 1
             # print('frame %d' % frame)
-            resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            cmd = self.get_per_frame_commands(resp, frame)
+            if not found_obi_seg and self.use_obi and frame > 1:
+                from tdw.output_data import IdPassSegmentationColors
+                cmd.extend([{"$type": "send_id_pass_segmentation_colors",
+                     "frequency": "once"}])
+
+                #print("frame", frame)
+                #print(self.obi.actors)
+
+            resp = self.communicate(cmd) #self.get_per_frame_commands(resp, frame))
+            if not found_obi_seg and self.use_obi and frame > 1:
+                found_obi_seg = self._set_obi_segmentation_colors(resp)
+                if found_obi_seg:
+                    self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
+
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the build freezes and has to reopen the socket.
@@ -1107,6 +1137,9 @@ class Dominoes(RigidbodiesDataset):
 
             # Write whether this frame completed the trial and any other trial-level data
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+        if self.use_obi:
+            self.write_static_obi_data(static_group, resp)
 
         # Cleanup.
         commands = []
@@ -1140,9 +1173,19 @@ class Dominoes(RigidbodiesDataset):
         _id_map = imageio.imread(id_filename)
         #get colors
         zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        if self.use_obi and len(zone_idx) == 0:
+            zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
+            zone_color = self.obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        else:
+            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+
         target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        if self.use_obi and len(target_idx) == 0:
+            target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
+            target_color = self.obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+        else:
+            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+
         #get individual maps
         zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
         target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
@@ -1283,8 +1326,8 @@ class Dominoes(RigidbodiesDataset):
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
             except TypeError:
-                print("Failed to get a new object position, %s" % target_position_new)
-                import ipdb; ipdb.set_trace()
+                if not self.obi:
+                    print("Failed to get a new object position, %s" % target_position_new)
 
     def _write_frame_labels(self,
                             frame_grp: h5py.Group,
@@ -1412,11 +1455,12 @@ class Dominoes(RigidbodiesDataset):
             self.model_names = self.model_names[:-1]
 
         # place it just beyond the target object with an effectively immovable mass and high friction
+        self.zone_location_tmp = self._get_zone_location(scale)
         commands = []
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=(self.zone_location or self._get_zone_location(scale)),
+                position=(self.zone_location or self.zone_location_tmp),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 scale=scale,
                 material=self.zone_material,

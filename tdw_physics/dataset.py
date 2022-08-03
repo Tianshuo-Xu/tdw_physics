@@ -13,7 +13,7 @@ import numpy as np
 import random
 from tdw.controller import Controller
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, SegmentationColors, Meshes
+from tdw.output_data import OutputData, SegmentationColors, IdPassSegmentationColors, Meshes
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
@@ -85,6 +85,10 @@ class Dataset(Controller, ABC):
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
+        if self.use_obi:
+            self.obi_scale_factor = 1.0
+            self.obi_object_ids = np.empty(dtype=int, shape=0)
+            self.obi_object_type = []
         self.model_names = []
         self._initialize_object_counter()
 
@@ -730,8 +734,6 @@ class Dataset(Controller, ABC):
                     except:
                         print("No object id found for seg", i)
 
-                import ipdb; ipdb.set_trace()
-
                 self.object_segmentation_colors = []
                 for o_id in self.object_ids:
                     if o_id in colors.keys():
@@ -740,8 +742,26 @@ class Dataset(Controller, ABC):
                     else:
                         self.object_segmentation_colors.append(
                             np.array([0,0,0], dtype=np.uint8).reshape(1,3))
-
                 self.object_segmentation_colors = np.concatenate(self.object_segmentation_colors, 0)
+
+
+    def _set_obi_segmentation_colors(self, resp: List[bytes]) -> None:
+        found_obi_seg = False
+        for r in resp:
+            if OutputData.get_data_type_id(r) == 'ipsc':
+                ipsc = IdPassSegmentationColors(r)
+                nobjs = ipsc.get_num_segmentation_colors()
+                if nobjs == len(self.object_ids) + len(self.obi_object_ids):
+                    self.obi_object_segmentation_colors = []
+                    for o_id in range(nobjs):
+                        seg_color = ipsc.get_segmentation_color(o_id)
+                        if min(np.linalg.norm(self.object_segmentation_colors - seg_color, axis=1)) > 1:
+                            self.obi_object_segmentation_colors.append(seg_color)
+                    self.obi_object_segmentation_colors = np.stack(self.obi_object_segmentation_colors, axis=0)
+                    found_obi_seg = True
+        return found_obi_seg
+
+
     def _get_object_meshes(self, resp: List[bytes]) -> None:
 
         self.object_meshes = dict()

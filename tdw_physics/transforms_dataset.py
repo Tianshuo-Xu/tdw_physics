@@ -130,8 +130,8 @@ class TransformsDataset(Dataset, ABC):
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
 
-        # r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-        # print(frame_num, r_types)
+        r_types = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        #print(frame_num, r_types)
 
         for r in resp[:-1]:
             r_id = OutputData.get_data_type_id(r)
@@ -187,6 +187,7 @@ class TransformsDataset(Dataset, ABC):
                                                    "top": bo.get_top(i),
                                                    "bottom": bo.get_bottom(i),
                                                    "center": bo.get_center(i)}})
+                self.bo_dict = bo_dict
                 for o_id, i in zip(self.object_ids, range(num_objects)):
                     for bound_type in bounds.keys():
                         try:
@@ -203,12 +204,12 @@ class TransformsDataset(Dataset, ABC):
 
 
         objs = frame.create_group("objects")
+        self.tr_dict = tr_dict
         objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
         objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
         for bound_type in bounds.keys():
             objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
-
         if self.use_obi and self.save_meshes:
             particles_group = objs.create_group("particles_positions")
             velocities_group = objs.create_group("particles_velocities")
@@ -216,10 +217,9 @@ class TransformsDataset(Dataset, ABC):
             actor_ids = []
             for actor_id in self.obi.actors:
                 actor_ids.append(actor_id)
-                particles_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].positions)
-                velocities_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].velocities)
+                particles_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].positions * self.obi_scale_factor)
+                velocities_group.create_dataset(str(actor_id), data=self.obi.actors[actor_id].velocities * self.obi_scale_factor)
             objs.create_dataset("obi_object_ids", data=actor_ids, compression="gzip")
-
         return frame, objs, tr_dict, False
 
     def get_object_position(self, obj_id: int, resp: List[bytes]) -> None:

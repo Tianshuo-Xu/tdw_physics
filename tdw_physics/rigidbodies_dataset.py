@@ -575,6 +575,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
           static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
           static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
 
+        static_group.create_dataset("use_obi", data=self.use_obi)
+        #if self.use_obi:
+        #    static_group.create_dataset("obi_object_ids", data=self.obi.actors)
+
         if self.save_meshes:
             mesh_group = static_group.create_group("mesh")
 
@@ -656,6 +660,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
     def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
 
+        assert(target_id in self.object_ids.tolist())
+        assert(obj_id in self.object_ids.tolist())
         contact_points = []
         contact_normals = []
 
@@ -667,7 +673,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 if [obj_id, target_id] == coll_ids or [target_id, obj_id] == coll_ids:
                     contact_points = [co.get_contact_point(i) for i in range(co.get_num_contacts())]
                     contact_normals = [co.get_contact_normal(i) for i in range(co.get_num_contacts())]
-
         return (contact_points, contact_normals)
 
     def get_object_environment_collision(self, obj_id: int, resp: List[bytes]):

@@ -1177,6 +1177,7 @@ class Dominoes(RigidbodiesDataset):
 
         before_start_frame = frame
         self.start_frame_after_curtain = before_start_frame
+
         # Continue the trial. Send commands, and parse output data.
         while not done:
             frame += 1
@@ -1185,6 +1186,7 @@ class Dominoes(RigidbodiesDataset):
             force_wait_time = 0 if not self.force_wait else self.force_wait
 
             resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=force_wait_time))
+
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
@@ -1201,8 +1203,7 @@ class Dominoes(RigidbodiesDataset):
 
             #print("frame_id", frame, self.stframe_whole_video, done)
 
-
-
+        #print("use_obi end", self.obi.actors)
         ## curatin gets into screen
         if self.num_interactions > 1 and interact_id < self.num_interactions-1: #curtain goes to center
             import time
@@ -1249,6 +1250,9 @@ class Dominoes(RigidbodiesDataset):
                 labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
             #print("ending a trial, frame_id", frame, self.stframe_whole_video, done)
         # Cleanup.
+        if self.use_obi:
+            self.write_static_obi_data(static_group, resp)
+
         commands = []
 
         for o_id in self.object_ids:
@@ -1574,6 +1578,7 @@ class Dominoes(RigidbodiesDataset):
             static_group.create_dataset("start_frame_of_the_clip", data=self.stframe_whole_video)
         except (AttributeError,TypeError):
             pass
+
         key_from_meta = ["does_target_contact_zone", 'first_target_contact_zone_frame']
 
         for key in key_from_meta:
@@ -1582,7 +1587,17 @@ class Dominoes(RigidbodiesDataset):
             except (AttributeError,TypeError):
                 pass
 
+    def write_static_obi_data(self, static_group: h5py.Group, resp) -> None:
 
+        if self.use_obi:
+            print("use_obi", self.obi.actors)
+            actor_list = [k for k, v in self.obi.actors.items()]
+            assert(len(actor_list) == self.obi_object_ids.shape[0])
+            for i, v in enumerate(actor_list):
+                assert(v == self.obi_object_ids[i])
+
+            static_group.create_dataset("obi_object_ids", data=actor_list)
+            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type])
 
     # def _write_static_data(self, static_group: h5py.Group) -> None:
     #     super()._write_static_data(static_group)

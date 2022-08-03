@@ -48,6 +48,11 @@ def get_collision_args(dataset_dir: str, parse=True):
                         default="cube",
                         help="comma-separated list of possible target zone shapes")
 
+    parser.add_argument("--zdloc",
+                        type=int,
+                        default="-1",
+                        help="comma-separated list of possible target zone shapes")
+
     parser.add_argument("--zjitter",
                         type=float,
                         default=0.35,
@@ -161,6 +166,7 @@ class Collision(Dominoes):
     def __init__(self,
                  port: int = None,
                  zjitter = 0,
+                 zone_dloc = -1,
                  fupforce = [0.,0.],
                  probe_lift = 0.,
                  **kwargs):
@@ -177,9 +183,12 @@ class Collision(Dominoes):
         self._candidate_types = self._probe_types
         self.candidate_scale_range = self.probe_scale_range
 
-        self.force_wait_range = [3, 3]
+        self.force_wait_range = [30, 30]
+        self.zone_dloc = zone_dloc
 
-
+    def get_stframe_pred(self):
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video + 10
+        return frame_id
 
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         """This is where we string together the important commands of the controller in order"""
@@ -194,7 +203,10 @@ class Collision(Dominoes):
             self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
-        commands.extend(self._place_target_zone())
+        self.offset = [0, 0]
+        #random.uniform(-0.5, 0.5),random.uniform(-0.5, 0.5)]
+
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
         commands.extend(self._place_star_object(interact_id))
@@ -207,7 +219,6 @@ class Collision(Dominoes):
         #commands.extend(self._place_and_push_probe_object(interact_id))
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
-        commands.extend(self._build_intermediate_structure(interact_id))
 
         # Teleport the avatar to a reasonable position
         if interact_id == 0:
@@ -251,20 +262,63 @@ class Collision(Dominoes):
         return commands
 
 
-    def _build_intermediate_structure(self, interact_id) -> List[dict]:
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        #variables = static_group.create_group("variables")
+        try:
+            static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_friction", data=self.star_object["friction"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_object["type"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_size", data=xyz_to_arr(self.star_object["scale"]))
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("zdloc", data=self.zone_dloc)
+        except (AttributeError,TypeError):
+            pass
 
-        # print("middle color", self.middle_color)
-        # if self.randomize_colors_across_trials:
-        #     self.middle_color = self.random_color(exclude=self.target_color) if self.monochrome else None
+    def generate_static_object_info(self):
 
-        commands = []
+        # color for "star object"
+        colors = [[0.01844594, 0.77508636, 0.12749255],#pink
+                  [0.17443318, 0.22064707, 0.39867442],#black
+                  [0.75136046, 0.06584012, 0.22674323],#red
+                  [0.47, 0.38,   0.901],#purple
+                   ]
+        non_star_color = [246/255, 234/255, 224/255]
 
-        # Go nuts
-        # commands.extend(self._place_barrier_foundation())
-        # commands.extend(self._build_bridge())
+        self.repeat_trial = False
+        # sample distinct objects
+        self.candidate_dict = dict()
+        self.star_object = dict()
+        self.star_object["type"] = random.choice(self._star_types)
+        self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+        #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
+        self.star_object["mass"] = 1 #random.choice([0.1, 2.0, 10.0])
+        self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
+        self.star_object["friction"] = random.uniform(0.01,  0.2)
+        print("====star object mass", self.star_object["mass"])
 
-        return commands
-
+        #distinct_masses = [0.1, 2.0, 10.0]
+        mass = 2.0
+        self.normal_mass = 2.0
+        random.shuffle(colors)
+        #random.shuffle(distinct_masses)
+        ## add the non-star objects have the same weights
+        for distinct_id in range(1):
+            self.candidate_dict[distinct_id] = dict()
+            self.candidate_dict[distinct_id]["type"] = random.choice(self._candidate_types)
+            self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.candidate_scale_range)
+            self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
+            self.candidate_dict[distinct_id]["mass"] = mass
 
 
     def _place_star_object(self, interact_id) -> List[dict]:
@@ -277,8 +331,9 @@ class Collision(Dominoes):
         #if not self.repeat_trial: # sample from scratch
         star_type = self.star_object["type"]
         star_scale = self.star_object["scale"]
-        star_mass = 1.0 #self.star_object["mass"]
+        star_mass = self.star_object["mass"]
         star_color = self.star_object["color"]
+        star_friction = self.star_object["friction"]
 
         # select an object
         # record, data = self.random_primitive(self._target_types,
@@ -293,6 +348,11 @@ class Collision(Dominoes):
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+
+         "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+         "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+        scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
 
         assert(o_id == 2), "make sure the star object is always with the same id"
         self.star_id = o_id
@@ -319,7 +379,7 @@ class Collision(Dominoes):
 
 
 
-        star_position = {"x": -self.collision_axis_length, "y": self.probe_lift , "z": 0.}
+        star_position = {"x": self.offset[0]-self.collision_axis_length, "y": self.probe_lift , "z": self.offset[1]}
 
         star_rotation = self.get_rotation(self.target_rotation_range)
 
@@ -350,8 +410,8 @@ class Collision(Dominoes):
                 color=rgb,
                 mass=2.0,
                 scale_mass=False,
-                dynamic_friction=0.5,
-                static_friction=0.5,
+                dynamic_friction=star_friction * 2,
+                static_friction=star_friction * 2,
                 bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
@@ -381,7 +441,7 @@ class Collision(Dominoes):
         if interact_id == 0:
             self.push_force = self.get_push_force(
                 scale_range= star_mass * np.array(self.force_scale_range) * 2,
-                angle_range=[-10, -30],
+                angle_range=[-8, +8],
                 yforce=self.fupforce)
         else:
             self.push_force = self.get_push_force(
@@ -431,137 +491,115 @@ class Collision(Dominoes):
 
         return commands
 
+    def _place_target_zone(self, interact_id) -> List[dict]:
 
-    def _place_and_push_probe_object(self, interact_id) -> List[dict]:
-        """
-        Place a probe object at the other end of the collision axis, then apply a force to push it.
-        """
-        exclude = not (self.monochrome and self.match_probe_and_target_color)
-        distinct_id = 0
-        probe_type = self.candidate_dict[distinct_id]["type"]
-        probe_scale = self.candidate_dict[distinct_id]["scale"]
-        probe_mass = self.candidate_dict[distinct_id]["mass"]
-        probe_color = self.candidate_dict[distinct_id]["color"]
+        # create a target zone (usually flat, with same texture as room)
+        if not self.repeat_trial: # sample from scratch
 
-
-        record, data = self.random_primitive([probe_type],
-                                             scale=probe_scale,
-                                             color=probe_color,
-                                             exclude_color=(self.target_color if exclude else None),
-                                             exclude_range=0.25)
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.probe = record
-        self.probe_type = data["name"]
-        self.probe_scale = scale
-        self.probe_id = o_id
-
-        # Add the object with random physics values
-        commands = []
-
-        ### TODO: better sampling of random physics values
-        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": self.probe_lift, "z": 0.}
-        rot = self.get_rotation(self.probe_rotation_range)
-
-        if self.use_ramp:
-            commands.extend(self._place_ramp_under_probe())
-
-        commands.extend(
-            self.add_physics_object(
-                record=record,
-                position=self.probe_initial_position,
-                rotation=rot,
-                mass=self.probe_mass,
-                # dynamic_friction=0.5,
-                # static_friction=0.5,
-                # bounciness=0.1,
-                dynamic_friction=0.4,
-                static_friction=0.4,
-                bounciness=0,
-                o_id=o_id))
-
-        # Set the probe material
-        commands.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(self.probe_material)))
-
-
-        # Scale the object and set its color.
-        commands.extend([
-            {"$type": "set_color",
-             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-             "id": o_id},
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id}])
-
-        # Set its collision mode
-        commands.extend([
-            # {"$type": "set_object_collision_detection_mode",
-            #  "mode": "continuous_speculative",
-            #  "id": o_id},
-            {"$type": "set_object_drag",
-             "id": o_id,
-             "drag": 0, "angular_drag": 0}])
-
-        print("=====probe mass", self.probe_mass)
-        # Apply a force to the probe object
-        self.push_force = self.get_push_force(
-            scale_range= self.probe_mass * np.array(self.force_scale_range),
-            angle_range=self.force_angle_range,
-            yforce=self.fupforce)
-
-        print("push force", self.push_force)
-        self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, 0, degrees=True)
-
-        self.push_position = self.probe_initial_position
-        if self.use_ramp:
-            self.push_cmd = {
-                "$type": "apply_force_to_object",
-                "force": self.push_force,
-                "id": int(o_id)
-            }
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale={'x': 0.4, 'y':0.2, 'z':0.5},
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
         else:
-            self.push_position = {
-                k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    self.probe_scale, rot['y'])[k]
-                for k,v in self.push_position.items()}
-            self.push_position = {
-                k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
-                for k,v in self.push_position.items()}
+            # dry pass to get the obj id counter correct
+            record, data = self.random_primitive([self.zone],
+                                                 scale=self.zone_scale,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            assert(record == self.zone)
+            assert(o_id == self.zone_id)
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(np.array_equal(rgb, self.zone_color))
 
 
-            print("push position", self.push_position)
-            self.push_cmd = {
-                "$type": "apply_force_at_position",
-                "force": self.push_force,
-                "position": self.push_position,
-                "id": int(o_id)
-            }
+        if any((s <= 0 for s in scale.values())):
+            self.remove_zone = True
+            self.scales = self.scales[:-1]
+            self.colors = self.colors[:-1]
+            self.model_names = self.model_names[:-1]
+        self.distinct_ids = np.append(self.distinct_ids, -1)
+        # place it just beyond the target object with an effectively immovable mass and high friction
 
+        self.zone_location = self._get_zone_location(scale, islast=interact_id==(self.num_interactions-1))
+        commands = []
+        commands.extend(
+            self.add_primitive(
+                record=record,
+                position=(self.zone_location),
+                rotation=TDWUtils.VECTOR3_ZERO,
+                scale=scale,
+                material=self.zone_material,
+                color=rgb,
+                mass=10,
+                scale_mass=False,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
+                bounciness=0,
+                o_id=o_id,
+                add_data=(not self.remove_zone),
+                make_kinematic=False # zone shouldn't move
+            ))
+        # get rid of it if not using a target object
+        if self.remove_zone:
+            commands.append(
+                {"$type": self._get_destroy_object_command_name(o_id),
+                 "id": int(o_id)})
+            self.object_ids = self.object_ids[:-1]
 
-        # decide when to apply the force
-        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+        self.hold_cmd = {"$type": "teleport_object",
+                          "id": o_id,
+                          "position": self.zone_location}
 
-        if self.PRINT:
-            print("force wait", self.force_wait)
-
-        if self.force_wait == 0:
-            commands.append(self.push_cmd)
 
         return commands
 
 
-    def _get_zone_location(self, scale):
+    def _get_zone_location(self, scale, islast):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
-        return {
-            "x": self.collision_axis_length,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-            "y": 0 if not self.remove_zone else 10.0,
-            "z": random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
-        }
 
+        if not islast:
+            return {
+                "x": self.offset[0] + random.uniform(self.collision_axis_length - 1.5, self.collision_axis_length - 1.7),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                "y": random.uniform(0.5, 0.8) if not self.remove_zone else 10.0,
+                "z": self.offset[1] + (float(random.uniform(-1, 1) > 0) * 2 - 1.0) * random.uniform(1.2, 1.3) + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            }
+        else:
+            if self.zone_dloc == 3:
+                return {
+                    "x": self.offset[0] + random.uniform(self.collision_axis_length , self.collision_axis_length) + random.uniform(0.15, 0.25),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "z": self.offset[1] + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+
+            # elif self.zone_dloc == 2:
+            #     #right after the object
+            #     return {
+            #        "x": self.offset[0] + random.uniform(self.collision_axis_length -0.5 , self.collision_axis_length-0.5),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+            #        "y": 2.5 if not self.remove_zone else 10.0,
+            #        "z": self.offset[1] +  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+            #     }
+
+            elif self.zone_dloc == 1:
+                # zone location at the right boundary
+                #random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1),
+                return {
+                    "x": self.offset[0] + random.uniform(self.collision_axis_length - 1.95, self.collision_axis_length-2.05),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "z": self.offset[1] +  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                }
+            else:
+                raise ValueError(f"zloc needs to be [1,2,3], but get {self.zone_dloc}")
 
 
     def clear_static_data(self) -> None:
@@ -583,7 +621,7 @@ class Collision(Dominoes):
         return funcs
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 200 # End after X frames even if objects are still moving.
+        return frame - self.stframe_whole_video > 200 # End after X frames even if objects are still moving.
 
     def _set_distractor_attributes(self) -> None:
 
@@ -610,11 +648,11 @@ if __name__ == "__main__":
 
     args = get_collision_args("collision")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     ColC = Collision(
         port=args.port,
@@ -623,6 +661,7 @@ if __name__ == "__main__":
         seed=args.seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
+        zone_dloc = args.zdloc,
         zone_scale_range=args.zscale,
         zone_color=args.zcolor,
         zone_material=args.zmaterial,

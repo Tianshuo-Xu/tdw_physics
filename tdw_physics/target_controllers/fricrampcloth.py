@@ -6,6 +6,9 @@ import importlib
 import numpy as np
 from enum import Enum
 import random
+import scipy
+from scipy.spatial.transform import Rotation as R
+
 from typing import List, Dict, Tuple
 from collections import OrderedDict
 from weighted_collection import WeightedCollection
@@ -54,6 +57,21 @@ def get_rolling_sliding_args(dataset_dir: str, parse=True):
     parser.add_argument("--zjitter",
                         type=float,
                         default=0.,
+                        help="amount of z jitter applied to the target zone")
+    parser.add_argument("--zdloc",
+                        type=int,
+                        default="-1",
+                        help="comma-separated list of possible target zone shapes")
+
+
+    parser.add_argument("--pheight",
+                        type=float,
+                        default=0.7,
+                        help="amount of z jitter applied to the target zone")
+
+    parser.add_argument("--csize",
+                        type=float,
+                        default=0.6,
                         help="amount of z jitter applied to the target zone")
 
     ### force
@@ -184,6 +202,9 @@ class FricRamp(MultiDominoes):
     def __init__(self,
                  port: int = None,
                  zjitter = 0,
+                 zone_dloc = -1,
+                 platform_height=0.7,
+                 cloth_size=0.6,
                  fupforce = [0.,0.],
                  ramp_scale = [0.2,0.25,0.5],
                  rolling_sliding_axis_length = 1.15,
@@ -209,6 +230,7 @@ class FricRamp(MultiDominoes):
         self.ledge_position = ledge_position
         self.ledge_scale = ledge_scale
         self.use_obi = True
+        self.cloth_size = cloth_size
         # self.ledge_color = ledge_color
         #['ramp_with_platform_30', 'ramp_with_platform_60', 'ramp_with_platform_weld']
         # triangular_prism
@@ -222,7 +244,7 @@ class FricRamp(MultiDominoes):
         How by what factor should the y and z dimensions should be smaller than the original ramp
         """
         self.second_ramp_factor = 0.5
-        self.camera_aim = {"x": 0., "y": 1.1, "z": 0.} # fixed aim
+        self.camera_aim = {"x": 0.3, "y": 1.1, "z": 0.} # fixed aim
         """
         The color of the second ramp
         """
@@ -231,35 +253,40 @@ class FricRamp(MultiDominoes):
         """
         Vedang's janky way of randomizing the friction and the size of the ramp
         """
+        self.zone_dloc = zone_dloc
 
-
-        self.fric_range= [0.01, 0.20] #[0.01, 0.25] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
-        self.ramp_y_range=[1.3, 1.3]
+        self.fric_range= [0.01, 0.2] # 0.20] #[0.01, 0.25] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
+        #self.ramp_y_range=[0.9, 0.9]
 
         self.is_single_ramp = is_single_ramp
         self.num_interactions = 1
 
 
         if self.is_single_ramp:
+            self.ramp_y_range=[platform_height, platform_height]
             self.add_second_ramp = False
-            self.ramp_base_height = 0
+            self.ramp_base_height_range = 0.1
+            self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
+            self.camera_aim = {"x": 1.3, "y": 1.1, "z": 0.}
         else:
+            self.ramp_y_range=[platform_height, platform_height]#[0.9, 0.9]
             self.add_second_ramp = True
             self.ramp_base_height_range = self.ramp_scale['y']
             self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
 
-        self._material_types = ["Fabric", "Leather", "Metal", "Paper", "Plastic"]
+        self._material_types = ["Fabric", "Leather", "Paper", "Plastic"]
 
 
         all_material = []
         for mtype in self.material_types:
              all_material += librarian.get_all_materials_of_type(mtype)
         #import ipdb; ipdb.set_trace()
-        self.all_material_names  = [m.name for m in all_material]
-        self.start_frame_for_prediction = 120
+        #exclude = ['aluminium_wire_knit_grill']
+        self.all_material_names  = [m.name for m in all_material if (not m.name.startswith("alum") and not m.name.startswith("metal"))]
+        self.start_frame_for_prediction = 150
 
 
-    def _add_ramp_base_to_ramp(self, color=None, sample_ramp_base_height=True) -> None:
+    def _add_ramp_base_to_ramp(self, color=None, sample_ramp_base_height=True, pos=None, is_kinematic=True) -> None:
 
         cmds = []
 
@@ -289,11 +316,12 @@ class FricRamp(MultiDominoes):
             'bounciness': 0}
         if self.ramp_physics_info.get('dynamic_friction', None) is not None:
             ramp_base_physics_info.update(self.ramp_physics_info)
+
         cmds.extend(
             RigidbodiesDataset.add_physics_object(
                 self,
                 record=self.ramp_base,
-                position=copy.deepcopy(self.ramp_pos),
+                position=copy.deepcopy(self.ramp_pos) if pos is None else pos,
                 rotation=TDWUtils.VECTOR3_ZERO,
                 o_id=self.ramp_base_id,
                 add_data=True,
@@ -315,7 +343,7 @@ class FricRamp(MultiDominoes):
              "id": self.ramp_base_id},
             {"$type": "set_kinematic_state",
              "id": self.ramp_base_id,
-             "is_kinematic": True,
+             "is_kinematic": is_kinematic,
              "use_gravity": True}])
 
         # add data
@@ -324,7 +352,8 @@ class FricRamp(MultiDominoes):
         self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
 
         # raise the ramp
-        self.ramp_pos['y'] += self.ramp_base_scale['y']
+        if not self.is_single_ramp:
+            self.ramp_pos['y'] += self.ramp_base_scale['y']
 
         return cmds
 
@@ -337,7 +366,7 @@ class FricRamp(MultiDominoes):
             self.ramp = random.choice(self.DEFAULT_RAMPS)
             rgb = self.ramp_color or self.random_color(exclude=self.target_color)
             ramp_pos = copy.deepcopy(self.probe_initial_position)
-            ramp_pos['y'] = self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
+            ramp_pos['y'] = 0.0 #self.zone_scale['y'] if not self.remove_zone else 0.0 # don't intersect w zone
             ramp_rot = self.get_y_rotation([90,90])
 
             self.ramp_pos = ramp_pos
@@ -351,7 +380,7 @@ class FricRamp(MultiDominoes):
             self.ramp_end_x = self.ramp
 
             second_ramp_pos = copy.deepcopy(self.ramp_pos)
-            second_ramp_pos['y'] = self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
+            second_ramp_pos['y'] = 0 #self.zone_scale['y']*1.1 if not self.remove_zone else 0.0 # don't intersect w zone
             rgb = self.ramp_color or self.random_color(exclude=self.target_color)
 
             ramp_rot = self.get_y_rotation([90,90])
@@ -382,7 +411,9 @@ class FricRamp(MultiDominoes):
                 add_data=True,
                 **self.ramp_physics_info
             ))
-            self.probe_initial_position['x'] += self.ramp_scale['z']*0.1 - 1.3
+
+            cmds.extend(self._add_ramp_base_to_ramp(color=self.second_ramp_color, pos={'x': 2.8, "y":0, "z":0}))
+            self.probe_initial_position['x'] += self.ramp_scale['z']*0.1 - 0.2 #random.uniform(1.0, 1.3) #1.3
             self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height + self.probe_initial_position['y'] + 1.6
 
         else:
@@ -434,10 +465,8 @@ class FricRamp(MultiDominoes):
             # need to adjust probe height as a result of ramp placement
 
 
-            self.probe_initial_position['x'] += self.ramp_scale['z']*0.1 - 1.3
+            self.probe_initial_position['x'] += self.ramp_scale['z']*0.1 - random.uniform(0.8, 1.1)
             self.probe_initial_position['y'] = self.ramp_scale['y'] * r_height + self.ramp_base_height + self.probe_initial_position['y'] + 1.2
-
-
 
             if self.add_second_ramp:
                 second_ramp_pos = copy.deepcopy(self.ramp_pos)
@@ -557,6 +586,76 @@ class FricRamp(MultiDominoes):
 
         return commands
 
+    def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
+
+        target_is_obi = True if (target_id in  self.obi_object_ids.tolist()) else False
+        object_is_obi = True if (obj_id in self.obi_object_ids.tolist()) else False
+
+
+        actor_pos = dict()
+        for actor_id in self.obi.actors:
+           actor_pos[actor_id] = self.obi.actors[actor_id].positions * self.obi_scale_factor
+
+        if target_is_obi:
+            if target_id not in actor_pos:
+                return [],[]
+            obi_position = actor_pos[target_id]
+        else:
+            o_id = target_id
+
+        if object_is_obi:
+            if obj_id not in actor_pos:
+                return [], []
+            obi_position = actor_pos[obj_id]
+        else:
+            o_id = obj_id
+        obj_info = self.bo_dict[o_id]
+        obj_posrot = self.tr_dict[o_id]
+        obj_vertices, _ = self.object_meshes[o_id]
+        obj_scale = xyz_to_arr(self.scales[self.object_ids.tolist().index(o_id)])
+
+        if not self.is_single_ramp :
+            if self.zone_type == "cube":
+                xmin, xmax = min(obj_info['left'][0], obj_info['right'][0]), max(obj_info['left'][0], obj_info['right'][0])
+                zmin, zmax = min(obj_info['front'][2], obj_info['back'][2]), max(obj_info['front'][2], obj_info['right'][2])
+                ymax = obj_info['top'][1]
+                contact_points = obi_position[(obi_position[:,0] > xmin) * (obi_position[:,0] < xmax)]
+                contact_points = contact_points[(contact_points[:,2] > zmin) * (contact_points[:,2] < zmax)]
+                #print(ymax)
+                #print(np.unique(contact_points[:,1])[:10])
+                contact_points = contact_points[(contact_points[:,1] - ymax) < 0.02]
+
+            else:
+                raise ValueError
+        else:
+            if self.zone_type == "cube":
+                xmin, xmax = min(obj_info['left'][0], obj_info['right'][0]), max(obj_info['left'][0], obj_info['right'][0])
+                zmin, zmax = min(obj_info['front'][2], obj_info['back'][2]), max(obj_info['front'][2], obj_info['right'][2])
+                pos = obj_posrot["pos"]
+                rot = obj_posrot["rot"]
+                rotm = np.eye(4)
+                rotm[:3, :3] = R.from_quat(rot).as_matrix()
+                rotm[:3, 3] = pos
+
+                nv = obj_vertices.shape[0]
+                trans_ver = np.matmul(rotm, np.concatenate([obj_vertices * obj_scale, np.ones((nv, 1))], 1).T).T[:,:3]
+                min_dist = np.min(scipy.spatial.distance_matrix(obi_position, trans_ver, p=2), axis=1)
+
+                ymax = obj_info['top'][1]
+                contact_points = obi_position[min_dist < 0.026]
+                #print(np.unique(min_dist)[:10])
+                #contact_points = contact_points[(contact_points[:,1] - ymax) < 0.02]
+
+            else:
+                raise ValueError
+
+        #print("number of contact points ", len(contact_points))
+        #if len(contact_points) > 0:
+        #    import ipdb; ipdb.set_trace()
+
+        return (contact_points, [])
+
+
     def _place_and_push_target_object(self) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
@@ -586,7 +685,10 @@ class FricRamp(MultiDominoes):
 
         ### TODO: better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -self.rolling_sliding_axis_length, "y": self.target_lift * 2, "z": 0.}
+        if self.is_single_ramp:
+            self.probe_initial_position = {"x": -self.rolling_sliding_axis_length + 0.1, "y": self.target_lift - 1.0 + 0.25*(6.0 - self.cloth_size), "z": 0.} #0.1
+        else:
+            self.probe_initial_position = {"x": -self.rolling_sliding_axis_length + 0.1, "y": self.target_lift, "z": 0.} #0.
         rot = self.get_rotation(self.target_rotation_range)
 
 
@@ -611,105 +713,68 @@ class FricRamp(MultiDominoes):
         from tdw.obi_data.cloth.cloth_material import ClothMaterial
 
         visual_material = random.choice(self.all_material_names)
-
-        cloth_material = ClothMaterial(visual_material,
+        if self.is_single_ramp:
+            cloth_material = ClothMaterial(visual_material,
                                texture_scale={"x": 0.8, "y": 0.8},
-                               stretching_scale=0.87,
-                               stretch_compliance=0.001,
+                               stretching_scale=1.1, #1.0,
+                               stretch_compliance=0.001, #0,
                                max_compression=0.25,
-                               max_bending=0.01,
-                               bend_compliance=1.0,
+                               max_bending=0.03, #0.01
+                               bend_compliance=1.0, #0,
                                drag=0.05,
                                lift=0.05,
                                visual_smoothness=0,
                                mass_per_square_meter=0.15)
+        else:
+            cloth_material = ClothMaterial(visual_material,
+                                   texture_scale={"x": 0.8, "y": 0.8},
+                                   stretching_scale=1.1,
+                                   stretch_compliance=0.001,
+                                   max_compression=0.25,
+                                   max_bending=0.03,
+                                   bend_compliance=1.0,
+                                   drag=0.05,
+                                   lift=0.05,
+                                   visual_smoothness=0,
+                                   mass_per_square_meter=0.15)
+            # cloth_material = ClothMaterial(visual_material,
+            #                        texture_scale={"x": 0.8, "y": 0.8},
+            #                        stretching_scale=0.87,
+            #                        stretch_compliance=0.001,
+            #                        max_compression=0.25,
+            #                        max_bending=0.01,
+            #                        bend_compliance=1.0,
+            #                        drag=0.05,
+            #                        lift=0.05,
+            #                        visual_smoothness=0,
+            #                        mass_per_square_meter=0.15)
 
 
-        # cloth_material = ClothMaterial(visual_material=visual_material,
-        #                                texture_scale={"x": 1.0, "y": 1.0},
-        #                                stretching_scale=1,
-        #                                stretch_compliance=0.002,
-        #                                max_compression=0.5,
-        #                                max_bending=0.05,
-        #                                bend_compliance=1.0,
-        #                                drag=0.05,
-        #                                lift=0.05,
-        #                                visual_smoothness=0,
-        #                                mass_per_square_meter=0.15)
 
-
-        # cloth_material = ClothMaterial(visual_material=visual_material,
-        #                        texture_scale={"x": 1, "y": 1},
-        #                        stretching_scale=0.8,
-        #                        stretch_compliance=0.001,
-        #                        max_compression=0,
-        #                        max_bending=0,
-        #                        drag=0.05,
-        #                        lift=0.05,
-        #                        visual_smoothness=0,
-        #                        mass_per_square_meter=1.5)
+        self.cloth_material = visual_material
 
         o_id = self._get_next_object_id()
         self.target_id = o_id
+        self.star_id = o_id
+        self.obi_object_ids = np.append(self.obi_object_ids, o_id)
+        self.obi_object_type = [(o_id, 'cloth')]
         #self.object_ids = np.append(self.object_ids, o_id)
 
         self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                object_id=o_id,
                                position=self.probe_initial_position,
                                rotation={"x": 0, "y": 0, "z": 0})
-        self.obi.set_solver(scale_factor=0.6, substeps=2)
-
-
-        print("o_id ==============", o_id)
-
+        self.obi_scale_factor = self.cloth_size
+        self.obi.set_solver(scale_factor=self.obi_scale_factor, substeps=2)
 
             # self.probe_initial_position['x'] += 0.9*self.target_lift #HACK rotation might've led to the object falling of the back of the ramp, so we're moving it forward
 
-        # commands.extend(
-        #     self.add_physics_object(
-        #         record=record,
-        #         position=self.probe_initial_position,
-        #         rotation=rot,
-        #         mass=self.probe_mass,
-        #         # dynamic_friction=0.5,
-        #         # static_friction=0.5,
-        #         # bounciness=0.1,
-        #         dynamic_friction=0.4,
-        #         static_friction=0.4,
-        #         bounciness=0,
-        #         o_id=o_id))
-
-        # commands.extend(
-        #     self.add_primitive(
-        #         record=record,
-        #         position=self.probe_initial_position,
-        #         rotation=rot,
-        #         mass=self.probe_mass,
-        #         material=self.target_material,
-        #         color=rgb,
-        #         scale=scale,
-        #         # dynamic_friction=0.5,
-        #         # static_friction=0.5,
-        #         # bounciness=0.1,
-        #         dynamic_friction=self.zone_friction,
-        #         static_friction=self.zone_friction,
-        #         bounciness=0,
-        #         o_id=o_id,
-        #         add_data=True
-        #     ))
-
-        # Set the target material
-        # commands.extend(
-        #     self.get_object_material_commands(
-        #         record, o_id, self.get_material_name(self.target_material)))
-
         # the target is the probe
         self.target_position = self.probe_initial_position
-
         # Scale the object and set its color.
         # commands.extend([
         #     {"$type": "set_color",
-        #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
+        #      "color": {"r": rgb[0], "g": rgb[1clothclothcloth], "b": rgb[2], "a": 1.},
         #      "id": o_id},
             # {"$type": "scale_object",
             #  "scale_factor": scale,
@@ -820,12 +885,89 @@ class FricRamp(MultiDominoes):
 
         return commands
 
+    def _place_target_zone(self) -> List[dict]:
+        if self.add_second_ramp:
+            cmd = super()._place_target_zone()
+            self.force_wait_zone = 0
+            return cmd
+        else:
+            #self.zone_scale_range = {'x': 0.3, 'y':0.3, 'z':0.3}
+
+            # create a target zone (usually flat, with same texture as room)
+
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale={'x': 0.4, 'y':0.1, 'z':0.5},
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
+
+            if any((s <= 0 for s in scale.values())):
+                self.remove_zone = True
+                self.scales = self.scales[:-1]
+                self.colors = self.colors[:-1]
+                self.model_names = self.model_names[:-1]
+
+            # place it just beyond the target object with an effectively immovable mass and high friction
+            commands = []
+            self.zone_location =  self._get_zone_location(scale)
+            commands.extend(
+                self.add_primitive(
+                    record=record,
+                    position=self.zone_location,
+                    rotation=TDWUtils.VECTOR3_ZERO,
+                    scale=scale,
+                    material=self.zone_material,
+                    color=rgb,
+                    mass=0.5,
+                    scale_mass=False,
+                    dynamic_friction=self.zone_friction,
+                    static_friction=(10.0 * self.zone_friction),
+                    bounciness=0,
+                    o_id=o_id,
+                    add_data=(not self.remove_zone),
+                    make_kinematic=False # zone shouldn't move
+                ))
+
+            # get rid of it if not using a target object
+            if self.remove_zone:
+                commands.append(
+                    {"$type": self._get_destroy_object_command_name(o_id),
+                     "id": int(o_id)})
+                self.object_ids = self.object_ids[:-1]
+
+            self.force_wait_zone = 145
+            self.hold_cmd = {"$type": "teleport_object",
+                          "id": o_id,
+                          "position": self.zone_location}
+
+            return commands
+
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
+
+
+        if (self.force_wait_zone != 0) and frame <= self.force_wait_zone:
+            if self.PRINT:
+                print("applied %s at time step %d" % (self.hold_cmd, frame))
+            output = [self.hold_cmd]
+        else:
+            output = []
+
+        #print("frame", output)
+
+        return output
+
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 450
+        return frame > 400
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
         # 0.1 for the probe shift, 0.01 to put under ramp
-        self.zone_dloc = 1
         if self.add_second_ramp:
 
             if self.zone_dloc == -1:
@@ -851,23 +993,23 @@ class FricRamp(MultiDominoes):
 
             if self.zone_dloc == 1:
                 return {
-                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 -3.2, #3.1
-                    "y": 2.3 if not self.remove_zone else 10.0,
-                    "z": 0.35 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 -random.uniform(2.3, 2.7), #3.1
+                    "y": 2.8 if not self.remove_zone else 10.0,
+                    "z": 0.45 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
             elif self.zone_dloc == 2:
                 return {
-                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
-                    "y": 2.3 if not self.remove_zone else 10.0,
-                    "z": -0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                    "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 + 1.0,
+                    "y": 2.8 if not self.remove_zone else 10.0,
+                    "z": 0.25 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
             else:
                 raise ValueError
     def _get_zone_second_location(self, scale):
         print(self.zone_scale)
         if self.add_second_ramp:
-            SHIFT = self.ramp_scale['z']/100. + 0.18
+            SHIFT = self.ramp_scale['z']/100. + 0.02# 0.18
         else:
             SHIFT = self.ramp_scale['z']*0.07
         return {
@@ -883,6 +1025,33 @@ class FricRamp(MultiDominoes):
         self.distractors = OrderedDict()
         self.occluders = OrderedDict()
         # clear some other stuff
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        variables = static_group.create_group("variables")
+
+        try:
+            static_group.create_dataset("is_single_ramp", data=self.is_single_ramp)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_friction", data=self.zone_friction)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_id", data=self.star_id)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("cloth_size", data=self.cloth_size)
+        except (AttributeError,TypeError):
+            pass
+
+        try:
+            static_group.create_dataset("cloth_material", data=self.cloth_material)
+        except (AttributeError,TypeError):
+            pass
+
+
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         Dominoes._write_static_data(self, static_group)
@@ -903,12 +1072,12 @@ if __name__ == "__main__":
 
     args = get_rolling_sliding_args("rolling_sliding")
 
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
-
+    print("gpu", args.gpu)
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
     ColC = FricRamp(
         room=args.room,
         randomize=args.random,
@@ -919,6 +1088,9 @@ if __name__ == "__main__":
         zone_color=args.zcolor,
         zone_material=args.zmaterial,
         zone_friction=args.zfriction,
+        zone_dloc = args.zdloc,
+        platform_height = args.pheight,
+        cloth_size = args.csize,
         target_objects=args.target,
         probe_objects=args.probe,
         target_scale_range=args.tscale,
