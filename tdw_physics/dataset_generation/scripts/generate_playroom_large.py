@@ -182,9 +182,11 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     rng = np.random.RandomState(seed=seed)
     model_splits = OrderedDict()
     cat_split_ind = 0
+
     for i,num in enumerate(num_models_per_split):
         models_here = []
         while (len(models_here) < num) and (cat_split_ind < len(category_splits.keys())):
+
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
                 models_here.extend(MODELS_PER_CATEGORY[cat])
