@@ -1,10 +1,9 @@
 
 
 #### mass ###
-# controller="tdw_physics/target_controllers/dominoes_var.py"
-# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/mass_dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128
-
+controller="tdw_physics/target_controllers/dominoes_var.py"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128 --num 30
 
 
 # controller="tdw_physics/target_controllers/waterpush_var.py"
@@ -70,20 +69,20 @@
 #### cloth ####
 # controller="tdw_physics/target_controllers/dropcloth_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/dropcloth_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_simple_box --height 512 --width 512
+# python $controller @$ARGS_PATH/dropcloth_pp/pilot_it2_drop_simple_box/commandline_args.txt --training_data_mode  --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/dropcloth/pilot_it2_drop_simple_box --height 256 --width 256 --num 40
 
 # controller="tdw_physics/target_controllers/clothhit_var.py"
 # ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/clothhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhit/pilot_it2_drop_simple_box --height 512 --width 512
+# python $controller @$ARGS_PATH/clothhit_pp/pilot_it2_drop_simple_box/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhit/pilot_it2_drop_simple_box --height 256 --width 256 --num 20
 
-controller="tdw_physics/target_controllers/clothhang_var.py"
-ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-python $controller @$ARGS_PATH/clothhang_pp/pilot_it2_drop_simple_box/commandline_args.txt --training_data_mode  --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhang/pilot_it2_drop_simple_box --height 256 --width 256
-
-
+# controller="tdw_physics/target_controllers/clothhang_var.py"
+# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+# python $controller @$ARGS_PATH/clothhang_pp/pilot_it2_drop_simple_box/commandline_args.txt --training_data_mode  --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/clothhang/pilot_it2_drop_simple_box --height 256 --width 256 --num 20
 
 
+##bowl,cube,cylinder,octahedron,pentagon,pipe,platonic,pyramid,sphere,torus
 
+#0.5, 0.9, 0
 
 ######## not used ########
 

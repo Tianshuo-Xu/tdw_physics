@@ -2,7 +2,7 @@
 import os
 
 
-scenario_name = "friction_collision"
+scenario_name = "mass_dominoes"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
@@ -12,7 +12,9 @@ variables = dict()
 exclude = dict()
 variables["mass_dominoes"] = dict()
 variables["mass_dominoes"]["num_middle_objects"] = [0, 1, 2, 3, 4]
-
+variables["mass_dominoes"]["star_putfirst"] = [0,1]
+variables["mass_dominoes"]["remove_middle"] = [0,1]
+exclude["mass_dominoes"] = [{"num_middle_objects": [0, 1], "remove_middle":[1]}]
 
 variables["mass_waterpush"] = dict()
 variables["mass_waterpush"]["target"] = ["bowl","cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
@@ -60,6 +62,18 @@ variables["friction_collision"]["zdloc"] = ["1","3"]
 variables["friction_collision"]["target"] = ["cone","cube","cylinder","dumbbell","pentagon","pipe","pyramid"]
 variables["friction_collision"]["tscale"] = ["0.8,0.4,0.8", "0.7,0.4,0.7","0.5,0.4,0.5","0.4,0.4,0.4"]
 exclude["friction_collision"] = []
+
+
+variables["deform_clothhang"] = dict()
+variables["deform_clothhang"]["zdloc"] = ["1","2"]
+variables["deform_clothhang"]["target"] = ["sphere","cube","cylinder","pipe","pyramid"]
+variables["deform_clothhang"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
+exclude["deform_clothhang"] = []
+
+
+variables["deform_clothdrop"] = dict()
+variables["deform_clothdrop"]["zdloc"] = ["1","2"]
+exclude["deform_clothdrop"] = []
 
 
 

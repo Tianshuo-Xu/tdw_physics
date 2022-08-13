@@ -7,6 +7,9 @@ import importlib
 import numpy as np
 from enum import Enum
 import random
+import scipy
+from scipy.spatial.transform import Rotation as R
+
 from typing import List, Dict, Tuple
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
@@ -69,7 +72,10 @@ def get_drop_args(dataset_dir: str):
                         type=str,
                         default="1.2,0.01,1.2",
                         help="scale of target zone")
-
+    parser.add_argument("--zdloc",
+                        type=int,
+                        default="-1",
+                        help="comma-separated list of possible target zone shapes")
 
     parser.add_argument("--mrot",
                         type=str,
@@ -170,6 +176,7 @@ class DropCloth(MultiDominoes):
                  drop_scale_range=[0.1, 0.4],
                  target_scale_range=[0.3, 0.6],
                  zone_scale_range={'x':2.,'y':0.01,'z':2.},
+                 zone_dloc = -1,
                  drop_jitter=0.02,
                  drop_rotation_range=None,
                  target_rotation_range=None,
@@ -177,9 +184,6 @@ class DropCloth(MultiDominoes):
                  middle_mass_range=[10.,11.],
                  middle_scale_range=None,
                  target_color=None,
-                 camera_radius=1.0,
-                 camera_min_angle=0,
-                 camera_max_angle=360,
                  camera_min_height=1./3,
                  camera_max_height=2./3,
                  room = "box",
@@ -218,26 +222,33 @@ class DropCloth(MultiDominoes):
         self.middle_scale_range = middle_scale_range
 
         ## camera properties
-        self.camera_radius = camera_radius
-        self.camera_min_angle = camera_min_angle
-        self.camera_max_angle = camera_max_angle
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
-        self._material_types = ["Fabric", "Leather", "Metal", "Paper", "Plastic"]
+        self._material_types = ["Fabric", "Leather",  "Paper", "Plastic"]
+        self.zone_dloc = zone_dloc
 
 
         all_material = []
         for mtype in self.material_types:
              all_material += librarian.get_all_materials_of_type(mtype)
-        #import ipdb; ipdb.set_trace()
-        self.all_material_names  = [m.name for m in all_material]
 
-        self.force_wait = 10
+        self.all_material_names  = [m.name for m in all_material if (not m.name.startswith("alum") and not m.name.startswith("metal"))]
+
+        self.force_wait = 8
 
     # def get_types(self, objlist):
     #     recs = MODEL_LIBRARIES["models_flex.json"].records
     #     tlist = [r for r in recs if r.name in objlist]
     #     return tlist
+
+    def get_stframe_pred(self):
+        if self.zone_dloc == 1:
+            frame_id = self.start_frame_after_curtain  + self.stframe_whole_video + 4
+
+        else:
+            frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+        return frame_id
+
 
     def set_drop_types(self, olist):
         tlist = self.get_types(olist)
@@ -284,6 +295,8 @@ class DropCloth(MultiDominoes):
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         self.star_object["material"] = random.choice(self.all_material_names)
 
+        self.star_object["deform"] = random.uniform(0,1.0)
+
         #self.star_object["material"] =
         print("====star object mass", self.star_object["mass"])
 
@@ -300,6 +313,16 @@ class DropCloth(MultiDominoes):
             self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
             self.candidate_dict[distinct_id]["mass"] = mass
 
+        self.middle_objects = dict()
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        #variables = static_group.create_group("variables")
+        static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        static_group.create_dataset("star_deform", data=self.star_object["deform"])
+        static_group.create_dataset("star_type", data=self.star_object["type"].name)
+        static_group.create_dataset("star_size", data=xyz_to_arr(self.star_object["scale"]))
+        static_group.create_dataset("zdloc", data=self.zone_dloc)
+
 
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         commands = []
@@ -312,7 +335,7 @@ class DropCloth(MultiDominoes):
             self.trial_seed = -1 # not used
 
         # Place target zone
-        commands.extend(self._place_target_zone())
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and drop an object.
         commands.extend(self._place_star_object(interact_id))
@@ -321,31 +344,39 @@ class DropCloth(MultiDominoes):
         commands.extend(self._place_intermediate_object(interact_id))
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+
+
+        if interact_id == 0:
+            self.a_pos, theta = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
-                                                center=TDWUtils.VECTOR3_ZERO)
+                                                center=TDWUtils.VECTOR3_ZERO,
+                                                reflections=self.camera_left_right_reflections,
+                                                return_theta=True)
 
-        cam_aim = {"x": 0, "y": 0.5, "z": 0}
-        commands.extend([
-            {"$type": "teleport_avatar_to",
-             "position": a_pos},
-            {"$type": "look_at_position",
-             "position": cam_aim},
-            {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, cam_aim)}
-        ])
+            # print("camera position", self.a_pos)
+            # print("theta", theta * 180 / np.pi)
+
+            # import ipdb; ipdb.set_trace()
 
         # Set the camera parameters
-        self._set_avatar_attributes(a_pos)
+        self._set_avatar_attributes(self.a_pos)
 
-        self.camera_position = a_pos
-        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
-        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
-        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
+
+
+
+        commands.extend([
+            {"$type": "teleport_avatar_to",
+             "position": self.camera_position},
+            {"$type": "look_at_position",
+             "position": self.camera_aim},
+            {"$type": "set_focus_distance",
+             "focus_distance": TDWUtils.get_distance(self.a_pos, self.camera_aim)}
+        ])
+
 
         # For distractor placements
         self.middle_scale = self.zone_scale
@@ -365,6 +396,7 @@ class DropCloth(MultiDominoes):
     def get_additional_command_when_removing_curtain(self, frame=0):
 
         return []
+
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
 
@@ -426,6 +458,62 @@ class DropCloth(MultiDominoes):
 
         return labels, resp, frame_num, done
 
+
+    def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
+
+        target_is_obi = True if (target_id in  self.obi_object_ids.tolist()) else False
+        object_is_obi = True if (obj_id in self.obi_object_ids.tolist()) else False
+
+
+        actor_pos = dict()
+        for actor_id in self.obi.actors:
+           actor_pos[actor_id] = self.obi.actors[actor_id].positions * self.obi_scale_factor
+
+        if target_is_obi:
+            if target_id not in actor_pos:
+                return [],[]
+            obi_position = actor_pos[target_id]
+        else:
+            o_id = target_id
+
+        if object_is_obi:
+            if obj_id not in actor_pos:
+                return [], []
+            obi_position = actor_pos[obj_id]
+        else:
+            o_id = obj_id
+
+        obj_info = self.bo_dict[o_id]
+        obj_posrot = self.tr_dict[o_id]
+        obj_vertices, _ = self.object_meshes[o_id]
+        obj_scale = xyz_to_arr(self.scales[self.object_ids.tolist().index(o_id)])
+
+
+        xmin, xmax = min(obj_info['left'][0], obj_info['right'][0]), max(obj_info['left'][0], obj_info['right'][0])
+        zmin, zmax = min(obj_info['front'][2], obj_info['back'][2]), max(obj_info['front'][2], obj_info['right'][2])
+        pos = obj_posrot["pos"]
+        rot = obj_posrot["rot"]
+        rotm = np.eye(4)
+        rotm[:3, :3] = R.from_quat(rot).as_matrix()
+        rotm[:3, 3] = pos
+
+        nv = obj_vertices.shape[0]
+        trans_ver = np.matmul(rotm, np.concatenate([obj_vertices * obj_scale, np.ones((nv, 1))], 1).T).T[:,:3]
+        min_dist = np.min(scipy.spatial.distance_matrix(obi_position, trans_ver, p=2), axis=1)
+
+        ymax = obj_info['top'][1]
+        contact_points = obi_position[min_dist < 0.027] #0.026]
+        #print(np.unique(min_dist)[:10])
+
+
+        #print("number of contact points ", len(contact_points))
+        #if len(contact_points) > 0:
+        #   import ipdb; ipdb.set_trace()
+
+        return (contact_points, [])
+
+
+
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
@@ -438,7 +526,7 @@ class DropCloth(MultiDominoes):
         return frame, objs, tr, sleeping and frame_num < 300
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 150
+        return frame - self.stframe_whole_video > 150
 
     def get_rotation(self, rot_range):
         if rot_range is None:
@@ -457,22 +545,114 @@ class DropCloth(MultiDominoes):
         # XXX TODO: Why is scaling part of random primitives
         # but rotation and translation are not?
         # Consider integrating!
+        commands = []
 
-
-        if interact_id >= 1:
-
-
+        if interact_id == 0:
             record, data = self.random_primitive(self._middle_types,
+                                         scale=self.middle_scale_range,
+                                         color=self.probe_color)
+        else:
+            record, data = self.random_primitive([self.middle_objects[0]["record"]],
+                                         scale=self.middle_objects[0]["scale"],
+                                         color=self.middle_objects[0]["color"])
+
+        #import ipdb; ipdb.set_trace()
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+
+
+        if self.zone_dloc == 1:
+            self.middle_position = {"x":0, "y": 0, "z": 0} if interact_id > 0 else {"x":-3.0, "y": 0, "z": -1.0}
+        else:
+            if interact_id > 0:
+                length = np.random.uniform(0.53, 0.57, 1)[0]
+                theta_degree = 45 + np.random.uniform(-20, 20, 1)[0]
+
+                self.middle_position = {"x":length * np.cos(np.deg2rad(theta_degree)), "y": 0, "z": length * np.sin(np.deg2rad(theta_degree))}
+            else:
+                self.middle_position =  {"x":3.0, "y": 0, "z": 0}
+        if interact_id == 0:
+            scale = {'x': 0.9, "y": 0.8, "z":  0.9} if self.zone_dloc == 1 else {'x': 0.3, "y": 0.5, "z":  0.3}  #0.9, 0.9, 0.9
+            record_size = {"x":abs(record.bounds['right']['x'] - record.bounds['left']['x']),
+             "y":abs(record.bounds['top']['y'] - record.bounds["bottom"]['y']),
+             "z":abs(record.bounds['front']['z'] - record.bounds['back']['z'])}
+
+            scale = {"x": scale["x"]/record_size["x"], "y": scale["y"]/record_size["y"], "z": scale["z"]/record_size["z"]}
+
+        # add the object
+
+        self.middle_rotation = self.get_rotation(self.middle_rotation_range)
+
+        commands.extend(self.add_physics_object(record=record,
+                                    o_id=o_id,
+                                    position=self.middle_position,
+                                    rotation=self.middle_rotation,
+                                    mass = 1000,
+                                    dynamic_friction=0.5,
+                                    static_friction=0.5,
+                                    bounciness=0.))
+        #Set the object material
+        commands.extend(
+            self.get_object_material_commands(
+                record, o_id, self.get_material_name(self.target_material)))
+
+        # # Scale the object and set its color.
+        commands.extend([
+            {"$type": "set_color",
+             "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 0.1},
+             "id": o_id},
+           {"$type": "scale_object",
+            "scale_factor": scale,
+            "id": o_id}])
+
+        if interact_id == 0:
+            self.middle_objects[0] = dict()
+            self.middle_objects[0]["record"] = record
+            self.middle_objects[0]["scale"] = scale
+            self.middle_objects[0]["color"] = rgb
+
+
+
+        num_middle = 3
+        theta = np.random.uniform(40, 120, 1)[0]
+        theta_offset = 0
+        if self.zone_dloc == 2 and interact_id > 0:
+            theta = 90
+            theta_offset = 45
+
+        for middle_id in range(num_middle):
+            if interact_id == 0:
+                if self.zone_dloc == 2:
+                    self._middle_types = [r for r in self._middle_types if r.name != "bowl"]
+
+                record, data = self.random_primitive(self._middle_types,
                                              scale=self.middle_scale_range,
                                              color=self.probe_color)
-
+            else:
+                record, data = self.random_primitive([self.middle_objects[middle_id + 1]["record"]],
+                                    scale=self.middle_objects[middle_id + 1]["scale"],
+                                    color=self.middle_objects[middle_id + 1]["color"])
 
             #import ipdb; ipdb.set_trace()
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-            self.middle_position = {"x":0, "y": 0, "z": 0}
 
-            # add the object
-            commands = []
+            #print("o_id ==== ", o_id)
+
+            scale["x"] = 0.3
+            scale["z"] = 0.3
+
+            if self.zone_dloc == 2 and interact_id > 0:
+                length = np.random.uniform(0.5, 0.5, 1)[0]
+            else:
+                length = np.random.uniform(0.5, 0.7, 1)[0]
+            theta_degree = theta_offset + theta * (1 + middle_id) + np.random.uniform(-20, 20, 1)[0]
+            #print(theta_degree, length)
+            self.middle_position = {"x":length * np.cos(np.deg2rad(theta_degree)), "y": 0, "z": length * np.sin(np.deg2rad(theta_degree))}
+
+            if interact_id > 0 and self.zone_dloc==1:
+                self.middle_position["x"] += 3.0
+
+
             self.middle_rotation = self.get_rotation(self.middle_rotation_range)
 
             commands.extend(self.add_physics_object(record=record,
@@ -480,20 +660,9 @@ class DropCloth(MultiDominoes):
                                         position=self.middle_position,
                                         rotation=self.middle_rotation,
                                         mass = 1000,
-                                        dynamic_friction=0.5,
-                                        static_friction=0.5,
+                                        dynamic_friction=0.3,
+                                        static_friction=0.3,
                                         bounciness=0.))
-
-            # commands.extend(
-            #     self.add_physics_object(
-            #         record=record,
-            #         position=self.target_position,
-            #         rotation=self.target_rotation,
-            #         mass= random.uniform(*get_range(self.middle_mass_range)),
-            #         dynamic_friction=0.4, #increased friction
-            #         static_friction=0.4,
-            #         bounciness=0,
-            #         o_id=o_id))
 
             #Set the object material
             commands.extend(
@@ -509,69 +678,11 @@ class DropCloth(MultiDominoes):
                 "scale_factor": scale,
                 "id": o_id}])
 
-        else:
-            # add the object
-            commands = []
-            num_middle = 3
-            theta = np.random.uniform(0, 180, 1)[0]
-
-            for middle_id in range(num_middle):
-
-                record, data = self.random_primitive(self._middle_types,
-                                                 scale=self.middle_scale_range,
-                                                 color=self.probe_color)
-
-
-
-                #import ipdb; ipdb.set_trace()
-                o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-
-                #print("o_id ==== ", o_id)
-
-                scale["x"] = 0.3
-                scale["z"] = 0.3
-
-                length = np.random.uniform(0.4, 0.6, 1)[0]
-                theta_degree = theta * (1 + middle_id) + np.random.uniform(-20, 20, 1)[0]
-                self.middle_position = {"x":length * np.cos(np.deg2rad(theta_degree)), "y": 0, "z": length * np.sin(np.deg2rad(theta_degree))}
-
-
-                self.middle_rotation = self.get_rotation(self.middle_rotation_range)
-
-                commands.extend(self.add_physics_object(record=record,
-                                            o_id=o_id,
-                                            position=self.middle_position,
-                                            rotation=self.middle_rotation,
-                                            mass = 1000,
-                                            dynamic_friction=0.5,
-                                            static_friction=0.5,
-                                            bounciness=0.))
-
-                # commands.extend(
-                #     self.add_physics_object(
-                #         record=record,
-                #         position=self.target_position,
-                #         rotation=self.target_rotation,
-                #         mass= random.uniform(*get_range(self.middle_mass_range)),
-                #         dynamic_friction=0.4, #increased friction
-                #         static_friction=0.4,
-                #         bounciness=0,
-                #         o_id=o_id))
-
-                #Set the object material
-                commands.extend(
-                    self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.target_material)))
-
-                # # Scale the object and set its color.
-                commands.extend([
-                    {"$type": "set_color",
-                     "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 0.1},
-                     "id": o_id},
-                   {"$type": "scale_object",
-                    "scale_factor": scale,
-                    "id": o_id}])
-
+            if interact_id == 0:
+                self.middle_objects[middle_id + 1] = dict()
+                self.middle_objects[middle_id + 1]["record"] = record
+                self.middle_objects[middle_id + 1]["scale"] = scale
+                self.middle_objects[middle_id + 1]["color"] = rgb
 
         return commands
 
@@ -589,72 +700,62 @@ class DropCloth(MultiDominoes):
         from tdw.obi_data.cloth.cloth_material import CLOTH_MATERIALS
         from tdw.obi_data.cloth.cloth_material import ClothMaterial
 
-        # cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-        #                                texture_scale={"x": 1, "y": 1},
-        #                                stretching_scale=1,
-        #                                stretch_compliance=0.002,
-        #                                max_compression=0.5,
-        #                                max_bending=0.05,
-        #                                bend_compliance=1.0,
-        #                                drag=0.05,
-        #                                lift=0.05,
-        #                                visual_smoothness=0,
-        #                                mass_per_square_meter=0.15)
 
-
-        #material = self.get_material_name(self.target_material)
-
+        deform = self.star_object["deform"]
         cloth_material = ClothMaterial(visual_material=self.star_object["material"],
-                               texture_scale={"x": 1, "y": 1},
-                               stretching_scale=0.75,
-                               stretch_compliance=0,
-                               max_compression=0,
-                               max_bending=0,
-                               drag=0.05,
-                               lift=0.05,
-                               visual_smoothness=0,
-                               mass_per_square_meter=0.01)
-
+                                       texture_scale={"x": 1, "y": 1},
+                                       stretching_scale= 0.9 + (1.05-0.9) * deform,
+                                       stretch_compliance=0 + 0.02 * deform,
+                                       max_compression= 0 + 0.5 * deform,
+                                       max_bending=0 + 0.05 * deform,
+                                       bend_compliance=0 + 1.0 * deform,
+                                       drag=0.05,
+                                       lift=0.05,
+                                       visual_smoothness=0,
+                                       mass_per_square_meter=0.03 + (0.04-0.03) * deform)
 
 
         self.target_position = {"x": 0, "y": 1.5, "z": 0}
-
+        if interact_id > 0:
+            if self.zone_dloc == 1:
+                self.target_position["y"] = 1.7
+            else:
+                self.target_position["y"] = 1.3
         # add the object
         commands = []
         if self.target_rotation is None:
             self.target_rotation = self.get_rotation(self.target_rotation_range)
 
-        o_id = self.get_unique_id()
+        #o_id = self.get_unique_id()
+        o_id = self._get_next_object_id()
+
         self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                object_id=o_id,
                                position=self.target_position,
                                rotation={"x": 0, "y": 0, "z": 0})
-        self.obi.set_solver(substeps=2)
+
+        self.obi_scale_factor = 0.8
+        self.obi.set_solver(scale_factor = self.obi_scale_factor, substeps=2)
 
         self.target_id = o_id
+        self.star_id = o_id
 
+        self.obi_object_ids = np.append(self.obi_object_ids, o_id)
+        self.obi_object_type = [(o_id, 'cloth')]
 
         self.target_type = "cloth"
         self.target = None
-        # self.target_id = o_id #for internal purposes, the other object is the target
-        # self.object_color = rgb
-
-
-        star_type = self.star_object["type"]
-        star_scale = self.star_object["scale"]
-        star_mass = self.star_object["mass"]
-        star_color = self.star_object["color"]
 
         # Create an object to drop.
         commands = []
 
         return commands
 
-    def _place_target_zone(self) -> List[dict]:
+    def _place_target_zone(self, interact_id) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
         record, data = self.random_primitive(self._zone_types,
-                                             scale=self.zone_scale_range,
+                                             scale={'x': 0.2, 'y':0.3, 'z':0.2} if self.zone_dloc==2 else {'x': 0.2, 'y':0.4, 'z':0.2},
                                              color=self.zone_color,
                                              add_data=True
         )
@@ -665,6 +766,7 @@ class DropCloth(MultiDominoes):
         self.zone_color = rgb
         self.zone_id = o_id
         self.zone_scale = scale
+        self.zone_mass = 10.0
         # self.zone_location = TDWUtils.VECTOR3_ZERO
 
         if any((s <= 0 for s in scale.values())):
@@ -673,14 +775,33 @@ class DropCloth(MultiDominoes):
             self.colors = self.colors[:-1]
             self.model_names = self.model_names[:-1]
 
+        zone_location = self.zone_location
+        if interact_id == 0:
+            zone_location['x'] = 0.8
+            zone_location['z'] = -0.8
+
+        if interact_id > 0:
+            if self.zone_dloc == 1:
+                length = 0.72
+                angle = 30
+                #{"x":length * np.cos(np.deg2rad(theta_degree)), "y": 0, "z": length * np.sin(np.deg2rad(theta_degree))}
+                zone_location['x'] = length * np.cos(np.deg2rad(angle)) #0.6 #0.6
+                zone_location['z'] = length * np.sin(np.deg2rad(angle)) #0.6 #0.6
+                zone_location['y'] = random.uniform(1.9, 2.1)
+            elif self.zone_dloc == 2:
+                zone_location['x'] = random.uniform(-0.2, 0.2) #0.6
+                zone_location['z'] = random.uniform(-0.2, 0.2)  #0.6
+                zone_location['y'] = 0 #random.uniform(1.9, 2.1)
+            else:
+                raise ValueError
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
         commands.extend(
             self.add_physics_object(
                 record=record,
-                position=self.zone_location,
+                position=zone_location,
                 rotation=TDWUtils.VECTOR3_ZERO,
-                mass=500,
+                mass=self.zone_mass,
                 dynamic_friction=self.zone_friction,
                 static_friction=(10.0 * self.zone_friction),
                 bounciness=0,
@@ -703,14 +824,6 @@ class DropCloth(MultiDominoes):
              "id": o_id}])
 
         # make it a "kinematic" object that won't move
-        commands.extend([
-            {"$type": "set_object_collision_detection_mode",
-             "mode": "continuous_speculative",
-             "id": o_id},
-            {"$type": "set_kinematic_state",
-             "id": o_id,
-             "is_kinematic": True,
-             "use_gravity": True}])
 
         # get rid of it if not using a target object
         if self.remove_zone:
@@ -719,6 +832,40 @@ class DropCloth(MultiDominoes):
                  "id": int(o_id)})
             self.object_ids = self.object_ids[:-1]
 
+        # self.push_cmd = None
+        # if interact_id > 0:
+        #     self.push_force = self.get_push_force(
+        #         scale_range= self.zone_mass * np.array(self.force_scale_range),
+        #         angle_range=self.force_angle_range,
+        #         yforce=[0,0])
+
+        #     print("push force", self.push_force)
+        #     self.push_force = self.rotate_vector_parallel_to_floor(
+        #         self.push_force, 0, degrees=True)
+
+        #     self.push_position = zone_location
+        #     self.push_position = {
+        #         k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+        #             scale, 0)[k]
+        #         for k,v in self.push_position.items()}
+        #     self.push_position = {
+        #         k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+        #         for k,v in self.push_position.items()}
+
+
+        #     print("push position", self.push_position)
+
+        #     self.push_cmd = {
+        #         "$type": "apply_force_at_position",
+        #         "force": self.push_force,
+        #         "position": self.push_position,
+        #         "id": int(o_id)
+        #     }
+        #     import ipdb; ipdb.set_trace()
+
+        #     self.zone_force_wait = 10
+
+
         return commands
 
 if __name__ == "__main__":
@@ -726,11 +873,11 @@ if __name__ == "__main__":
     args = get_drop_args("drop")
 
     import platform, os
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu+1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     DC = DropCloth(
         randomize=args.random,
@@ -758,6 +905,7 @@ if __name__ == "__main__":
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range = args.zscale,
+        zone_dloc = args.zdloc,
         probe_material=args.pmaterial,
         zone_material=args.zmaterial,
         zone_color=args.zcolor,

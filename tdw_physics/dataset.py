@@ -518,6 +518,7 @@ class Dataset(Controller, ABC):
                                    angle_min: float = 0,
                                    angle_max: float = 360,
                                    reflections: bool = False,
+                                   return_theta = False,
                                    ) -> Dict[str, float]:
         """
         :param radius_min: The minimum distance from the center.
@@ -544,7 +545,10 @@ class Dataset(Controller, ABC):
         a_x = a_x_new
         a_z = a_z_new
 
-        return {"x": a_x, "y": a_y, "z": a_z}
+        if return_theta:
+            return {"x": a_x, "y": a_y, "z": a_z}, theta
+        else:
+            return {"x": a_x, "y": a_y, "z": a_z}
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         """
@@ -747,18 +751,32 @@ class Dataset(Controller, ABC):
 
     def _set_obi_segmentation_colors(self, resp: List[bytes]) -> None:
         found_obi_seg = False
+        if self.obi_object_type[0][1] in ['tethered_cloth']:
+            self.obi_object_segmentation_colors = []
+            return found_obi_seg
         for r in resp:
             if OutputData.get_data_type_id(r) == 'ipsc':
                 ipsc = IdPassSegmentationColors(r)
                 nobjs = ipsc.get_num_segmentation_colors()
-                if nobjs == len(self.object_ids) + len(self.obi_object_ids):
+                #if nobjs == len(self.object_ids) + len(self.obi_object_ids):
+                self.obi_object_segmentation_colors = []
+                for o_id in range(nobjs):
+                    seg_color = ipsc.get_segmentation_color(o_id)
+                    if seg_color[0] > 256 or seg_color[0] > 256 or seg_color[0] > 256: # broken object, probably means hidden
+                        continue
+                    if min(np.linalg.norm(self.object_segmentation_colors - seg_color, axis=1)) > 1:
+                        self.obi_object_segmentation_colors.append(seg_color)
+
+                if len(self.obi_object_segmentation_colors) > len(self.obi_object_ids):
+                    import ipdb; ipdb.set_trace()
                     self.obi_object_segmentation_colors = []
-                    for o_id in range(nobjs):
-                        seg_color = ipsc.get_segmentation_color(o_id)
-                        if min(np.linalg.norm(self.object_segmentation_colors - seg_color, axis=1)) > 1:
-                            self.obi_object_segmentation_colors.append(seg_color)
-                    self.obi_object_segmentation_colors = np.stack(self.obi_object_segmentation_colors, axis=0)
-                    found_obi_seg = True
+                else:
+
+                    assert(len(self.obi_object_segmentation_colors) <= len(self.obi_object_ids)), f"{self.obi_object_segmentation_colors}, {self.obi_object_ids}"
+                    if len(self.obi_object_segmentation_colors) == len(self.obi_object_ids):
+                        self.obi_object_segmentation_colors = np.stack(self.obi_object_segmentation_colors, axis=0)
+                        found_obi_seg = True
+
         return found_obi_seg
 
 

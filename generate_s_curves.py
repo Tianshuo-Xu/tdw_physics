@@ -5,6 +5,8 @@ import h5py
 import math
 import numpy as np
 import pickle
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 import collections
 
@@ -24,15 +26,16 @@ if "ccncluster" in socket.gethostname():
 else:
     data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump"
 
-folder = os.path.join(data_root, "collidefric_pp") #"bouncy_platform_pp")
-import ipdb; ipdb.set_trace()
+sname = "mass_dominoes_pp"
+folder = os.path.join(data_root, sname)
+#import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "pilot_it2_collision_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+restrict = "pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
 remove = "" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
-target_varname = "star_friction" #"star_mass"
-merge_by =  "" #"all""tscale"
+target_varname = "star_mass" #"star_mass" #"star_mass", "star_deform"
+merge_by =  "all" #"all""tscale"
 #merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
@@ -42,16 +45,16 @@ for filename in filenames:
     if merge_by == "all":
         set_dict["all"].append(filename)
     elif merge_by:
-        set_dict[info_dict[merge_by]].append(filename)
+        set_dict[info_dict[merge_by]].append(f/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physicsilename)
     else:
         set_dict[filename].append(filename)
-
+import ipdb; ipdb.set_trace()
 
 for set_id, merge_var_name in enumerate(set_dict):
     target_params = []
     labels = []
 
-    for filename in set_dict[merge_var_name]:
+    for filename in tqdm(set_dict[merge_var_name]):
         if remove and remove in filename:
             continue
 
@@ -66,6 +69,7 @@ for set_id, merge_var_name in enumerate(set_dict):
             labels.append(float(f["static"]["does_target_contact_zone"]))
 
         print(labels)
+        print(target_params)
     """
 
     for hdf5_file in glob.glob(folder + "/*_001.hdf5"):
@@ -81,7 +85,7 @@ for set_id, merge_var_name in enumerate(set_dict):
         target_params = [math.log10(param) for param in target_params]
     else:
         target_params = [param for param in target_params]
-    import matplotlib.pyplot as plt
+
     #scatter plot
     for oid, param in enumerate(target_params):
         if param > 0.5 and labels[oid] < 0.2:
@@ -109,7 +113,7 @@ for set_id, merge_var_name in enumerate(set_dict):
 #plt.legend(loc="lower left")
 plt.legend(loc="upper left")
 plt.show()
-plt.savefig("s_curve.png")
+plt.savefig(f"s_curve_{sname}.png")
 
 print(len(labels))
 

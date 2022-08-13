@@ -289,8 +289,13 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")
 
+    parser.add_argument("--star_putfirst",
+                        type=int,
+                        default=0,
+                        help="star object will be the first domino during prediction phase.")
     parser.add_argument("--remove_middle",
-                        action="store_true",
+                        type=int,
+                        default=0,
                         help="Remove one of the middle dominoes scene.")
 
     # which models are allowed
@@ -533,8 +538,6 @@ def get_args(dataset_dir: str, parse=True):
     args = parser.parse_args()
     args = postprocess(args)
 
-    import ipdb; ipdb.set_trace()
-
     return args
 
 class Dominoes(RigidbodiesDataset):
@@ -551,6 +554,7 @@ class Dominoes(RigidbodiesDataset):
                  port: int = None,
                  room='box',
                  target_zone=['cube'],
+                 star_putfirst=False,
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
                  zone_scale_range=[0.5,0.01,0.5],
@@ -616,6 +620,7 @@ class Dominoes(RigidbodiesDataset):
 
         ## which room to use
         self.room = room
+        self.star_putfirst = star_putfirst
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
@@ -835,6 +840,7 @@ class Dominoes(RigidbodiesDataset):
 
                 temp_path_f.close()
                 os.remove(temp_path)
+
                 #Move the file.
                 # try:
                 #     temp_path.replace(filepath)
@@ -845,7 +851,7 @@ class Dominoes(RigidbodiesDataset):
                 # Save an MP4 of the stimulus
                 if self.save_movies:
                     for pass_mask in self.save_passes:
-                        if pass_mask not in ["_depth", "_id"]:
+                        if pass_mask not in ["_depth"]:
                             mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
 
                             cmd, stdout, stderr = pngs_to_mp4(
@@ -854,9 +860,13 @@ class Dominoes(RigidbodiesDataset):
                                 png_dir=self.png_dir,
                                 size=[self._height, self._width],
                                 overwrite=True,
-                                remove_pngs = True,
+                                remove_pngs = False,
                                 use_parent_dir=False)
-                        elif pass_mask in ["_id"]:
+                            #print(cmd, stdout, stderr)
+                            #print("pass_mask", pass_mask)
+                            #import ipdb; ipdb.set_trace()
+
+                        if pass_mask in ["_id"]:
                             from pycocotools import mask as cocomask
                             mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
 
@@ -908,9 +918,14 @@ class Dominoes(RigidbodiesDataset):
 
                         #     import ipdb; ipdb.set_trace()
                         #     print("hello")
+                    files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("img_")]
+                    [os.remove(file) for file in files]
+                    files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                    [os.remove(file) for file in files]
                     if "_depth" in self.save_passes:
                         mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
                     else:
+                        #import ipdb; ipdb.set_trace()
                         os.rmdir(str(self.png_dir))
                     #rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
                     #os.rmdir(self.png_dir)
@@ -1022,13 +1037,13 @@ class Dominoes(RigidbodiesDataset):
         self.star_object["type"] = random.choice(self._star_types)
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["mass"] = 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
         #distinct_masses = [0.1, 2.0, 10.0]
-        mass = 2.0
-        self.normal_mass = 2.0
+        mass = 1.0
+        self.normal_mass = mass
         random.shuffle(colors)
         #random.shuffle(distinct_masses)
         ## add the non-star objects have the same weights
@@ -1075,12 +1090,13 @@ class Dominoes(RigidbodiesDataset):
 
 
         self._trial_num = trial_num
+        self.interact_id = interact_id
 
 
         commands = []
         # Remove asset bundles (to prevent a memory leak).
         if trial_num % 100 == 0:
-            commands.append({"$type": "unload_asset_bundles"})
+           commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
         commands.extend(self.get_trial_initialization_commands(interact_id))
@@ -1102,6 +1118,7 @@ class Dominoes(RigidbodiesDataset):
         if interact_id == 0: # base segementation color
             self.video_object_segmentation_colors = self.object_segmentation_colors
 
+
         self._get_object_meshes(resp)
         frame = 0
         # Write static data to disk.
@@ -1116,9 +1133,11 @@ class Dominoes(RigidbodiesDataset):
 
         if interact_id == 0:
              frames_grp = temp_path_f.create_group("frames")
+             self.video_obi_object_segmentation_colors = np.zeros((0, 4))
         else:
              frames_grp = temp_path_f["frames"]
 
+        found_obi_seg = False
         ## curatin leaves screen
         if interact_id > 0: #curtain move from center to left
             import time
@@ -1143,8 +1162,20 @@ class Dominoes(RigidbodiesDataset):
                 commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
                 commands.extend(self.get_additional_command_when_removing_curtain(frame=frame))
 
+
+                if not found_obi_seg and self.use_obi and frame > 1:
+                    from tdw.output_data import IdPassSegmentationColors
+                    commands.extend([{"$type": "send_id_pass_segmentation_colors",
+                         "frequency": "once"}])
+
                 #commands.extend(self.get_per_frame_commanAdding curtainds(resp, frame))
                 resp = self.communicate(commands)
+
+
+                if not found_obi_seg and self.use_obi and frame > 1:
+                    found_obi_seg = self._set_obi_segmentation_colors(resp)
+                    if found_obi_seg and interact_id == 0:
+                        self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
 
                 frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
 
@@ -1184,9 +1215,19 @@ class Dominoes(RigidbodiesDataset):
             #print('frame %d' % frame)
             #print(frame, interact_id, self.force_wait, self.force_wait+before_start_frame)
             force_wait_time = 0 if not self.force_wait else self.force_wait
+            cmd = self.get_per_frame_commands(resp, frame, force_wait=force_wait_time)
+            if not found_obi_seg and self.use_obi and frame > 1:
+                if self.obi_object_type[0][1] not in ['thether_cloth']:
+                    from tdw.output_data import IdPassSegmentationColors
+                    cmd.extend([{"$type": "send_id_pass_segmentation_colors",
+                         "frequency": "once"}])
 
-            resp = self.communicate(self.get_per_frame_commands(resp, frame, force_wait=force_wait_time))
-
+            resp = self.communicate(cmd)
+            if not found_obi_seg and self.use_obi and frame > 1:
+                #print("frame", frame)
+                found_obi_seg = self._set_obi_segmentation_colors(resp)
+                if found_obi_seg:
+                    self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
@@ -1275,6 +1316,7 @@ class Dominoes(RigidbodiesDataset):
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
 
+
         if interact_id == self.num_interactions - 1:
             # Save out the target/zone segmentation mask
             #frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
@@ -1294,10 +1336,20 @@ class Dominoes(RigidbodiesDataset):
             #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
             #get colors
             zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+            if self.use_obi and len(zone_idx) == 0:
+                zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
+                zone_color = self.video_obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            else:
+                zone_color = self.video_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
 
-            zone_color = self.video_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
             target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-            target_color = self.video_object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+            if self.use_obi and len(target_idx) == 0:
+                target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
+                target_color = self.video_obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+            else:
+                target_color = self.video_object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+
+
             #get individual maps
             zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
             target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
@@ -1597,101 +1649,12 @@ class Dominoes(RigidbodiesDataset):
                 assert(v == self.obi_object_ids[i])
 
             static_group.create_dataset("obi_object_ids", data=actor_list)
-            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type])
-
-    # def _write_static_data(self, static_group: h5py.Group) -> None:
-    #     super()._write_static_data(static_group)
-
-    #     # randomization
-    #     try:
-    #         static_group.create_dataset("room", data=self.room)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("seed", data=self.seed)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("randomize", data=self.randomize)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("trial_seed", data=self.trial_seed)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("trial_num", data=self._trial_num)
-    #     except (AttributeError,TypeError):
-    #         pass
-
-    #     ## which objects are the zone, target, and probe
-    #     try:
-    #         static_group.create_dataset("zone_id", data=self.zone_id)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("target_id", data=self.target_id)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("probe_id", data=self.probe_id)
-    #     except (AttributeError,TypeError):
-    #         pass
-
-    #     try:
-    #         static_group.create_dataset("star_id", data=self.star_id)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("curtain_id", data=self.curtain_id)
-    #     except (AttributeError,TypeError):
-    #         pass
-
-    #     if self.use_ramp:
-    #         static_group.create_dataset("ramp_id", data=self.ramp_id)
-    #         if self.ramp_base_height > 0.0:
-    #             static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
-    #             static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
-
-    #     ## color and scales of primitive objects
-    #     try:
-    #         static_group.create_dataset("target_type", data=self.target_type)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("probe_type", data=self.probe_type)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("probe_mass", data=self.probe_mass)
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("push_time", data=int(self.force_wait))
-    #     except (AttributeError,TypeError):
-    #         pass
-
-    #     # distractors and occluders
-    #     try:
-    #         static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
-    #     except (AttributeError,TypeError):
-    #         pass
-    #     try:
-    #         static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
-    #     except (AttributeError,TypeError):
-    #         pass
+            #print("obi object_types", self.obi_object_type)
+            #import ipdb; ipdb.set_trace()
+            # cannot save a list of string
+            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type][0])
+        if self.use_obi and self.obi_object_segmentation_colors is not None:
+            static_group.create_dataset("video_obi_object_segmentation_colors", data=self.video_obi_object_segmentation_colors)
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -1703,7 +1666,10 @@ class Dominoes(RigidbodiesDataset):
                                                          frame_num=frame_num + self.stframe_whole_video)
 
         # map segmentation color to match frame 0
-        if self.video_object_segmentation_colors is not None:
+        if self.video_object_segmentation_colors is not None and self.interact_id > 0:
+
+            if self.video_object_segmentation_colors.shape[0] != self.object_segmentation_colors.shape[0]:
+                import ipdb; ipdb.set_trace()
             assert(self.video_object_segmentation_colors.shape[0] == self.object_segmentation_colors.shape[0])
             nobjs = self.video_object_segmentation_colors.shape[0]
             img_path = os.path.join(str(self.png_dir), f"id_{frame_num + self.stframe_whole_video:04}.png")
@@ -1712,13 +1678,26 @@ class Dominoes(RigidbodiesDataset):
             for idx in range(nobjs):
                 color_dist = np.sum(abs(seg_image - self.object_segmentation_colors[idx][np.newaxis, np.newaxis, :]), axis=2)
                 id_map[color_dist == 0] = self.video_object_segmentation_colors[idx]
+
+            if self.use_obi:
+                nobiobjs = len(self.obi_object_segmentation_colors)
+
+                for idx in range(nobiobjs):
+                    color_dist = np.sum(abs(seg_image - self.obi_object_segmentation_colors[idx][np.newaxis, np.newaxis, :]), axis=2)
+                    id_map[color_dist == 0] = self.video_obi_object_segmentation_colors[idx]
+
             imageio.imwrite(img_path, id_map)
+        #if self.use_obi:
+        #    # see if there is uncovered color, that should be obi color
+
+        #import ipdb; ipdb.set_trace()
 
         # If this is a stable structure, disregard whether anything is actually moving.
         return frame, objs, tr, sleeping and not (frame_num < 150)
 
     def _update_target_position(self, resp: List[bytes], frame_num: int) -> None:
-        if frame_num <= 1:
+        #print("frame_num", frame_num)
+        if frame_num <= 2:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
 
@@ -1728,8 +1707,9 @@ class Dominoes(RigidbodiesDataset):
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
             except TypeError:
-                import ipdb; ipdb.set_trace()
-                print("Failed to get a new object position, %s" % target_position_new)
+                if not self.obi:
+                    import ipdb; ipdb.set_trace()
+                    print("Failed to get a new object position, %s" % target_position_new)
 
     def _write_frame_labels(self,
                             frame_grp: h5py.Group,
@@ -1954,7 +1934,7 @@ class Dominoes(RigidbodiesDataset):
 
             if star_mass > self.normal_mass * 2: # heavy object
 
-                bias = np.random.uniform(0,1) < 0.75
+                bias = np.random.uniform(0,1) < 0.9
                 if bias:
                     pos_id = random.choice(range(1, self.total_num_dominoes))
                 else:
@@ -1962,7 +1942,7 @@ class Dominoes(RigidbodiesDataset):
 
 
             elif star_mass < self.normal_mass * 0.5: #light object
-                bias = np.random.uniform(0,1) < 0.75
+                bias = np.random.uniform(0,1) < 0.9
                 if bias:
                     pos_id = 0
                 else:
@@ -1980,6 +1960,12 @@ class Dominoes(RigidbodiesDataset):
         else:
             self.target_pos_id = self.total_num_dominoes - 1
             pos_id = random.choice(range(self.total_num_dominoes))
+            # put last
+            if self.star_putfirst:
+                pos_id = 0
+            else:
+                pos_id = random.choice(range(1, self.total_num_dominoes))
+
         # carpet, target, middle, middle | prob
         star_position = {
             "x": pos_id * self.spacing - 0.5,
@@ -2218,6 +2204,7 @@ class Dominoes(RigidbodiesDataset):
 
 
         self._write_class_specific_data(static_group)
+
         static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
 
 
@@ -2858,14 +2845,19 @@ class MultiDominoes(Dominoes):
         pos_id_list = pos_id_list[1:]
 
         commands = []
-        if self.remove_middle:
+        if interact_id == self.num_interactions-1 and self.remove_middle:
+            # only remove object when at the last trial
             # don't remove the left most domino
             # otherwise it will cause problem when
             # detemining the "target" object
             pos_id_list_tmp = copy.deepcopy(pos_id_list)
             if pos_id_list_tmp[-1] == self.total_num_dominoes - 1:
                 pos_id_list_tmp.remove(self.total_num_dominoes - 1)
-            rm_pos_idx = random.choice(pos_id_list_tmp)
+
+            if len(pos_id_list_tmp) == 0:
+                rm_pos_idx = -1
+            else:
+                rm_pos_idx = random.choice(pos_id_list_tmp)
         else:
             rm_pos_idx = -1
 
@@ -2877,8 +2869,6 @@ class MultiDominoes(Dominoes):
             #     print("offset now", offset)
             #     break
 
-            if pos_id_list[m] == rm_pos_idx:
-                continue
 
             distinct_id = 0 #random.choice(range(self.num_distinct_objects))
             self.distinct_ids = np.append(self.distinct_ids, distinct_id)
@@ -2907,6 +2897,10 @@ class MultiDominoes(Dominoes):
                 rot["z"] = 90
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
+
+            if pos_id_list[m] == rm_pos_idx:
+                pos["z"] += 3.0 # move to background
+
             self.posid_to_objid[pos_id_list[m]]["rot"] = rot
             self.posid_to_objid[pos_id_list[m]]["mass"] = middle_mass
             self.posid_to_objid[pos_id_list[m]]["scale"] = middle_scale
@@ -2914,17 +2908,17 @@ class MultiDominoes(Dominoes):
             self.middle_type = data["name"]
             self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
 
-            if((interact_id == self.num_interactions - 1) and\
-               pos_id_list[m] == self.total_num_dominoes - 1): #left most
-                self.target = record
-                self.target_type = data["name"]
-                self.target_color = rgb
-                self.target_scale = scale
-                self.target_id = o_id
-                if self.target_rotation is None:
-                    self.target_rotation = rot
-                if self.target_position is None:
-                    self.target_position = pos
+            # if((interact_id == self.num_interactions - 1) and\
+            #    pos_id_list[m] == self.total_num_dominoes - 1): #left most
+            #     self.target = record
+            #     self.target_type = data["name"]
+            #     self.target_color = rgb
+            #     self.target_scale = scale
+            #     self.target_id = o_id
+            #     if self.target_rotation is None:
+            #         self.target_rotation = rot
+            #     if self.target_position is None:
+            #         self.target_position = pos
 
             commands.extend(
                 self.add_physics_object(
@@ -2951,6 +2945,19 @@ class MultiDominoes(Dominoes):
                  "scale_factor": scale,
                  "id": o_id}])
 
+            if (interact_id == self.num_interactions - 1) and\
+               pos_id_list[m] == self.total_num_dominoes - 1:
+                self.target = record
+                self.target_type = data["name"]
+                self.target_color = rgb
+                self.target_scale = scale
+                self.target_id = o_id
+                if self.target_rotation is None:
+                    self.target_rotation = rot
+                if self.target_position is None:
+                    self.target_position = pos
+
+
         return commands
 
 
@@ -2974,6 +2981,7 @@ if __name__ == "__main__":
         num_middle_objects=args.num_middle_objects,
         num_distinct_objects=args.num_distinct_objects,
         randomize=args.random,
+        star_putfirst=args.star_putfirst,
         seed=args.seed,
         target_zone=args.zone,
         zone_location=args.zlocation,

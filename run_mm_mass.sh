@@ -12,30 +12,30 @@ else
 fi
 
 # echo $PHYSICS_HOME
-# scenario_name="mass_dominoes_pp"
-# controller="tdw_physics/target_controllers/dominoes_var.py"
-# ARGS_PATH=$PHYSICS_HOME"/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-
-# for args_f in $ARGS_PATH"/"$scenario_name/mass_dominoes*
-# do
-#     echo "found file" $args_f
-#     echo "write data to" "$DUMP_DIR"${args_f#$ARGS_PATH}
-
-#     CUDA_VISIBLE_DEVIES=$1 python $controller @$args_f"/commandline_args.txt" --dir "$DUMP_DIR"${args_f#$ARGS_PATH}  --training_data_mode --height 256 --width 256 --gpu $1 --num 30
-# done
-
-sname="mass_waterpush"
-scenario_name=$sname"_pp"
-controller="tdw_physics/target_controllers/waterpush_var.py"
+scenario_name="mass_dominoes_pp"
+controller="tdw_physics/target_controllers/dominoes_var.py"
 ARGS_PATH=$PHYSICS_HOME"/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
 
-for args_f in $ARGS_PATH"/"$scenario_name/$sname-target=bowl*
+for args_f in $ARGS_PATH"/"$scenario_name/mass_dominoes-num_middle_objects=[0-2]*
 do
     echo "found file" $args_f
     echo "write data to" "$DUMP_DIR"${args_f#$ARGS_PATH}
 
     CUDA_VISIBLE_DEVIES=$1 python $controller @$args_f"/commandline_args.txt" --dir "$DUMP_DIR"${args_f#$ARGS_PATH}  --training_data_mode --height 64 --width 64 --gpu $1 --num 30
 done
+
+# sname="mass_waterpush"
+# scenario_name=$sname"_pp"
+# controller="tdw_physics/target_controllers/waterpush_var.py"
+# ARGS_PATH=$PHYSICS_HOME"/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+
+# for args_f in $ARGS_PATH"/"$scenario_name/$sname-target=bowl*
+# do
+#     echo "found file" $args_f
+#     echo "write data to" "$DUMP_DIR"${args_f#$ARGS_PATH}
+
+#     CUDA_VISIBLE_DEVIES=$1 python $controller @$args_f"/commandline_args.txt" --dir "$DUMP_DIR"${args_f#$ARGS_PATH}  --training_data_mode --height 64 --width 64 --gpu $1 --num 30
+# done
 
 
 
