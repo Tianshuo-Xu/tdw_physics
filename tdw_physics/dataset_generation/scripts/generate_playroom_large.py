@@ -11,28 +11,55 @@ import json
 from tqdm import tqdm
 from tdw_physics.util import MODEL_LIBRARIES, none_or_str, none_or_int
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
-
+from tdw_physics.dataset_generation.scripts.playroom_selection import (
+    EXCLUDE_MODEL, EXCLUDE_CATEGORY, CATEGORY_SCALE_FACTOR, MODEL_SCALE_FACTOR)
 
 RECORDS = []
 for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
     RECORDS.extend(lib.records)
-MODELS = list(set([r for r in RECORDS if not r.do_not_use]))
-MODEL_NAMES = sorted(list(set([r.name for r in RECORDS if not r.do_not_use])))
+
+
+MODELS = list(set([r for r in RECORDS if not r.do_not_use and not r.name in EXCLUDE_MODEL and not 'composite' in r.name]))
+MODEL_NAMES = sorted(list(set([r.name for r in MODELS])))
+
 CATEGORIES = sorted(list(set([r.wcategory for r in RECORDS])))
+CATEGORIES = [cat for cat in CATEGORIES if cat not in EXCLUDE_CATEGORY]
+
 MODELS_PER_CATEGORY = {k: [r for r in MODELS if r.wcategory == k] for k in CATEGORIES}
+MODEL_NAME_PER_CATEGORY = {k: [r.name for r in MODELS if r.wcategory == k] for k in CATEGORIES}
 NUM_MODELS_PER_CATEGORY = {k: len([r for r in MODELS if r.wcategory == k]) for k in CATEGORIES}
+
+SCALE_DICT = {}
+for category in CATEGORY_SCALE_FACTOR.keys():
+    assert category in MODEL_NAME_PER_CATEGORY.keys(), category
+
+for category, model_names in MODEL_NAME_PER_CATEGORY.items():
+    if category in CATEGORY_SCALE_FACTOR.keys():
+        factor = CATEGORY_SCALE_FACTOR[category]
+    else:
+        factor = 1.0
+
+    for model in model_names:
+        SCALE_DICT[model] = factor
+
+for model, factor in MODEL_SCALE_FACTOR.items():
+    SCALE_DICT[model] = factor
+
+
 NUM_MOVING_MODELS = 1000
 NUM_STATIC_MODELS = 1000
 NUM_TOTAL_MODELS = len(MODEL_NAMES)
 SAVE_FRAME = 0
 
 # All the models with flex enabled
+ALL_FLEX_MODELS = [r.name for r in RECORDS if (r.flex == True and not r.do_not_use and not r.name in EXCLUDE_MODEL and not 'composite' in r.name)]
+for model in ALL_FLEX_MODELS:
+    assert model in MODEL_NAMES, breakpoint()
 
-FLEX_MODELS  = {}
-for filename in MODEL_LIBRARIES.keys():
-    FLEX_MODELS[filename] = [record.name for record in MODEL_LIBRARIES[filename].records if record.flex == True]
-
-
+rng = np.random.RandomState(seed=0)
+HOLD_OUT_MODELS = [r for r in rng.choice(ALL_FLEX_MODELS, 200) if r in SCALE_DICT.keys()][0:100]
+TRAIN_VAL_MODELS = [r for r in MODELS if r.name not in HOLD_OUT_MODELS and r.name in SCALE_DICT.keys()]
+TRAIN_VAL_MODELS_NAMES = [r.name for r in TRAIN_VAL_MODELS]
 
 def _record_usable(record_name):
     if 'composite' in record_name:
@@ -158,9 +185,11 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     rng = np.random.RandomState(seed=seed)
     model_splits = OrderedDict()
     cat_split_ind = 0
+
     for i,num in enumerate(num_models_per_split):
         models_here = []
         while (len(models_here) < num) and (cat_split_ind < len(category_splits.keys())):
+
             cats = category_splits[cat_split_ind]
             for cat in sorted(cats):
                 models_here.extend(MODELS_PER_CATEGORY[cat])
@@ -170,8 +199,10 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_simple_scenario(models, num_trials, seed, num_distractors, permute=True):
-    rng = np.random.RandomState(seed=seed)
+def build_simple_scenario(models, num_trials, seed, num_distractors, room, permute=True):
+    room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
+    rng = np.random.RandomState(seed=(seed + room_seed[room]))
+
 
     scenarios = []
     for i in range(num_trials):
@@ -445,13 +476,17 @@ def main(args):
         scale_dict = zoo_scale_dict
         scale_dict.update(kitchen_scale_dict)
         scale_dict.update(office_scale_dict)
+    elif 'allobj' in args.dir:
+        models_simple = TRAIN_VAL_MODELS_NAMES
+        scale_dict = SCALE_DICT
+
     else:
         raise ValueError
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=2000, seed=args.category_seed, num_distractors=args.num_distractors, permute=True)
+    scenarios = build_simple_scenario(models_simple, num_trials=10000, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True)
 
     print('Number of models: ', len(models_simple))
 

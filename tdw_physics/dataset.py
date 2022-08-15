@@ -386,7 +386,7 @@ class Dataset(Controller, ABC):
                         self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
-                with timeout(seconds=60):
+                with timeout(seconds=180):
                     self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=trial_num,
