@@ -177,10 +177,10 @@ camera_near_plane=0.1
 data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini/"
 
 
-scenario_name = "mass_waterpush_pp"
-trial_name = "mass_waterpush-target=bowl-tscale=0.3,0.5,0.3-zdloc=1"
+scenario_name = "deform_clothhang_pp"
+trial_name = "deform_clothhang-zdloc=1-target=cube-tscale=[0.15,0.15]"
 trial_id = 0
-show_timestep = 80
+show_timestep = 250
 file = os.path.join(data_root, f"{scenario_name}/{trial_name}/{trial_id:04}.pkl")
 
 png_video_file = os.path.join(data_root, f"{scenario_name}/{trial_name}/{trial_id:04}_img.mp4")
@@ -235,7 +235,7 @@ _, H, W, C = videodata.shape
 #input
 # 1.5 secs after starting the frame
 #start_frame_id = data["static"]["start_frame_of_the_clip"] + 45
-start_frame_id = data["static"]["start_frame_for_prediction"]
+start_frame_id = data["static"]["start_frame_for_prediction"] + 100
 out = imageio.mimsave(
     os.path.join("tmp", 'input.gif'),
     videodata[:start_frame_id], fps = 30)
@@ -330,7 +330,7 @@ leftwall = trimesh.creation.box(extents=(0.1, 20, 20), transform=trans)
 trans[:3,3] = np.array([10, 10, 0])
 rightwall = trimesh.creation.box(extents=(0.1, 20, 20), transform=trans)
 
-combined = trimesh.util.concatenate(obj_meshes + [floor, frontwall, backwall, leftwall, rightwall])
+combined = trimesh.util.concatenate(obj_meshes) # + [floor, frontwall, backwall, leftwall, rightwall])
 scene = combined.scene()
 
 #meshes_all = sum(obj_meshes)
@@ -352,8 +352,8 @@ def pix_to_camrays(x,y, pix_T_cam, world_T_camtri):
     pix_T_cam: 3x3
     """
     fx, fy, tx, ty = pix_T_cam[0,0], pix_T_cam[1,1], pix_T_cam[0,2], pix_T_cam[1,2]
-    X = (xv + 0.5 -tx)/fx
-    Y = (-1) * (yv + 0.5 -ty)/fy # make everything into trimesh coordiante
+    X = (x + 0.5 -tx)/fx
+    Y = (-1) * (y + 0.5 -ty)/fy # make everything into trimesh coordiante
     vts = np.stack([X,Y,-np.ones_like(X)], axis=1).reshape([-1,3])
 
     # unitize
@@ -365,6 +365,18 @@ def pix_to_camrays(x,y, pix_T_cam, world_T_camtri):
     ori = np.ones_like(vts2) * world_T_camtri[:3,3]
 
     return ori, vts2
+
+def pixel_to_depth_from_scene(combined, xv, yv, pix_T_cam, world_T_camtri):
+    ori, vts2 = pix_to_camrays(xv, yv, pix_T_cam, world_T_camtri)
+    points, index_ray, index_tri = combined.ray.intersects_location(
+        ori, vts2, multiple_hits=False)
+    # # for each hit, find the distance along its vector
+    if points.shape[0] == 0:
+        return np.array([]), np.array([])
+    depth_ = trimesh.util.diagonal_dot(points - ori[0],
+                                      vts2[index_ray])
+    return depth_, index_ray
+
 #np.dot(rot, cam_T_world)
 
 
@@ -379,42 +391,20 @@ xv = xv.transpose().reshape([-1])
 yv = yv.transpose().reshape([-1])
 
 
+# depth_, index_ray = pixel_to_depth_from_scene(combined, xv, yv, pix_T_cam, world_T_camtri)
 
-ori, vts2 = pix_to_camrays(xv, yv, pix_T_cam, world_T_camtri)
+# #print("diff", np.sum(np.abs(vts2 - vectors)))
 
-
-points, index_ray, index_tri = combined.ray.intersects_location(
-    ori, vts2, multiple_hits=False)
-
-# # for each hit, find the distance along its vector
-depth_ = trimesh.util.diagonal_dot(points - ori[0],
-                                  vts2[index_ray])
-depth_canvas = np.zeros((H*W))
-depth_canvas[index_ray] = depth_
-
-print("diff", np.sum(np.abs(vts2 - vectors)))
-#import ipdb; ipdb.set_trace()
-
-
-
-# points, index_ray, index_tri = mesh.ray.intersects_location(
-#     origins, vectors, multiple_hits=False)
-
-# # for each hit, find the distance along its vector
-# depth = trimesh.util.diagonal_dot(points - origins[0],
-#                                   vectors[index_ray])
-
-data = scene.save_image()
-imageio.imsave("tmp/rendered.png", np.array(Image.open(io.BytesIO(data))))
-
+imageio.imsave("tmp/rendered.png", np.array(Image.open(io.BytesIO(scene.save_image()))))
 imageio.imsave("tmp/rgb.png", videodata[timestep])
-imageio.imsave("tmp/depth.png", depth_canvas.reshape([W,H]).transpose())
-import ipdb; ipdb.set_trace()
+# depth_canvas = np.zeros((H*W))
+# depth_canvas[index_ray] = depth_
+# imageio.imsave("tmp/depth.png", depth_canvas.reshape([W,H]).transpose())
+# import ipdb; ipdb.set_trace()
 
 
 if use_obi:
     particle_positions = data['frames'][f"{timestep:04}"]['objects']['particles_positions']
-
     if timestep < data["static"]["start_frame_of_the_clip"]:
         obi_list = data['static0']["obi_object_ids"].tolist()
     else:
@@ -423,11 +413,32 @@ if use_obi:
     for idx in obi_list:
         if str(idx) in particle_positions:
             pts = particle_positions[str(idx)]
+            pts_cam = apply_4x4(cam_T_world, pts)
+            pts_px = Camera2Pixels_np(pts_cam, pix_T_cam).astype(np.int32).clip(-1,256)
+            selected_idx = np.where((pts_px[:,0] >= 0) * (pts_px[:,1] >=0) * (pts_px[:,0] <= 255) * (pts_px[:,1] <= 255))[0]
+
+            pts_px = pts_px[selected_idx]
+            pts_cam = pts_cam[selected_idx]
+            #pts_px = pts_px[(pts_px[:,0] >= 0) * (pts_px[:,1] >=0), :]
+            #pts_px = pts_px[(pts_px[:,0] <= 255) * (pts_px[:,1] <= 255), :]
+            #534
+
+
+            depth_, index_ray = pixel_to_depth_from_scene(combined, pts_px[:,0], pts_px[:,1], pix_T_cam, world_T_camtri)
+            if index_ray.shape[0] > 0:
+                index_ray = index_ray[pts_cam[index_ray, 2] > depth_]
+            #print(pts_cam[index_ray, 2])
+            #print(depth_)
+
             #pts = apply_4x4(cam_T_world, pts)
+            #import ipdb; ipdb.set_trace()
+
 
             colors = np.zeros((pts.shape[0], 4), dtype=np.uint8)
             colors[:,3] = 255
             colors[:,2] = 255
+            if index_ray.shape[0] > 0:
+                colors[selected_idx[index_ray], 0] = 255
             obj_pts.append(trimesh.PointCloud(pts, colors=colors))
 
 
@@ -437,7 +448,7 @@ if use_obi:
 meshes = trimesh.Scene(obj_meshes_pts[0])
 for i in range(1,len(obj_meshes_pts)):
    meshes += trimesh.Scene(obj_meshes_pts[i])
-(meshes + trimesh.Scene(obj_pts[0]) + camera + trimesh.Scene(floor) + trimesh.Scene(backwall) + trimesh.Scene(leftwall) + trimesh.Scene(rightwall) +  axis).show()
+(meshes + trimesh.Scene(obj_pts[0]) + camera + trimesh.Scene(floor) +  axis).show()
 
 
 
@@ -499,8 +510,8 @@ storage[storage > 0.5] = 1
 
 if use_obi:
     import scipy
-    sigma = 2
-    thres = 1.0
+    sigma = 1.5
+    thres = 5.0 #1.0
     n_obis = len(data['static0']["obi_object_ids"].tolist())
 
     if timestep < data["static"]["start_frame_of_the_clip"]:
@@ -510,9 +521,38 @@ if use_obi:
     obj_pts = []
     for obi_id in range(n_obis):
         frames = []
+        frames_before = []
         maxi = np.ones((3)) * float("-inf")
         mini = np.ones((3)) * float("inf")
         for timestep in range(start_frame_id):
+
+            #1. construct scene
+            positions = data["frames"][f"{timestep:04}"]["objects"]["positions"]
+            rotations = data["frames"][f"{timestep:04}"]["objects"]["rotations"]#x,y,z,w
+            obj_meshes = []
+            object_ids = data["static"]["object_ids"]
+            for idx, object_id in enumerate(object_ids):
+                vertices = data["static"]["mesh"][f"vertices_{idx}"]
+                faces = data["static"]["mesh"][f"faces_{idx}"]
+                mesh = trimesh.Trimesh(vertices=vertices * data["static"]["scale"][idx],
+                                   faces=faces)
+                rot = np.eye(4)
+                rot[:3, :3] = R.from_quat(rotations[idx]).as_matrix()
+                mesh.apply_transform(rot)
+                mesh.apply_translation(positions[idx])
+                mesh.visual.face_colors = [255, 100, 100, 255]
+                obj_meshes.append(mesh)
+
+
+            combined = trimesh.util.concatenate(obj_meshes) # + [floor, frontwall, backwall, leftwall, rightwall])
+            scene = combined.scene()
+            scene.camera.resolution = [H, W]
+            scene.camera.fov = [fov_x, fov_y]
+            scene.camera_transform = world_T_camtri
+            scene.camera.z_near = camera_near_plane
+            scene.camera.z_far = camera_far_plane
+
+            #2. compute visible points
             particle_positions = data['frames'][f"{timestep:04}"]['objects']['particles_positions']
             if timestep < data["static"]["start_frame_of_the_clip"]:
                 idx = data['static0']["obi_object_ids"].tolist()[obi_id]
@@ -520,26 +560,44 @@ if use_obi:
                 idx = data['static']["obi_object_ids"].tolist()[obi_id]
 
             canvas = np.zeros((H,W))
+            canvas_before = np.zeros((H,W))
             if str(idx) in particle_positions:
                 pts = particle_positions[str(idx)]
                 if pts.shape[0] > 0:
                     maxi = np.maximum(maxi, np.max(pts, 0))
                     mini = np.minimum(mini, np.min(pts, 0))
 
+                pts_cam = apply_4x4(cam_T_world, pts)
+                pts_px = Camera2Pixels_np(pts_cam , pix_T_cam).astype(np.int32).clip(-1,256)
+                selected_idx = np.where((pts_px[:,0] >= 0) * (pts_px[:,1] >=0) * (pts_px[:,0] <= 255) * (pts_px[:,1] <= 255))[0]
+                pts_px = pts_px[selected_idx]
+                pts_cam = pts_cam[selected_idx]
 
-                pts_px = Camera2Pixels_np(apply_4x4(cam_T_world, pts), pix_T_cam).astype(np.int32).clip(-1,256)
+                canvas_before[pts_px[:, 1], pts_px[:, 0]] = 255
+                canvas_before = scipy.ndimage.filters.gaussian_filter(canvas_before, [sigma, sigma], mode='constant')
+                canvas_before = canvas_before * (1 - storage[timestep])
+                canvas_before[canvas_before > thres] = 255
+                #canvas[canvas_before > thres] = 125
 
-                pts_px = pts_px[(pts_px[:,0] >= 0) * (pts_px[:,1] >=0), :]
-                pts_px = pts_px[(pts_px[:,0] <= 255) * (pts_px[:,1] <= 255), :]
-                canvas[pts_px[:, 1], pts_px[:, 0]] = 255
+                if pts.shape[0] > 0:
+
+                    print("time", timestep, pts_px.shape)
+                    canvas[pts_px[:, 1], pts_px[:, 0]] = 255
+
+                    depth_, index_ray = pixel_to_depth_from_scene(combined, pts_px[:,0], pts_px[:,1], pix_T_cam, world_T_camtri)
+                    if index_ray.shape[0] > 0:
+                        index_ray = index_ray[pts_cam[index_ray, 2] > depth_] #occluded pixels
+                        pts_px = pts_px[index_ray]
+                        print("remove pts, time", timestep, pts_px.shape)
+                        canvas[pts_px[:, 1], pts_px[:, 0]] = 0 #remove occluded pixels
                 canvas = scipy.ndimage.filters.gaussian_filter(canvas, [sigma, sigma], mode='constant')
-                canvas = canvas * (1 - storage[timestep])
                 canvas[canvas > thres] = 255
 
-
-
-
+            if timestep == show_timestep:
+                imageio.imsave(f"tmp/obi_id{obi_id}_showtime.png", canvas)
+                #import ipdb; ipdb.set_trace()
             frames.append(canvas)
+            frames_before.append(canvas_before)
         print("maxi", maxi)
         print("mini", mini)
 
@@ -547,7 +605,16 @@ if use_obi:
         os.path.join("tmp", f'obi_id{obi_id}.gif'),
         frames, fps = 30)
 
+        out = imageio.mimsave(
+        os.path.join("tmp", f'obi_id{obi_id}_before.gif'),
+        frames_before, fps = 30)
 
+        import ipdb; ipdb.set_trace()
+
+        writer = imageio.get_writer(f'tmp/obi_id{obi_id}.mp4', fps=20)
+        for im_id, im in enumerate(frames):
+            writer.append_data(np.concatenate([im, videodata[im_id, :,:,0]], axis=1))
+        writer.close()
 
 # for obi_ids, obi_pts in enumerate(obj_pts):
 #     pts = obi_pts.vertices
