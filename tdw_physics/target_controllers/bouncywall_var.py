@@ -310,7 +310,7 @@ class BouncyWall(Dominoes):
             self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
-        commands.extend(self._place_target_zone())
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
         commands.extend(self._place_star_object(interact_id))

@@ -30,12 +30,12 @@ sname = "mass_dominoes_pp"
 folder = os.path.join(data_root, sname)
 #import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+restrict = "mass_dominoes-num_middle_objects=2-star_putfirst=1-remove_middle=1" #pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
 remove = "" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
 target_varname = "star_mass" #"star_mass" #"star_mass", "star_deform"
-merge_by =  "all" #"all""tscale"
+merge_by =  "num_middle_objects" #"all""tscale"
 #merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
@@ -45,10 +45,10 @@ for filename in filenames:
     if merge_by == "all":
         set_dict["all"].append(filename)
     elif merge_by:
-        set_dict[info_dict[merge_by]].append(f/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physics/home/hsiaoyut/2021/tdw_physicsilename)
+        set_dict[info_dict[merge_by]].append(filename)
     else:
         set_dict[filename].append(filename)
-import ipdb; ipdb.set_trace()
+#import ipdb; ipdb.set_trace()
 
 for set_id, merge_var_name in enumerate(set_dict):
     target_params = []
@@ -87,9 +87,9 @@ for set_id, merge_var_name in enumerate(set_dict):
         target_params = [param for param in target_params]
 
     #scatter plot
-    for oid, param in enumerate(target_params):
-        if param > 0.5 and labels[oid] < 0.2:
-            print("heavy object with negative outcome", oid)
+    #for oid, param in enumerate(target_params):
+    #    if param > 0.5 and labels[oid] < 0.2:
+    #        print("heavy object with negative outcome", oid)
 
     plt.scatter(target_params, labels)
     if target_varname in ["star_mass"]:
@@ -98,7 +98,7 @@ for set_id, merge_var_name in enumerate(set_dict):
         plt.xlabel(f"{target_varname}")
     plt.ylabel("red hits yellow")
     ax = plt.gca()
-    ax.set_ylim([-0.1, 1.5])
+    ax.set_ylim([-0.1, 1.6])
 
 
     nbins = 8
@@ -113,7 +113,13 @@ for set_id, merge_var_name in enumerate(set_dict):
 #plt.legend(loc="lower left")
 plt.legend(loc="upper left")
 plt.show()
-plt.savefig(f"s_curve_{sname}.png")
+
+rstr, mstr = "", ""
+if restrict != "":
+    rstr = f"_r{restrict}"
+if merge_by != "":
+    mstr = f"_m{merge_by}"
+plt.savefig(f"s_curve_{sname}{rstr}{mstr}.png")
 
 print(len(labels))
 

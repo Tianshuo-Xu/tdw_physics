@@ -174,6 +174,9 @@ class TransformsDataset(Dataset, ABC):
                             #with open(path, "wb") as f:
                             image = Image.open(io.BytesIO(im.get_image(i)))
                             ImageOps.mirror(image).save(path)
+                            if pass_mask == "_img" and np.unique(np.array(image).reshape(-1,3), axis=0).shape[0] < 30:
+                               import ipdb; ipdb.set_trace()
+                               print(f"bad _img.... check {path}")
                             #f.write()
                             #f.write(im.get_image(i))
             elif r_id == "boun":

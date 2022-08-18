@@ -87,7 +87,7 @@ def get_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--zscale",
                         type=str,
-                        default="0.5,0.01,2.0",
+                        default="0.5,0.1,1.0", #0.5, 0.1, 2.0
                         help="scale of target zone")
     parser.add_argument("--zlocation",
                         type=none_or_str,
@@ -834,6 +834,9 @@ class Dominoes(RigidbodiesDataset):
                 output = dict()
                 dfs_hdf5(temp_path_f, output)
 
+
+                #import ipdb; ipdb.set_trace()
+
                 output_file = str(filepath).replace(".hdf5", ".pkl")
                 with open(output_file, 'wb') as outfile:
                     pickle.dump(output, outfile)
@@ -1546,7 +1549,7 @@ class Dominoes(RigidbodiesDataset):
             self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
-        commands.extend(self._place_target_zone())
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
         commands.extend(self._place_star_object(interact_id))
@@ -1808,19 +1811,27 @@ class Dominoes(RigidbodiesDataset):
         return cmd
 
     def _get_zone_location(self, scale):
-        return {
-            "x": self.total_num_dominoes * self.spacing - 0.5 + 0.2,
-            #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z": 0.0 if not self.remove_zone else 10.0
-        }
+        if self.interact_id == self.num_interactions - 1:
+            return {
+                "x": self.total_num_dominoes * self.spacing - 0.5 + 0.2,
+                #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z": 0.0 if not self.remove_zone else 10.0
+            }
+        else:
+            return {
+                "x": -1.1,
+                #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z": 0.0 if not self.remove_zone else 10.0
+            }
 
     def element_wise_equal(self, x, y):
         for ele in x:
             if x[ele] != y[ele]:
                 return False
         return True
-    def _place_target_zone(self) -> List[dict]:
+    def _place_target_zone(self, interact_id) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
         if not self.repeat_trial: # sample from scratch
@@ -2201,6 +2212,22 @@ class Dominoes(RigidbodiesDataset):
         distinct_group.create_dataset("scales", data=scales)
         distinct_group.create_dataset("colors", data=colors)
         distinct_group.create_dataset("masses", data=[self.candidate_dict[id_]["mass"] for id_ in range(self.num_distinct_objects)])
+
+        static_group.create_dataset("room", data=self.room)
+        static_group.create_dataset("seed", data=self.seed)
+        static_group.create_dataset("randomize", data=self.randomize)
+        static_group.create_dataset("trial_seed", data=self.trial_seed)
+        static_group.create_dataset("trial_num", data=self._trial_num)
+
+
+        ## which objects are the zone, target, and probe
+
+        static_group.create_dataset("zone_id", data=self.zone_id)
+        static_group.create_dataset("target_id", data=self.target_id)
+        try:
+            static_group.create_dataset("probe_id", data=self.probe_id)
+        except (AttributeError,TypeError):
+            pass
 
 
         self._write_class_specific_data(static_group)
