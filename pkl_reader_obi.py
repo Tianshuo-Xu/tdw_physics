@@ -180,7 +180,7 @@ data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini/"
 scenario_name = "deform_clothhang_pp"
 trial_name = "deform_clothhang-zdloc=1-target=cube-tscale=[0.15,0.15]"
 trial_id = 0
-show_timestep = 250
+show_timestep = 50
 file = os.path.join(data_root, f"{scenario_name}/{trial_name}/{trial_id:04}.pkl")
 
 png_video_file = os.path.join(data_root, f"{scenario_name}/{trial_name}/{trial_id:04}_img.mp4")
