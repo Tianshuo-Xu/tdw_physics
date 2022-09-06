@@ -196,11 +196,11 @@ class Collision(Dominoes):
         commands = []
 
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
         self.offset = [0, 0]
@@ -304,7 +304,7 @@ class Collision(Dominoes):
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
         self.star_object["mass"] = 1 #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
-        self.star_object["friction"] = random.uniform(0.01,  0.2)
+        self.star_object["friction"] = self.var_rng.uniform(0.01,  0.2)
         print("====star object mass", self.star_object["mass"])
 
         #distinct_masses = [0.1, 2.0, 10.0]
@@ -659,6 +659,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_dloc = args.zdloc,

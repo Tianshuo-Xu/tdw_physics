@@ -49,6 +49,11 @@ def get_args(dataset_dir: str, parse=True):
     common = get_parser(dataset_dir, get_help=False)
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
+    parser.add_argument("--phy_var",
+                        type=float,
+                        default=-100,
+                        help="physics variable. Should be between [-1 and 1]")
+
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=3,
@@ -470,6 +475,7 @@ def get_args(dataset_dir: str, parse=True):
             # change the random seed in a deterministic way
             args.random = 0
             args.seed = (args.seed * 1000) % 997
+            args.var_rng_seed = (args.seed * 1000) % 995
 
             # randomize colors and wood textures
             args.match_probe_and_target_color = False
@@ -496,6 +502,7 @@ def get_args(dataset_dir: str, parse=True):
             # change the random seed in a deterministic way
             args.random = 0
             args.seed = (args.seed * 3000) % 1999
+            args.var_rng_seed = (args.seed * 1000) % 1995
 
             # target is red, zone is yellow, others are random
             args.use_test_mode_colors = False
@@ -552,7 +559,9 @@ class Dominoes(RigidbodiesDataset):
 
     def __init__(self,
                  port: int = None,
+                 var_rng_seed=None,
                  room='box',
+                 phyvar=None,
                  target_zone=['cube'],
                  star_putfirst=False,
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
@@ -615,6 +624,9 @@ class Dominoes(RigidbodiesDataset):
             port = np.random.randint(1000,4000)
             print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
+        self.var_rng_seed = var_rng_seed
+        self.var_rng = np.random.RandomState(var_rng_seed)
+        self.phyvar = phyvar
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
 
@@ -629,6 +641,9 @@ class Dominoes(RigidbodiesDataset):
         self.flex_only = flex_only
         self.use_obi = False
         self.obi = None
+
+
+
 
         ## whether the occluders and distractors can move
         self.no_moving_distractors = no_moving_distractors
@@ -756,10 +771,12 @@ class Dominoes(RigidbodiesDataset):
 
         exists_up_to = 0
 
+        numbers = []
         for f in output_dir.glob("*.pkl"):
             print(f.stem, exists_up_to)
-            if int(f.stem[:4]) > exists_up_to:
-                exists_up_to = int(f.stem[:4])
+            numbers.append(int(f.stem[:4]))
+            #if int(f.stem[:4]) > exists_up_to:
+            #    exists_up_to = int(f.stem[:4])
 
 
                 #subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
@@ -768,6 +785,12 @@ class Dominoes(RigidbodiesDataset):
                 #    #exists_up_to = int(f.stem[:4])
                 #else:
                 #    exists_up_to = int(f.stem[:4])
+        numbers.sort()
+        for i in range(len(numbers)):
+            if i in numbers:
+                exists_up_to = i
+            else:
+                break
 
         if exists_up_to > 0:
             print('Trials up to %d already exist, skipping those' % exists_up_to)
@@ -809,6 +832,7 @@ class Dominoes(RigidbodiesDataset):
                         object_info = 1
 
                     print("frame_whole_video", self.stframe_whole_video)
+                    #print(i, self.num_interactions, interact_id, i * self.num_interactions + interact_id)
                     nframes = self.trial(filepath=filepath,
                                temp_path_f=temp_path_f,
                                trial_num=i * self.num_interactions + interact_id,
@@ -871,12 +895,23 @@ class Dominoes(RigidbodiesDataset):
 
                         if pass_mask in ["_id"]:
                             from pycocotools import mask as cocomask
+                            from tdw_physics.rigidbodies_dataset import ObiSegsHelper
+                            import time
+                            start_time = time.time()
+
                             mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
 
                             files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                            H,W,C = imageio.imread(files[0]).shape
                             out_dict = {}
                             seg_colors = output["static"]["video_object_segmentation_colors"]
                             nobjs = seg_colors.shape[0]
+
+                            if self.use_obi:
+                                self.obi_seg = ObiSegsHelper((H, W), output["frames"]["0000"]["camera_matrices"])
+
+                            files.sort()
+
                             for file in files:
                                 seg_img = imageio.imread(file)
                                 frm_id = file[-8:-4]
@@ -895,11 +930,111 @@ class Dominoes(RigidbodiesDataset):
                                     rels['idx'] = idx
                                     rels_list.append(rels)
                                 out_dict[frm_id] = rels_list
+                            print("total time for normal seg", time.time() - start_time)
+                            start_time = time.time()
+
+                            if self.use_obi:
+                                import multiprocessing
+                                nchunks = 1
+                                n_obis = self.obi_object_ids.shape[0]
+
+                                if nchunks == 1:
+                                    obi_segs = []
+                                    for file_id, file in enumerate(files):
+                                        #import ipdb; ipdb.set_trace()
+                                        frm_id = int(file[-8:-4])
+                                        seg = self.obi_seg.get_obi_segs(output, frm_id, n_obis)
+                                        obi_segs.append(seg)
+                                        if frm_id % 50 == 0:
+                                            print(frm_id, file_id, "/", len(files))
+                                    result_list = obi_segs
+                                else:
+                                    st_eds = [(int(x[0][-8:-4]), int(x[-1][-8:-4])) for x in np.array_split(files, nchunks)]
+
+                                    def run_chunk(st, ed, queue):
+                                        obi_segs = []
+                                        for frm_id in range(st,ed+1):
+                                            seg = self.obi_seg.get_obi_segs(output, frm_id, n_obis)
+                                            obi_segs.append(seg)
+                                            # if self.start_frame_for_prediction == frm_id:
+                                            #     if self.zone_is_obi:
+                                            #         imageio.imsave(mp4_filename + "_obi_map.png", seg[0])[..., np.newaxis] * ZONE_COLOR
+                                            #     elif self.target_is_obi:
+                                            #         imageio.imsave(mp4_filename + "_obi_map.png", seg[0][..., np.newaxis] * TARGET_COLOR)
+                                        print("nframes", len(obi_segs))
+                                        queue.put(obi_segs)
+
+                                    queues = [] #multiprocessing.Queue()
+                                    processes = []
+                                    for st_ed in st_eds:
+                                        queue =  multiprocessing.Queue()
+                                        p = multiprocessing.Process(target=run_chunk, args=(st_ed[0], st_ed[1], queue))
+                                        processes.append(p)
+                                        queues.append(queue)
+                                    for process in processes:
+                                        process.start()
+                                    for process in processes:
+                                        process.join()
+
+                                    # nframes x nobi_object
+                                    result_list = []
+                                    for queue in queues:
+                                        while not queue.empty():
+                                            result_list += queue.get()
+
+                                for obi_id in range(n_obis):
+                                    counter = 0
+                                    for frels in result_list:
+                                        frm_id, rels = frels[obi_id]
+                                        assert(frm_id == counter), f"{frm_id}, {counter}"
+                                        if not isinstance(rels, int):
+                                           rels['counts'] = rels['counts'].decode('utf8')
+                                           rels['idx'] = obi_id + nobjs
+                                           out_dict[f"{frm_id:04}"].append(rels)
+                                        counter += 1
+
+                                print("total time for obi seg", time.time() - start_time, len(result_list))
+                                if self.zone_is_obi or self.target_is_obi:
+                                    try:
+                                        frm_id, rels = result_list[self.start_frame_for_prediction][0]
+                                    except:
+                                        import ipdb; ipdb.set_trace()
+                                    if isinstance(rels, int):
+                                        seg = np.zeros((H, W), np.uint8)
+                                    else:
+                                        #rels['counts'] = rels['counts'].decode('utf8')
+                                        rgn = cocomask.decode(rels)
+                                        seg = (rgn * 255).astype(np.uint8)
+                                    if self.zone_is_obi:
+                                        imageio.imsave(mp4_filename + "_obi_map.png", seg[..., np.newaxis] * ZONE_COLOR)
+                                    elif self.target_is_obi:
+                                        imageio.imsave(mp4_filename + "_obi_map.png", seg[..., np.newaxis] * TARGET_COLOR)
+
+                                """ visualization
+                                frames = []
+                                for frels in result_list:
+                                    frame_id, rels = frels[0]
+                                    if isinstance(rels, int):
+                                        frames.append(np.zeros((H, W), np.uint8))
+                                    else:
+                                        rels['counts'] = rels['counts'].decode('utf8')
+                                        rgn = cocomask.decode(rels)
+                                        frames.append((rgn * 255).astype(np.uint8))
+
+
+                                writer = imageio.get_writer(mp4_filename + '_obi.mp4', fps=20)
+                                for im_id, im in enumerate(frames):
+                                    writer.append_data(im)
+                                writer.close()
+                                """
                                 #if int(frm_id) % 20 ==0:
                                 #    print('%d/%d\n'%(int(frm_id), len(files)))
                                     #break
+
                             with open(mp4_filename + ".json", 'w') as fh:
                                 json.dump(out_dict, fh)
+
+
 
                             [os.remove(file) for file in files]
 
@@ -1038,11 +1173,18 @@ class Dominoes(RigidbodiesDataset):
         self.candidate_dict = dict()
         self.star_object = dict()
         self.star_object["type"] = random.choice(self._star_types)
-        self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+
+        if self.use_test_mode_colors:
+            self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+        else:
+            self.star_object["color"] = self.random_color_exclude_list(exclude_list=[non_star_color], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.sampled_star_mass = 10 ** self.var_rng.uniform(-1,1)
+        self.star_object["mass"] = (10 ** self.phyvar if self.phyvar > -10 else self.sampled_star_mass)
+
+        #np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
-        print("====star object mass", self.star_object["mass"])
+        print("===================star object mass", self.star_object["mass"])
 
         #distinct_masses = [0.1, 2.0, 10.0]
         mass = 1.0
@@ -1073,6 +1215,21 @@ class Dominoes(RigidbodiesDataset):
         """
         # Clear the object IDs and other static data
 
+        # randomization across trials
+        if not(self.randomize):
+            if interact_id == 0:
+                self.trial_seed = self.seed + trial_num
+                random.seed(self.trial_seed)
+                np.random.seed(self.trial_seed)
+                self.var_rng = np.random.RandomState(self.var_rng_seed + trial_num)
+
+                print("rand var", trial_num, self.trial_seed, self.var_rng_seed)
+                #import ipdb; ipdb.set_trace()
+
+        else:
+            self.trial_seed = -1 # not used
+
+            raise ValueError("Please set randomize as 0 for reproducibility.")
 
 
         from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
@@ -1339,9 +1496,12 @@ class Dominoes(RigidbodiesDataset):
             #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
             #get colors
             zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+            self.zone_is_obi = False
+            self.target_is_obi = False
             if self.use_obi and len(zone_idx) == 0:
                 zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
                 zone_color = self.video_obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+                self.zone_is_obi = True
             else:
                 zone_color = self.video_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
 
@@ -1349,6 +1509,7 @@ class Dominoes(RigidbodiesDataset):
             if self.use_obi and len(target_idx) == 0:
                 target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
                 target_color = self.video_obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+                self.target_is_obi = True
             else:
                 target_color = self.video_object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
 
@@ -1541,12 +1702,7 @@ class Dominoes(RigidbodiesDataset):
     def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         commands = []
 
-        # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone(interact_id))
@@ -1943,7 +2099,7 @@ class Dominoes(RigidbodiesDataset):
         if interact_id < self.num_interactions - 1:
             # try avoiding sampling the last one
 
-            if star_mass > self.normal_mass * 2: # heavy object
+            if self.sampled_star_mass > self.normal_mass * 2: # heavy object
 
                 bias = np.random.uniform(0,1) < 0.9
                 if bias:
@@ -1952,7 +2108,7 @@ class Dominoes(RigidbodiesDataset):
                     pos_id = random.choice(range(self.total_num_dominoes))
 
 
-            elif star_mass < self.normal_mass * 0.5: #light object
+            elif self.sampled_star_mass < self.normal_mass * 0.5: #light object
                 bias = np.random.uniform(0,1) < 0.9
                 if bias:
                     pos_id = 0
@@ -2218,6 +2374,7 @@ class Dominoes(RigidbodiesDataset):
         static_group.create_dataset("randomize", data=self.randomize)
         static_group.create_dataset("trial_seed", data=self.trial_seed)
         static_group.create_dataset("trial_num", data=self._trial_num)
+        static_group.create_dataset("var_rng_seed", data=self.var_rng_seed)
 
 
         ## which objects are the zone, target, and probe
@@ -3010,6 +3167,8 @@ if __name__ == "__main__":
         randomize=args.random,
         star_putfirst=args.star_putfirst,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,

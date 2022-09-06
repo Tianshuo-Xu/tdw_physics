@@ -359,7 +359,7 @@ class ClothHit(MultiDominoes):
         self.star_object["mass"] =  2000 #0.0002 #2 * 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         self.star_object["material"] = random.choice(self.all_material_names)
-        self.star_object["deform"] = random.uniform(0,1)
+        self.star_object["deform"] = self.var_rng.uniform(0,1)
 
         #self.star_object["material"] =
         print("====star object mass", self.star_object["mass"])
@@ -382,11 +382,11 @@ class ClothHit(MultiDominoes):
         commands = []
 
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         self.offset = [0, 0]
         # Place target zone
@@ -995,6 +995,8 @@ if __name__ == "__main__":
     DC = ClothHit(
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         height_range=[args.ymin, args.ymax],
         drop_scale_range=args.dscale,
         drop_jitter=args.jitter,

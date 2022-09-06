@@ -279,7 +279,8 @@ class BouncyWall(Dominoes):
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
         self.star_object["mass"] = 2.0
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
-        self.star_object["bouncy"] = random.uniform(*self.target_bounciness)
+        self.star_object["bouncy"] = self.var_rng.uniform(*self.target_bounciness)
+        #random.uniform(*self.target_bounciness)
 
         print("====star object bounciness", self.star_object["bouncy"])
 
@@ -303,11 +304,11 @@ class BouncyWall(Dominoes):
         commands = []
         self.interact_id = interact_id
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone(interact_id))
@@ -799,8 +800,6 @@ class BouncyWall(Dominoes):
         BUFFER = 0
 
         if self.interact_id == 0:
-
-            self.zone_location_d = 1
             return {
                 "x": 0.0,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
                 "y": 0.0 if not self.remove_zone else 10.0,
@@ -808,7 +807,6 @@ class BouncyWall(Dominoes):
             }
 
         else:
-            self.zone_location_d = 2
             if self.zone_location_d == 0:
                 return {
                     "x": 0.5,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
@@ -891,6 +889,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,

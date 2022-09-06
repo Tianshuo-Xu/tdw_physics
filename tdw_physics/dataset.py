@@ -768,7 +768,7 @@ class Dataset(Controller, ABC):
                         self.obi_object_segmentation_colors.append(seg_color)
 
                 if len(self.obi_object_segmentation_colors) > len(self.obi_object_ids):
-                    import ipdb; ipdb.set_trace()
+                    #import ipdb; ipdb.set_trace()
                     self.obi_object_segmentation_colors = []
                 else:
 

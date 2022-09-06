@@ -472,16 +472,16 @@ class FricRamp(MultiDominoes):
         """This is where we string together the important commands of the controller in order"""
         commands = []
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         """
         Vedang's janky way of randomizing
         """
-        self.zone_friction = random.uniform(*self.fric_range)
+        self.zone_friction = self.var_rng.uniform(*self.fric_range)
         self.ramp_scale['y'] = random.uniform(*self.ramp_y_range)
         print("zone_friction", self.zone_friction)
         print("ramp_scale", self.ramp_scale)
@@ -879,7 +879,7 @@ class FricRamp(MultiDominoes):
             elif self.zone_dloc == 2:
                 return {
                     "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2,
-                    "y": 2.3 if not self.remove_zone else 10.0,
+                    "y": 0 if not self.remove_zone else 10.0,
                     "z": -0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
             else:
@@ -966,6 +966,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,

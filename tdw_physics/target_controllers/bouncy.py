@@ -99,7 +99,7 @@ def get_bouncy_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--tbounce",
                         type=str,
-                        default="[0.5,0.9]",
+                        default="[0.01,1.0]",
                         help="range of bounciness setted for the target object")
 
     # layout
@@ -190,7 +190,7 @@ class Bouncy(MultiDominoes):
                  port: int = None,
                  zjitter=0.,
                  fupforce=[0., 0.],
-                 target_bounciness=[0., 0.],
+                 target_bounciness=[0.01, 1.0],
                  ramp_scale=[0.2, 0.25, 0.5],
                  bouncy_axis_length=1.15,
                  use_ramp=True,
@@ -230,11 +230,11 @@ class Bouncy(MultiDominoes):
         commands = []
 
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1  # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1  # not used
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
@@ -351,7 +351,7 @@ class Bouncy(MultiDominoes):
         #         static_friction=0.4,
         #         bounciness=0,
         #         o_id=o_id))
-        self.star_bouncy = random.uniform(*self.target_bounciness)
+        self.star_bouncy = self.var_rng.uniform(*self.target_bounciness)
         self.star_mass = self.probe_mass
         self.star_color = rgb
         self.star_type = self.target_type
@@ -904,6 +904,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,

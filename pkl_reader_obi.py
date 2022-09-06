@@ -174,11 +174,11 @@ def depth2pointcloud_np(z, pix_T_cam):
 
 camera_far_plane=100
 camera_near_plane=0.1
-data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini/"
+data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini4/"
 
 
-scenario_name = "deform_clothhang_pp"
-trial_name = "deform_clothhang-zdloc=1-target=cube-tscale=[0.15,0.15]"
+scenario_name = "mass_waterpush_pp"
+trial_name = "mass_waterpush-target=bowl-tscale=0.3,0.5,0.3-zdloc=1"
 trial_id = 0
 show_timestep = 50
 file = os.path.join(data_root, f"{scenario_name}/{trial_name}/{trial_id:04}.pkl")
@@ -448,7 +448,7 @@ if use_obi:
 meshes = trimesh.Scene(obj_meshes_pts[0])
 for i in range(1,len(obj_meshes_pts)):
    meshes += trimesh.Scene(obj_meshes_pts[i])
-(meshes + trimesh.Scene(obj_pts[0]) + camera + trimesh.Scene(floor) +  axis).show()
+#(meshes + trimesh.Scene(obj_pts[0]) + camera + trimesh.Scene(floor) +  axis).show()
 
 
 
@@ -476,6 +476,7 @@ if use_obi:
         obi_mask_from_proj = True
 
 nobjs = seg_colors.shape[0]
+n_obis = len(data['static']["obi_object_ids"].tolist())
 
 with open(id_video_file, "r") as fh_read:
     in_dict = json.load(fh_read)
@@ -491,12 +492,12 @@ for timestep in range(start_frame_id):
 
 #for timestep in range(start_frame_id)
 storage = np.zeros((start_frame_id, H,W))
-for idx in range(nobjs):
+for idx in range(nobjs + n_obis):
     frames = []
     for timestep in range(start_frame_id):
         if idx in obj_info_dict[timestep]:
             rgn = cocomask.decode(obj_info_dict[timestep][idx])
-            frames.append(rgn * 255)
+            frames.append((rgn * 255).astype(np.uint8))
         else:
             frames.append(np.zeros((H, W)))
 
@@ -507,8 +508,13 @@ for idx in range(nobjs):
 storage[storage > 0.5] = 1
 
 
+if False: #use_obi:
+    from pycocotools import mask as cocomask
+    from multiprocessing.pool import ThreadPool as Pool
+    import multiprocessing
 
-if use_obi:
+    import time
+    start_time = time.time()
     import scipy
     sigma = 1.5
     thres = 5.0 #1.0
@@ -520,96 +526,151 @@ if use_obi:
         obi_list = data['static']["obi_object_ids"].tolist()
     obj_pts = []
     for obi_id in range(n_obis):
-        frames = []
+        #frames = []
         frames_before = []
         maxi = np.ones((3)) * float("-inf")
         mini = np.ones((3)) * float("inf")
-        for timestep in range(start_frame_id):
 
-            #1. construct scene
-            positions = data["frames"][f"{timestep:04}"]["objects"]["positions"]
-            rotations = data["frames"][f"{timestep:04}"]["objects"]["rotations"]#x,y,z,w
-            obj_meshes = []
-            object_ids = data["static"]["object_ids"]
-            for idx, object_id in enumerate(object_ids):
-                vertices = data["static"]["mesh"][f"vertices_{idx}"]
-                faces = data["static"]["mesh"][f"faces_{idx}"]
-                mesh = trimesh.Trimesh(vertices=vertices * data["static"]["scale"][idx],
-                                   faces=faces)
-                rot = np.eye(4)
-                rot[:3, :3] = R.from_quat(rotations[idx]).as_matrix()
-                mesh.apply_transform(rot)
-                mesh.apply_translation(positions[idx])
-                mesh.visual.face_colors = [255, 100, 100, 255]
-                obj_meshes.append(mesh)
+        # start_frame_id
 
 
-            combined = trimesh.util.concatenate(obj_meshes) # + [floor, frontwall, backwall, leftwall, rightwall])
-            scene = combined.scene()
-            scene.camera.resolution = [H, W]
-            scene.camera.fov = [fov_x, fov_y]
-            scene.camera_transform = world_T_camtri
-            scene.camera.z_near = camera_near_plane
-            scene.camera.z_far = camera_far_plane
+        def run_chunk(st, ed, queue):
+            frames = []
+            for timestep in range(st, ed + 1):
 
-            #2. compute visible points
-            particle_positions = data['frames'][f"{timestep:04}"]['objects']['particles_positions']
-            if timestep < data["static"]["start_frame_of_the_clip"]:
-                idx = data['static0']["obi_object_ids"].tolist()[obi_id]
+                #1. construct scene
+                positions = data["frames"][f"{timestep:04}"]["objects"]["positions"]
+                rotations = data["frames"][f"{timestep:04}"]["objects"]["rotations"]#x,y,z,w
+                obj_meshes = []
+                object_ids = data["static"]["object_ids"]
+                for idx, object_id in enumerate(object_ids):
+                    vertices = data["static"]["mesh"][f"vertices_{idx}"]
+                    faces = data["static"]["mesh"][f"faces_{idx}"]
+                    mesh = trimesh.Trimesh(vertices=vertices * data["static"]["scale"][idx],
+                                       faces=faces)
+                    rot = np.eye(4)
+                    rot[:3, :3] = R.from_quat(rotations[idx]).as_matrix()
+                    mesh.apply_transform(rot)
+                    mesh.apply_translation(positions[idx])
+                    mesh.visual.face_colors = [255, 100, 100, 255]
+                    obj_meshes.append(mesh)
+
+
+                combined = trimesh.util.concatenate(obj_meshes) # + [floor, frontwall, backwall, leftwall, rightwall])
+                scene = combined.scene()
+                scene.camera.resolution = [H, W]
+                scene.camera.fov = [fov_x, fov_y]
+                scene.camera_transform = world_T_camtri
+                scene.camera.z_near = camera_near_plane
+                scene.camera.z_far = camera_far_plane
+
+                #2. compute visible points
+                particle_positions = data['frames'][f"{timestep:04}"]['objects']['particles_positions']
+                if timestep < data["static"]["start_frame_of_the_clip"]:
+                    idx = data['static0']["obi_object_ids"].tolist()[obi_id]
+                else:
+                    idx = data['static']["obi_object_ids"].tolist()[obi_id]
+
+                canvas = np.zeros((H,W), np.uint8)
+                #canvas_before = np.zeros((H,W))
+                if str(idx) in particle_positions:
+                    pts = particle_positions[str(idx)]
+                    #if pts.shape[0] > 0:
+                    #    maxi = np.maximum(maxi, np.max(pts, 0))
+                    #    mini = np.minimum(mini, np.min(pts, 0))
+
+                    pts_cam = apply_4x4(cam_T_world, pts)
+                    pts_px = Camera2Pixels_np(pts_cam , pix_T_cam).astype(np.int32).clip(-1,256)
+                    selected_idx = np.where((pts_px[:,0] >= 0) * (pts_px[:,1] >=0) * (pts_px[:,0] < W) * (pts_px[:,1] < H))[0]
+                    pts_px = pts_px[selected_idx]
+                    pts_cam = pts_cam[selected_idx]
+
+                    # canvas_before[pts_px[:, 1], pts_px[:, 0]] = 255
+                    # canvas_before = scipy.ndimage.filters.gaussian_filter(canvas_before, [sigma, sigma], mode='constant')
+                    # canvas_before = canvas_before * (1 - storage[timestep])
+                    # canvas_before[canvas_before > thres] = 255
+                    #canvas[canvas_before > thres] = 125
+
+                    if pts_px.shape[0] > 0:
+
+                        #print("time", timestep, pts_px.shape)
+                        canvas[pts_px[:, 1], pts_px[:, 0]] = 255
+
+                        depth_, index_ray = pixel_to_depth_from_scene(combined, pts_px[:,0], pts_px[:,1], pix_T_cam, world_T_camtri)
+                        if index_ray.shape[0] > 0:
+                            index_ray = index_ray[pts_cam[index_ray, 2] > depth_] #occluded pixels
+                            pts_px = pts_px[index_ray]
+                            #print("remove pts, time", timestep, pts_px.shape)
+                            canvas[pts_px[:, 1], pts_px[:, 0]] = 0 #remove occluded pixels
+                    canvas = scipy.ndimage.filters.gaussian_filter(canvas, [sigma, sigma], mode='constant')
+                    canvas[canvas > thres] = 255
+
+                #if timestep == show_timestep:
+                #    imageio.imsave(f"tmp/obi_id{obi_id}_showtime.png", canvas)
+                    #import ipdb; ipdb.set_trace()
+
+                n_nonzeros = np.sum(canvas > 125)
+                if n_nonzeros == 0:
+                    frames.append((timestep, 0))
+                else:
+                    bi_mask = np.asfortranarray(canvas > 125)
+                    rels = cocomask.encode(bi_mask)
+                    frames.append((timestep, rels))
+                    #frames_before.append(canvas_before)
+            #print("nframes", len(frames))
+            queue.put(frames)
+            return
+            #return frames
+
+        nchunks = 12
+        st_eds = [(x[0], x[-1]) for x in np.array_split(range(start_frame_id), nchunks)]
+        queues = [] #multiprocessing.Queue()
+        processes = []
+        for st_ed in st_eds:
+            queue =  multiprocessing.Queue()
+            p = multiprocessing.Process(target=run_chunk, args=(st_ed[0], st_ed[1], queue))
+            processes.append(p)
+            queues.append(queue)
+            #p.start()
+
+        for process in processes:
+            process.start()
+        #pool = Pool(nchunks)
+        for process in processes:
+            process.join()
+        #for item in items:
+
+        #result = pool.map(run_chunk, st_eds)
+        result_list = []
+        for queue in queues:
+            while not queue.empty():
+                result_list += queue.get()
+        #pool.close()
+        #pool.join()
+
+        print("total time", time.time() - start_time)
+
+        # decode coco
+        frames = []
+        for frame_id, rels in result_list:
+            if isinstance(rels, int):
+                frames.append(np.zeros((H, W), np.uint8))
             else:
-                idx = data['static']["obi_object_ids"].tolist()[obi_id]
+                rels['counts'] = rels['counts'].decode('utf8')
+                rgn = cocomask.decode(rels)
+                frames.append((rgn * 255).astype(np.uint8))
 
-            canvas = np.zeros((H,W))
-            canvas_before = np.zeros((H,W))
-            if str(idx) in particle_positions:
-                pts = particle_positions[str(idx)]
-                if pts.shape[0] > 0:
-                    maxi = np.maximum(maxi, np.max(pts, 0))
-                    mini = np.minimum(mini, np.min(pts, 0))
-
-                pts_cam = apply_4x4(cam_T_world, pts)
-                pts_px = Camera2Pixels_np(pts_cam , pix_T_cam).astype(np.int32).clip(-1,256)
-                selected_idx = np.where((pts_px[:,0] >= 0) * (pts_px[:,1] >=0) * (pts_px[:,0] <= 255) * (pts_px[:,1] <= 255))[0]
-                pts_px = pts_px[selected_idx]
-                pts_cam = pts_cam[selected_idx]
-
-                canvas_before[pts_px[:, 1], pts_px[:, 0]] = 255
-                canvas_before = scipy.ndimage.filters.gaussian_filter(canvas_before, [sigma, sigma], mode='constant')
-                canvas_before = canvas_before * (1 - storage[timestep])
-                canvas_before[canvas_before > thres] = 255
-                #canvas[canvas_before > thres] = 125
-
-                if pts.shape[0] > 0:
-
-                    print("time", timestep, pts_px.shape)
-                    canvas[pts_px[:, 1], pts_px[:, 0]] = 255
-
-                    depth_, index_ray = pixel_to_depth_from_scene(combined, pts_px[:,0], pts_px[:,1], pix_T_cam, world_T_camtri)
-                    if index_ray.shape[0] > 0:
-                        index_ray = index_ray[pts_cam[index_ray, 2] > depth_] #occluded pixels
-                        pts_px = pts_px[index_ray]
-                        print("remove pts, time", timestep, pts_px.shape)
-                        canvas[pts_px[:, 1], pts_px[:, 0]] = 0 #remove occluded pixels
-                canvas = scipy.ndimage.filters.gaussian_filter(canvas, [sigma, sigma], mode='constant')
-                canvas[canvas > thres] = 255
-
-            if timestep == show_timestep:
-                imageio.imsave(f"tmp/obi_id{obi_id}_showtime.png", canvas)
-                #import ipdb; ipdb.set_trace()
-            frames.append(canvas)
-            frames_before.append(canvas_before)
-        print("maxi", maxi)
-        print("mini", mini)
+        #print("maxi", maxi)
+        #print("mini", mini)
 
         out = imageio.mimsave(
         os.path.join("tmp", f'obi_id{obi_id}.gif'),
         frames, fps = 30)
 
-        out = imageio.mimsave(
-        os.path.join("tmp", f'obi_id{obi_id}_before.gif'),
-        frames_before, fps = 30)
+        # out = imageio.mimsave(
+        # os.path.join("tmp", f'obi_id{obi_id}_before.gif'),
+        # frames_before, fps = 30)
 
-        import ipdb; ipdb.set_trace()
 
         writer = imageio.get_writer(f'tmp/obi_id{obi_id}.mp4', fps=20)
         for im_id, im in enumerate(frames):

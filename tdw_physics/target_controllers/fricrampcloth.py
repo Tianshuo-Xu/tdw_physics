@@ -244,7 +244,8 @@ class FricRamp(MultiDominoes):
         How by what factor should the y and z dimensions should be smaller than the original ramp
         """
         self.second_ramp_factor = 0.5
-        self.camera_aim = {"x": 0.3, "y": 1.1, "z": 0.} # fixed aim
+        self.camera_aim = {"x": 1.3, "y": 1.1, "z": 0.} # fixed aim
+
         """
         The color of the second ramp
         """
@@ -261,13 +262,14 @@ class FricRamp(MultiDominoes):
         self.is_single_ramp = is_single_ramp
         self.num_interactions = 1
 
-
         if self.is_single_ramp:
             self.ramp_y_range=[platform_height, platform_height]
             self.add_second_ramp = False
             self.ramp_base_height_range = 0.1
             self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
             self.camera_aim = {"x": 1.3, "y": 1.1, "z": 0.}
+            if self.zone_dloc == 2:
+                self.camera_aim = {"x": 1.6, "y": 1.1, "z": 0.}
         else:
             self.ramp_y_range=[platform_height, platform_height]#[0.9, 0.9]
             self.add_second_ramp = True
@@ -511,16 +513,16 @@ class FricRamp(MultiDominoes):
         """This is where we string together the important commands of the controller in order"""
         commands = []
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         """
         Vedang's janky way of randomizing
         """
-        self.zone_friction = random.uniform(*self.fric_range)
+        self.zone_friction = self.var_rng.uniform(*self.fric_range)
         self.ramp_scale['y'] = random.uniform(*self.ramp_y_range)
         print("zone_friction", self.zone_friction)
         print("ramp_scale", self.ramp_scale)
@@ -585,6 +587,61 @@ class FricRamp(MultiDominoes):
             self._set_test_mode_colors(commands)
 
         return commands
+
+
+    def get_random_avatar_position(self,
+                                   radius_min: float,
+                                   radius_max: float,
+                                   y_min: float,
+                                   y_max: float,
+                                   center: Dict[str, float],
+                                   angle_min: float = 0,
+                                   angle_max: float = 360,
+                                   reflections: bool = False,
+                                   return_theta = False,
+                                   ) -> Dict[str, float]:
+        """
+        :param radius_min: The minimum distance from the center.
+        :param radius_max: The maximum distance from the center.
+        :param y_min: The minimum y positional coordinate.
+        :param y_max: The maximum y positional coordinate.
+        :param center: The centerpoint.
+        :param angle_min: The minimum angle of rotation around the centerpoint.
+        :param angle_max: The maximum angle of rotation around the centerpoint.
+
+        :return: A random position for the avatar around a centerpoint.
+        """
+
+        a_r = random.uniform(radius_min, radius_max)
+        a_x = center["x"] + a_r
+        a_z = center["z"] + a_r
+
+        if self.zone_dloc == 2 and self.is_single_ramp:
+            rnd = random.uniform(0,1)
+            if rnd > 0:
+                theta = np.radians(random.uniform(angle_min, -70))
+
+            else:
+                theta = np.radians(random.uniform(-20,  angle_max))
+
+        else:
+            theta = np.radians(random.uniform(angle_min, angle_max))
+        #theta = np.radians(-60) # #bad: -30, -40, -50 p.radians(random.uniform(angle_min, angle_max))
+        if reflections:
+            theta2 = random.uniform(angle_min+180, angle_max+180)
+            theta = random.choice([theta, theta2])
+
+        a_y = random.uniform(y_min, y_max)
+        a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
+        a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
+        a_x = a_x_new
+        a_z = a_z_new
+
+        if return_theta:
+            return {"x": a_x, "y": a_y, "z": a_z}, theta
+        else:
+            return {"x": a_x, "y": a_y, "z": a_z}
+
 
     def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
 
@@ -941,7 +998,7 @@ class FricRamp(MultiDominoes):
                      "id": int(o_id)})
                 self.object_ids = self.object_ids[:-1]
 
-            self.force_wait_zone = 145
+            self.force_wait_zone = 0
             self.hold_cmd = {"$type": "teleport_object",
                           "id": o_id,
                           "position": self.zone_location}
@@ -1001,8 +1058,8 @@ class FricRamp(MultiDominoes):
             elif self.zone_dloc == 2:
                 return {
                     "x": self.ramp_scale['z']*self.second_ramp_factor+self.zone_scale_range['x']/2 + 1.0,
-                    "y": 2.8 if not self.remove_zone else 10.0,
-                    "z": 0.25 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
+                    "y": 1.0 if not self.remove_zone else 10.0,
+                    "z": 0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
             else:
                 raise ValueError
@@ -1082,6 +1139,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,

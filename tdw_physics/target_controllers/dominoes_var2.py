@@ -5,15 +5,17 @@ import h5py
 import json
 import copy
 import importlib
-import numpy as np
-from enum import Enum
 from PIL import Image
-import random
 import imageio
 import pickle
+import io
 import os
+import math
 from tqdm import tqdm
+import numpy as np
 from pathlib import Path
+from enum import Enum
+import random
 from typing import List, Dict, Tuple
 from collections import OrderedDict
 from weighted_collection import WeightedCollection
@@ -32,12 +34,13 @@ from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_all_label_funcs,
                                                get_labels_from)
-
+from tdw_physics.util_geom import save_obj
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
 FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id"]
 ZONE_COLOR = [255,255,0]
 TARGET_COLOR = [255,0,0]
+
 
 def get_args(dataset_dir: str, parse=True):
     """
@@ -46,12 +49,11 @@ def get_args(dataset_dir: str, parse=True):
     common = get_parser(dataset_dir, get_help=False)
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
-    parser.add_argument("--phy_var",
-                        type=float,
-                        default=-100,
-                        help="physics variable. Should be between [-1 and 1]")
-
     parser.add_argument("--num_middle_objects",
+                        type=int,
+                        default=3,
+                        help="The number of middle objects to place")
+    parser.add_argument("--num_distinct_objects",
                         type=int,
                         default=3,
                         help="The number of middle objects to place")
@@ -85,7 +87,7 @@ def get_args(dataset_dir: str, parse=True):
 
     parser.add_argument("--zscale",
                         type=str,
-                        default="0.5,0.01,2.0",
+                        default="0.5,0.1,1.0", #0.5, 0.1, 2.0
                         help="scale of target zone")
     parser.add_argument("--zlocation",
                         type=none_or_str,
@@ -175,10 +177,14 @@ def get_args(dataset_dir: str, parse=True):
                         type=none_or_str,
                         default=None,
                         help="comma-separated R,G,B values for the middle object color. None is random.")
-    parser.add_argument("--collision_axis_length",
+    # parser.add_argument("--collision_axis_length",
+    #                     type=float,
+    #                     default=2.0,
+    #                     help="Length of spacing between probe and target objects at initialization.")
+    parser.add_argument("--spacing",
                         type=float,
-                        default=2.0,
-                        help="Length of spacing between probe and target objects at initialization.")
+                        default=0.5,
+                        help="Length of spacing between each parit of dominoes at initialization.")
     parser.add_argument("--spacing_jitter",
                         type=float,
                         default=0.2,
@@ -283,9 +289,13 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Prevent all distractors (and occluders) from moving by making them 'kinematic' objects")
 
-
+    parser.add_argument("--star_putfirst",
+                        type=int,
+                        default=0,
+                        help="star object will be the first domino during prediction phase.")
     parser.add_argument("--remove_middle",
-                        action="store_true",
+                        type=int,
+                        default=0,
                         help="Remove one of the middle dominoes scene.")
 
     # which models are allowed
@@ -323,7 +333,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in ['box', 'tdw', 'house'], args.room
+        assert  args.room in ['box', 'tdw', 'random', 'mmcraft'], args.room
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -457,11 +467,9 @@ def get_args(dataset_dir: str, parse=True):
 
             # multiply the number of trials by a factor
             args.num = int(float(args.num) * args.num_multiplier)
-
             # change the random seed in a deterministic way
             args.random = 0
             args.seed = (args.seed * 1000) % 997
-            args.var_rng_seed = (args.seed * 1000) % 995
 
             # randomize colors and wood textures
             args.match_probe_and_target_color = False
@@ -471,10 +479,11 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"#,_depth"
-            args.save_passes = "_img,_id" #,_depth"
+            args.write_passes = "_img,_id"
+            args.save_passes = "_img,_id"
             args.save_movies = True
             args.save_meshes = True
+            args.save_labels = True
             args.use_test_mode_colors = False
 
         # produce "readout" training data with red target and yellow zone,
@@ -498,7 +507,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            args.write_passes = "_img,_id"
+            args.write_passes = "_img,_id,_depth"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -512,7 +521,7 @@ def get_args(dataset_dir: str, parse=True):
             assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
 
             # red and yellow target and zone
-            args.use_test_mode_colors = True
+            args.use_test_mode_colors = False
 
             args.write_passes = "_img,_id,_depth,_normals,_flow"
             args.save_passes = "_img,_id"
@@ -543,10 +552,9 @@ class Dominoes(RigidbodiesDataset):
 
     def __init__(self,
                  port: int = None,
-                 var_rng_seed=None,
                  room='box',
-                 phyvar=None,
-                 target_zone=['cuvar_rng_seedvar_rng_seedbe'],
+                 target_zone=['cube'],
+                 star_putfirst=False,
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
                  zone_scale_range=[0.5,0.01,0.5],
@@ -607,21 +615,20 @@ class Dominoes(RigidbodiesDataset):
             port = np.random.randint(1000,4000)
             print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
-        self.var_rng_seed = var_rng_seed
-        self.var_rng = np.random.RandomState(var_rng_seed)
-        self.phyvar = phyvar
         ## initializes static data and RNG
         super().__init__(port=port, **kwargs)
 
         ## which room to use
-
         self.room = room
+        self.star_putfirst = star_putfirst
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
 
         ## whether only flex objects are allowed
         self.flex_only = flex_only
+        self.use_obi = False
+        self.obi = None
 
         ## whether the occluders and distractors can move
         self.no_moving_distractors = no_moving_distractors
@@ -635,6 +642,7 @@ class Dominoes(RigidbodiesDataset):
         self.set_zone_types(target_zone)
         self.zone_location = zone_location
         self.zone_color = zone_color
+
         self.zone_scale_range = zone_scale_range
         self.zone_material = zone_material
         self.zone_friction = zone_friction
@@ -720,9 +728,649 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
-
         self.use_test_mode_colors = use_test_mode_colors
-        self.use_obi = False
+
+
+
+
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str) -> None:
+
+
+        output_dir = Path(output_dir)
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True)
+        temp_path = Path(temp_path)
+        if not temp_path.parent.exists():
+            temp_path.parent.mkdir(parents=True)
+        # Remove an incomplete temp path.
+        if temp_path.exists():
+            temp_path.unlink()
+
+        pbar = tqdm(total=num)
+        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+        self.num_interactions = 2
+        self.num_distinct_objects = 1
+
+        exists_up_to = 0
+
+        for f in output_dir.glob("*.pkl"):
+            print(f.stem, exists_up_to)
+            if int(f.stem[:4]) > exists_up_to:
+                exists_up_to = int(f.stem[:4])
+
+
+                #subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
+                #if subvideos < self.num_interactions:
+                #    break
+                #    #exists_up_to = int(f.stem[:4])
+                #else:
+                #    exists_up_to = int(f.stem[:4])
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
+
+
+        pbar.update(exists_up_to)
+        for i in range(exists_up_to, num):
+            object_info = None
+            # see if the last iteraction is there, otherwise re-generate the trials
+            #filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + "_" + TDWUtils.zero_padding(self.num_interactions - 1, 3) + ".hdf5")
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".pkl")
+
+            if not filepath.exists():
+                # file path here
+                filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+                # Create the .hdf5 file.
+                temp_path_f = h5py.File(str(temp_path.resolve()), "a")
+                self.stframe_whole_video = 0
+                # Save out images
+                self.png_dir = None
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists():
+                        self.png_dir.mkdir(parents=True)
+
+                for interact_id in range(self.num_interactions):
+                    ####filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + "_" + TDWUtils.zero_padding(interact_id, 3) + ".hdf5")
+                    self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+
+                    # Save out images
+                    # self.png_dir = None
+                    # if any([pa in PASSES for pa in self.save_passes]):
+                    #     self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4)+ "_" + TDWUtils.zero_padding(interact_id, 3))
+                    #     if not self.png_dir.exists():
+                    #         self.png_dir.mkdir(parents=True)
+
+                    # Do the trial.
+                    if interact_id > 0:
+                        object_info = 1
+
+                    print("frame_whole_video", self.stframe_whole_video)
+                    nframes = self.trial(filepath=filepath,
+                               temp_path_f=temp_path_f,
+                               trial_num=i * self.num_interactions + interact_id,
+                               object_info=object_info,
+                               interact_id=interact_id)
+                    self.stframe_whole_video += nframes
+                    # if self.save_meshes:
+                    #     for o_id in self.object_ids:
+                    #         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                    #         vertices, faces = self.object_meshes[o_id]
+                    #         save_obj(vertices, faces, obj_filename)
+
+                # Close the file.
+                def dfs_hdf5(hf, data):
+                    for attr in hf:
+                        data_ = hf[attr]
+                        if isinstance(data_, h5py.Group):
+                            data[attr] = dict()
+                            dfs_hdf5(data_, data[attr])
+                        else:
+                            data[attr] = data_[()]
+
+                output = dict()
+                dfs_hdf5(temp_path_f, output)
+
+                output_file = str(filepath).replace(".hdf5", ".pkl")
+                with open(output_file, 'wb') as outfile:
+                    pickle.dump(output, outfile)
+
+                temp_path_f.close()
+                os.remove(temp_path)
+
+                #Move the file.
+                # try:
+                #     temp_path.replace(filepath)
+                # except OSError:
+                #     shutil.move(temp_path, filepath)
+
+
+                # Save an MP4 of the stimulus
+                if self.save_movies:
+                    for pass_mask in self.save_passes:
+                        if pass_mask not in ["_depth"]:
+                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+
+                            cmd, stdout, stderr = pngs_to_mp4(
+                                filename=mp4_filename,
+                                image_stem=pass_mask[1:]+'_',
+                                png_dir=self.png_dir,
+                                size=[self._height, self._width],
+                                overwrite=True,
+                                remove_pngs = False,
+                                use_parent_dir=False)
+                            #print(cmd, stdout, stderr)
+                            #print("pass_mask", pass_mask)
+                            #import ipdb; ipdb.set_trace()
+
+                        if pass_mask in ["_id"]:
+                            from pycocotools import mask as cocomask
+                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+
+                            files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                            out_dict = {}
+                            seg_colors = output["static"]["video_object_segmentation_colors"]
+                            nobjs = seg_colors.shape[0]
+                            for file in files:
+                                seg_img = imageio.imread(file)
+                                frm_id = file[-8:-4]
+
+
+                                rels_list = []
+                                for idx in range(nobjs):
+                                    color_dist = np.linalg.norm(seg_img.astype(np.float32) - seg_colors[idx][np.newaxis, np.newaxis, :].astype(np.float32), axis=2)
+                                    #seg[color_dist == 0] = 255
+                                    n_nonzeros = np.sum(color_dist == 0)
+                                    if n_nonzeros == 0:
+                                        continue
+                                    bi_mask = np.asfortranarray(color_dist == 0)
+                                    rels = cocomask.encode(bi_mask)
+                                    rels['counts'] = rels['counts'].decode('utf8')
+                                    rels['idx'] = idx
+                                    rels_list.append(rels)
+                                out_dict[frm_id] = rels_list
+                                #if int(frm_id) % 20 ==0:
+                                #    print('%d/%d\n'%(int(frm_id), len(files)))
+                                    #break
+                            with open(mp4_filename + ".json", 'w') as fh:
+                                json.dump(out_dict, fh)
+
+                            [os.remove(file) for file in files]
+
+
+                        # else:
+                        #     #save depth as pkl
+                        #     files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("depth_")]
+                        #     depths = []
+                        #     for file in files:
+                        #         depths.append(imageio.imread(file))
+                        #     depths = np.stack(depths, axis=0)
+                        #     mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        #     with open(mp4_filename + ".pkl", "wb") as f:
+                        #         pickle.dump(depths,f)
+
+                        #     hf = h5py.File(mp4_filename + '.h5', 'w')
+                        #     hf.create_dataset('_depth', data=depths)
+
+
+                        #     import ipdb; ipdb.set_trace()
+                        #     print("hello")
+                    #files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("img_")]
+                    #[os.remove(file) for file in files]
+                    #files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                    #[os.remove(file) for file in files]
+                    #if "_depth" in self.save_passes:
+                    #    mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
+                    #else:
+                        #import ipdb; ipdb.set_trace()
+                    #    os.rmdir(str(self.png_dir))
+                    #rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    #os.rmdir(self.png_dir)
+
+            pbar.update(1)
+        pbar.close()
+
+    def xyzdict_to_array(self, dict_):
+        return np.array([dict_['x'], dict_['y'], dict_['z']])
+
+    def add_curtain(self):
+        record, data = self.random_primitive(self._zone_types,
+                                             scale={'x': 1.0, 'y': 0.8, 'z': 0.02},
+                                             color=np.array([0.76,0.76,0.76], np.float64),
+                                             add_data=False
+        )
+
+        # create the curtain
+        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        self.curtain = record
+        self.curtain_type = data["name"]
+        self.curtain_color = rgb
+        self.curtain_id = o_id
+        self.curtain_scale = scale
+
+
+        world_T_cam = np.eye(4)
+        y_axis = np.array([0, -1, 0])
+        z_axis = self.xyzdict_to_array(self.camera_aim) - self.xyzdict_to_array(self.camera_position)
+        x_axis = np.cross(y_axis, z_axis)
+        world_T_cam[:3,0]=x_axis
+        world_T_cam[:3,1]=y_axis
+        world_T_cam[:3,2]=z_axis
+        world_T_cam[:3,3]=self.xyzdict_to_array(self.camera_position)
+
+
+        location = dict()
+
+        displacement = 0.4
+
+        self.curtain_center = world_T_cam.dot(np.array([0,   0.5, 0.2, 1]))[:3]
+        self.curtain_left = world_T_cam.dot(np.array([displacement,   0.5, 0.2, 1]))[:3]
+        self.curtain_initial = world_T_cam.dot(np.array([-displacement, 0.5,  0.2, 1]))[:3]
+        self.small_shift = world_T_cam[:3,:3].dot(np.array([0.01, 0,   0]))
+        initial_location = world_T_cam.dot(np.array([-displacement,  0.5,  0.2, 1]))
+        #import ipdb; ipdb.set_trace()
+        location['x'] = initial_location[0]
+        location['y'] = initial_location[1]
+        location['z'] = initial_location[2]
+
+
+        #import ipdb; ipdb.set_trace()
+        # location2 = dict()
+        # self.curtain_center_x = self.camera_position['x'] * 0.8 + self.camera_aim['x'] * 0.2
+        # self.curtain_left_x = self.curtain_center_x + 1.0
+        # location2['x'] = self.curtain_center_x - 1.0
+        # location2['y'] = self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
+        # location2['z'] = self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
+
+        rot_degree = dict()
+        rot_degree['x'] = 0
+        rot_degree['y'] = math.atan2(z_axis[0], z_axis[2]) * (180/math.pi)
+        rot_degree['z'] = 0
+
+        commands = []
+        commands.extend(
+            self.add_primitive(
+                record=record,
+                position=location,
+                rotation=rot_degree,
+                scale=scale,
+                material=self.zone_material,
+                color=rgb,
+                mass=500,
+                scale_mass=False,
+                dynamic_friction=self.zone_friction,
+                static_friction=(10.0 * self.zone_friction),
+                bounciness=0,
+                o_id=o_id,
+                add_data=(not self.remove_zone),
+                make_kinematic=False # zone shouldn't move
+            ))
+        commands.extend([{"$type": "set_kinematic_state",
+                 "id": o_id,
+                 "is_kinematic": True,
+                 "use_gravity": False}])
+
+
+        return commands
+
+    def get_additional_command_when_removing_curtain(self, frame=0):
+        if frame == self.force_wait:
+           return [self.push_cmd]
+        return []
+    def generate_static_object_info(self):
+
+        # color for "star object"
+        colors = [[0.01844594, 0.77508636, 0.12749255],#pink
+                  [0.17443318, 0.22064707, 0.39867442],#black
+                  [0.75136046, 0.06584012, 0.22674323],#red
+                  [0.47, 0.38,   0.901],#purple
+                   ]
+        non_star_color = [246/255, 234/255, 224/255]
+
+        self.repeat_trial = False
+        # sample distinct objects
+        self.candidate_dict = dict()
+        self.star_object = dict()
+        self.star_object["type"] = random.choice(self._star_types)
+        self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
+        #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
+        self.star_object["mass"] = 10 ** np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
+        print("====star object mass", self.star_object["mass"])
+
+        #distinct_masses = [0.1, 2.0, 10.0]
+        mass = 1.0
+        self.normal_mass = mass
+        random.shuffle(colors)
+        #random.shuffle(distinct_masses)
+        ## add the non-star objects have the same weights
+        for distinct_id in range(1):
+            self.candidate_dict[distinct_id] = dict()
+            self.candidate_dict[distinct_id]["type"] = random.choice(self._candidate_types)
+            self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.candidate_scale_range)
+            self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
+            self.candidate_dict[distinct_id]["mass"] = mass
+
+    def trial(self,
+              filepath: Path,
+              temp_path_f: Path,
+              object_info,
+              trial_num: int,
+              interact_id: int) -> None:
+        # generate a batch of trials instead of one
+        """
+        Run a trial. Write static and per-frame data to disk until the trial is done.
+
+        :param filepath: The path to this trial's hdf5 file.
+        :param temp_path: The path to the temporary file.
+        :param trial_num: The number of the current trial.
+        """
+        # Clear the object IDs and other static data
+
+
+
+        from tdw_physics.rigidbodies_dataset import get_random_xyz_transform
+        if object_info == None:
+            self.generate_static_object_info()
+            self.video_object_segementation_colors = None
+        else:
+            self.repeat_trial = True
+
+        self.clear_static_data()
+
+
+        if self.use_obi and self.obi is None:
+            from tdw.add_ons.obi import Obi
+            obi = Obi()
+            self.add_ons = [obi] #.extend([obi])
+            self.obi = obi
+
+
+        self._trial_num = trial_num
+        self.interact_id = interact_id
+
+
+        commands = []
+        # Remove asset bundles (to prevent a memory leak).
+        if trial_num % 100 == 0:
+           commands.append({"$type": "unload_asset_bundles"})
+
+        # Add commands to start the trial.
+        commands.extend(self.get_trial_initialization_commands(interact_id))
+        # Add commands to request output data.
+
+
+        #resp = self.communicate(commands)
+
+        commands.extend(self.add_curtain())
+        commands.extend(self._get_send_data_commands())
+
+        # Send the commands and start the trial.
+        r_types = ['']
+        count = 0
+
+        resp = self.communicate(commands)
+
+        self._set_segmentation_colors(resp)
+        if interact_id == 0: # base segementation color
+            self.video_object_segmentation_colors = self.object_segmentation_colors
+
+
+        self._get_object_meshes(resp)
+        frame = 0
+        # Write static data to disk.
+        if interact_id == self.num_interactions - 1: # prediction phase
+            static_group = temp_path_f.create_group("static")
+            self._write_static_data(static_group)
+        else:
+            static_group = temp_path_f.create_group(f"static{interact_id}")
+            self._write_static_data(static_group)
+        # Add the first frame.
+        done = False
+
+        if interact_id == 0:
+             frames_grp = temp_path_f.create_group("frames")
+             self.video_obi_object_segmentation_colors = np.zeros((0, 4))
+        else:
+             frames_grp = temp_path_f["frames"]
+
+        found_obi_seg = False
+        ## curatin leaves screen
+        if interact_id > 0: #curtain move from center to left
+            import time
+            location = dict()
+            location['x'] = self.curtain_center[0]
+            location['y'] = self.curtain_center[1]
+            location['z'] = self.curtain_center[2]
+            # location['x'] = self.curtain_center_x
+            # location['y'] = self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
+            # location['z'] = self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
+
+            for i in range(200):
+                if i > 0:
+                    frame += 1
+                #print("hello", i)
+                #time.sleep(0.4)
+                #location['x'] += 0.01
+                location['x'] += self.small_shift[0]
+                location['y'] += self.small_shift[1]
+                location['z'] += self.small_shift[2]
+                commands = []
+                commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
+                commands.extend(self.get_additional_command_when_removing_curtain(frame=frame))
+
+
+                if not found_obi_seg and self.use_obi and frame > 1:
+                    from tdw.output_data import IdPassSegmentationColors
+                    commands.extend([{"$type": "send_id_pass_segmentation_colors",
+                         "frequency": "once"}])
+
+                #commands.extend(self.get_per_frame_commanAdding curtainds(resp, frame))
+                resp = self.communicate(commands)
+
+
+                if not found_obi_seg and self.use_obi and frame > 1:
+                    found_obi_seg = self._set_obi_segmentation_colors(resp)
+                    if found_obi_seg and interact_id == 0:
+                        self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
+
+                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+                # Write whether this frame completed the trial and any other trial-level data
+                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+                #if location['x'] > self.curtain_left_x:
+                #    break
+                dist_to_left = np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left)
+                if dist_to_left < 0.01:
+                    break
+
+                #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
+                #    break
+                #if np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_left):
+                #    break
+
+            # curtain stays
+            # for i in range(20):
+            #     frame += 1
+            #     resp = self.communicate([])
+            #     frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            #     # Write whether this frame completed the trial and any other trial-level data
+            #     labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+
+
+        else:
+            frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+            self._write_frame_labels(frame_grp, resp, -1, False)
+
+        before_start_frame = frame
+        self.start_frame_after_curtain = before_start_frame
+
+        # Continue the trial. Send commands, and parse output data.
+        while not done:
+            frame += 1
+            #print('frame %d' % frame)
+            #print(frame, interact_id, self.force_wait, self.force_wait+before_start_frame)
+            force_wait_time = 0 if not self.force_wait else self.force_wait
+            cmd = self.get_per_frame_commands(resp, frame, force_wait=force_wait_time)
+            if not found_obi_seg and self.use_obi and frame > 1:
+                if self.obi_object_type[0][1] not in ['thether_cloth']:
+                    from tdw.output_data import IdPassSegmentationColors
+                    cmd.extend([{"$type": "send_id_pass_segmentation_colors",
+                         "frequency": "once"}])
+
+            resp = self.communicate(cmd)
+            if not found_obi_seg and self.use_obi and frame > 1:
+                #print("frame", frame)
+                found_obi_seg = self._set_obi_segmentation_colors(resp)
+                if found_obi_seg:
+                    self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
+            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
+            # Sometimes the buif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerif interact_id > 0: #curtain move from left to the centerild freezes and has to reopen the socket.
+            # This prevents such errors from throwing off the frame numbering
+            if ('imag' not in r_ids) or ('tran' not in r_ids):
+                print("retrying frame %d, response only had %s" % (frame, r_ids))
+                frame -= 1
+                continue
+
+            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+            # Write whether this frame completed the trial and any other trial-level data
+            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+
+            #print("frame_id", frame, self.stframe_whole_video, done)
+
+        #print("use_obi end", self.obi.actors)
+        ## curatin gets into screen
+        if self.num_interactions > 1 and interact_id < self.num_interactions-1: #curtain goes to center
+            import time
+            location = dict()
+            location['x'] = self.curtain_initial[0]#self.curtain_center_x - 1.0
+            location['y'] = self.curtain_initial[1]#self.camera_position['y'] * 0.8 + self.camera_aim['y'] * 0.2 -0.3
+            location['z'] = self.curtain_initial[2]#self.camera_position['z'] * 0.8 + self.camera_aim['z'] * 0.2
+
+            for i in range(200):
+                frame += 1
+
+                #print("hello", i)
+                #time.sleep(0.4)
+                location['x'] += self.small_shift[0]
+                location['y'] += self.small_shift[1]
+                location['z'] += self.small_shift[2]
+
+                #location['x'] += 0.01
+                commands = []
+                commands.extend([{"$type": "teleport_object", "position": location, "id": self.curtain_id}])
+                #commands.extend(self.get_per_frame_commands(resp, frame))
+
+                resp = self.communicate(commands)
+                dist_to_center = np.linalg.norm(self.xyzdict_to_array(location) - self.curtain_center)
+
+                #print(dist_to_center)
+                if dist_to_center < 0.01:
+                    frame -= 1
+                    break
+                #if location['x'] > self.curtain_center_x:
+                #    break
+                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+                # Write whether this frame completed the trial and any other trial-level data
+                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+
+            # #curtain stays
+            for i in range(20):
+                frame += 1
+                resp = self.communicate([])
+                frame_grp, objs_grp, tr_dict, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
+
+                # Write whether this frame completed the trial and any other trial-level data
+                labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+            #print("ending a trial, frame_id", frame, self.stframe_whole_video, done)
+        # Cleanup.
+        if self.use_obi:
+            self.write_static_obi_data(static_group, resp)
+
+        commands = []
+
+        for o_id in self.object_ids:
+            commands.append({"$type": self._get_destroy_object_command_name(o_id),
+                             "id": int(o_id)})
+        self.communicate(commands)
+        if self.use_obi:
+            self.obi.reset()
+
+
+        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        if self.save_labels:
+            meta = OrderedDict()
+            meta = get_labels_from(temp_path_f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            self.trial_metadata.append(meta)
+            self._post_write_static_data(static_group, meta)
+            # Save the trial-level metadata
+            json_str =json.dumps(self.trial_metadata, indent=4)
+            self.meta_file.write_text(json_str, encoding='utf-8')
+            print("TRIAL %d LABELS" % self._trial_num)
+            print(json.dumps(self.trial_metadata[-1], indent=4))
+
+
+        if interact_id == self.num_interactions - 1:
+            # Save out the target/zone segmentation mask
+            #frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+            self.start_frame_for_prediction = self.get_stframe_pred()
+            frame_id = self.start_frame_for_prediction
+
+            static_group.create_dataset("start_frame_for_prediction", data=self.start_frame_for_prediction)
+
+            #_id = temp_path_f['frames'][f'{frame_id:04}']['images']['_id']
+            static_group.create_dataset("num_reset", data=self.num_interactions - 1)
+
+            #static_group.create_dataset("frame_id_map", data=frame_id)
+
+            id_filename = os.path.join(str(filepath.parent).split('.hdf5')[0], "pngs_" + str(filepath).split("/")[-1][:4], f"id_{frame_id:04}.png")
+            #get PIL image
+            _id_map = imageio.imread(id_filename)
+            #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+            #get colors
+            zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+            if self.use_obi and len(zone_idx) == 0:
+                zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
+                zone_color = self.video_obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            else:
+                zone_color = self.video_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+
+            target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+            if self.use_obi and len(target_idx) == 0:
+                target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
+                target_color = self.video_obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+            else:
+                target_color = self.video_object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+
+
+            #get individual maps
+            zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+            target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+            #colorize
+            zone_map = zone_map * ZONE_COLOR
+            target_map = target_map * TARGET_COLOR
+            joint_map = zone_map + target_map
+            # add alpha
+            alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+            joint_map = np.dstack((joint_map, alpha))
+            #as image
+            map_img = Image.fromarray(np.uint8(joint_map))
+            #save image
+            map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
+
+        return len(frames_grp)
+
+    def get_stframe_pred(self):
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+        return frame_id
+
     def get_types(self,
                   objlist,
                   libraries=["models_flex.json"],
@@ -769,9 +1417,11 @@ class Dominoes(RigidbodiesDataset):
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
-        ## randomize colors
-        if self._random_zone_color:
-            self.zone_color = None
+        ## set randomize colors
+        if not self.repeat_trial:
+            # don't change the target
+            if self._random_zone_color:
+                self.zone_color = None
         if self._random_target_color:
             self.target_color = None
         if self._random_probe_color:
@@ -823,15 +1473,24 @@ class Dominoes(RigidbodiesDataset):
         return 55
 
     def get_scene_initialization_commands(self) -> List[dict]:
-        if self.room == 'box':
+
+        selected_room = ""
+        if self.room == 'random':
+            selected_room = random.choice(['box', 'tdw', 'mmcraft'])
+
+
+        if self.room == 'box' or selected_room == "box":
             add_scene = self.get_add_scene(scene_name="box_room_2018")
-        elif self.room == 'tdw':
+        elif self.room == 'tdw' or selected_room == "tdw":
             add_scene = self.get_add_scene(scene_name="tdw_room")
-        elif self.room == 'house':
+        elif self.room == 'house' or selected_room == "house":
             add_scene = self.get_add_scene(scene_name='archviz_house')
-        return [add_scene,
+        elif self.room == 'mmcraft' or selected_room == "mmcraft":
+            add_scene = self.get_add_scene(scene_name='mm_craftroom_1b')
+        print("room name", self.room, selected_room)
+        commands = [add_scene,
                 {"$type": "set_aperture",
-                 "aperture": 8.0},
+                 "aperture": 4.0},
                 {"$type": "set_post_exposure",
                  "post_exposure": 0.4},
                 {"$type": "set_ambient_occlusion_intensity",
@@ -839,34 +1498,77 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5}]
 
-    def get_trial_initialization_commands(self) -> List[dict]:
+        if self.room == 'tdw' or selected_room == "tdw":
+            commands.extend([
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.25},
+                {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
+                {"$type": "set_shadow_strength", "strength": 0.5},
+                {"$type": "rotate_directional_light_by", "angle": -30, "axis": "pitch", "index": 0},
+            ])
+        elif self.room == 'box' or selected_room == "box":
+            commands.extend([
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.7},
+                {"$type": "set_shadow_strength", "strength": 0.6},
+            ])
+        elif self.room == 'house' or selected_room == "house":
+            commands.extend([
+             {"$type": "adjust_directional_light_intensity_by", "intensity": 0.4},
+             {"$type": "adjust_point_lights_intensity_by", "intensity": 0.5},
+             {"$type": "set_shadow_strength", "strength": 0.8}])
+        elif self.room == 'mmcraft' or selected_room == "mmcraft":
+            commands.extend([
+                {"$type": "adjust_point_lights_intensity_by", "intensity": 0.6},
+                {"$type": "adjust_directional_light_intensity_by", "intensity": 0.2},
+                {"$type": "set_shadow_strength", "strength": 0.5}])
+
+
+        return commands
+        # return [add_scene,
+        #         {"$type": "set_aperture",
+        #          "aperture": 8.0},
+        #         {"$type": "set_post_exposure",
+        #          "post_exposure": 0.4},
+        #         {"$type": "set_ambient_occlusion_intensity",
+        #          "intensity": 0.175},
+        #         {"$type": "set_ambient_occlusion_thickness_modifier",
+        #          "thickness": 3.5}]
+
+
+
+    def get_trial_initialization_commands(self, interact_id) -> List[dict]:
         commands = []
 
         # randomization across trials
-        # if not(self.randomize):
-        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-        #     random.seed(self.trial_seed)
-        # else:
-        #     self.trial_seed = -1 # not used
+        if not(self.randomize):
+            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+            random.seed(self.trial_seed)
+        else:
+            self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
-        commands.extend(self._place_target_zone())
+        commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
-        commands.extend(self._place_target_object())
+        commands.extend(self._place_star_object(interact_id))
+
+        #self.model_names.append(record.name)
+        #self.scales.append(data['scale'])
+        #self.colors
 
         # Set the probe color
         if self.probe_color is None:
             self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
 
         # Choose, place, and push a probe object.
-        commands.extend(self._place_and_push_probe_object())
+        commands.extend(self._place_and_push_probe_object(interact_id))
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
-        commands.extend(self._build_intermediate_structure())
+        commands.extend(self._build_intermediate_structure(interact_id))
 
         # Teleport the avatar to a reasonable position based on the drop height.
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+
+        if interact_id == 0:
+            self.a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
@@ -876,7 +1578,7 @@ class Dominoes(RigidbodiesDataset):
                                                 reflections=self.camera_left_right_reflections)
 
         # Set the camera parameters
-        self._set_avatar_attributes(a_pos)
+        self._set_avatar_attributes(self.a_pos)
 
         commands.extend([
             {"$type": "teleport_avatar_to",
@@ -884,7 +1586,7 @@ class Dominoes(RigidbodiesDataset):
             {"$type": "look_at_position",
              "position": self.camera_aim},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+             "focus_distance": TDWUtils.get_distance(self.a_pos, self.camera_aim)}
         ])
 
 
@@ -900,10 +1602,35 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
+    def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
+
+        if force_wait == None:
+            if (self.force_wait != 0) and frame == self.force_wait:
+                if self.PRINT:
+                    print("applied %s at time step %d" % (self.push_cmd, frame))
+                return [self.push_cmd]
+            else:
+                return []
+        else:
+            if (self.force_wait != 0) and frame == force_wait:
+                if self.PRINT:
+                    print("applied %s at time step %d" % (self.push_cmd, frame))
+                return [self.push_cmd]
+            else:
+                return []
 
     def _post_write_static_data(self, static_group: h5py.Group, meta) -> None:
         # write start_frame_id and red_hits_yellow label
         # randomization
+        try:
+            static_group.create_dataset("start_frame_after_curtain", data=self.start_frame_after_curtain)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("start_frame_of_the_clip", data=self.stframe_whole_video)
+        except (AttributeError,TypeError):
+            pass
+
         key_from_meta = ["does_target_contact_zone", 'first_target_contact_zone_frame']
 
         for key in key_from_meta:
@@ -913,6 +1640,7 @@ class Dominoes(RigidbodiesDataset):
                 pass
 
     def write_static_obi_data(self, static_group: h5py.Group, resp) -> None:
+
         if self.use_obi:
             print("use_obi", self.obi.actors)
             actor_list = [k for k, v in self.obi.actors.items()]
@@ -921,410 +1649,12 @@ class Dominoes(RigidbodiesDataset):
                 assert(v == self.obi_object_ids[i])
 
             static_group.create_dataset("obi_object_ids", data=actor_list)
-            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type])
+            #print("obi object_types", self.obi_object_type)
+            #import ipdb; ipdb.set_trace()
+            # cannot save a list of string
+            static_group.create_dataset("obi_object_type", data=[v for k, v in self.obi_object_type][0])
         if self.use_obi and self.obi_object_segmentation_colors is not None:
             static_group.create_dataset("video_obi_object_segmentation_colors", data=self.video_obi_object_segmentation_colors)
-
-    def trial_loop(self,
-                   num: int,
-                   output_dir: str,
-                   temp_path: str) -> None:
-
-
-        output_dir = Path(output_dir)
-        if not output_dir.exists():
-            output_dir.mkdir(parents=True)
-        temp_path = Path(temp_path)
-        if not temp_path.parent.exists():
-            temp_path.parent.mkdir(parents=True)
-        # Remove an incomplete temp path.
-        if temp_path.exists():
-            temp_path.unlink()
-        self.num_interactions = 1
-
-        pbar = tqdm(total=num)
-        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-        exists_up_to = 0
-        for f in output_dir.glob("*.pkl"):
-            if int(f.stem) > exists_up_to:
-                exists_up_to = int(f.stem)
-
-        if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
-
-        pbar.update(exists_up_to)
-        for i in range(exists_up_to, num):
-            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
-
-            if not filepath.exists():
-
-                temp_path_f = h5py.File(str(temp_path.resolve()), "a")
-                self.stframe_whole_video = 0
-
-                # Save out images
-                self.png_dir = None
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists():
-                        self.png_dir.mkdir(parents=True)
-
-                # Do the trial.
-                self.trial(filepath=filepath,
-                           temp_path_f=temp_path_f,
-                           trial_num=i)
-
-                # Close the file.
-                def dfs_hdf5(hf, data):
-                    for attr in hf:
-                        data_ = hf[attr]
-                        if isinstance(data_, h5py.Group):
-                            data[attr] = dict()
-                            dfs_hdf5(data_, data[attr])
-                        else:
-                            data[attr] = data_[()]
-
-                output = dict()
-                dfs_hdf5(temp_path_f, output)
-
-                output_file = str(filepath).replace(".hdf5", ".pkl")
-                with open(output_file, 'wb') as outfile:
-                    pickle.dump(output, outfile)
-
-                temp_path_f.close()
-                os.remove(temp_path)
-
-
-
-                # Save an MP4 of the stimulus
-                if self.save_movies:
-
-                    for pass_mask in self.save_passes:
-                        if pass_mask not in ["_depth", "_id"]:
-                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
-                            cmd, stdout, stderr = pngs_to_mp4(
-                                filename=mp4_filename,
-                                image_stem=pass_mask[1:]+'_',
-                                png_dir=self.png_dir,
-                                size=[self._height, self._width],
-                                overwrite=True,
-                                remove_pngs=True,
-                                use_parent_dir=False)
-                        elif pass_mask in ["_id"]:
-                            from pycocotools import mask as cocomask
-                            mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
-
-                            files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
-                            out_dict = {}
-                            seg_colors = output["static"]["video_object_segmentation_colors"]
-                            if self.use_obi:
-                                seg_colors = np.concatenate([seg_colors, output["static"]["video_obi_object_segmentation_colors"]])
-                            nobjs = seg_colors.shape[0]
-                            for file in files:
-                                seg_img = imageio.imread(file)
-                                frm_id = file[-8:-4]
-
-
-                                rels_list = []
-                                for idx in range(nobjs):
-                                    color_dist = np.linalg.norm(seg_img.astype(np.float32) - seg_colors[idx][np.newaxis, np.newaxis, :].astype(np.float32), axis=2)
-                                    #seg[color_dist == 0] = 255
-                                    n_nonzeros = np.sum(color_dist == 0)
-                                    if n_nonzeros == 0:
-                                        continue
-                                    bi_mask = np.asfortranarray(color_dist == 0)
-                                    rels = cocomask.encode(bi_mask)
-                                    rels['counts'] = rels['counts'].decode('utf8')
-                                    rels['idx'] = idx
-                                    rels_list.append(rels)
-                                out_dict[frm_id] = rels_list
-                                #if int(frm_id) % 20 ==0:
-                                #    print('%d/%d\n'%(int(frm_id), len(files)))
-                                    #break
-                            with open(mp4_filename + ".json", 'w') as fh:
-                                json.dump(out_dict, fh)
-                            [os.remove(file) for file in files]
-                    if "_depth" in self.save_passes:
-                        mv = subprocess.run('mv ' + str(self.png_dir).replace(" ", "\ ") + " " + str(filepath).split('.hdf5')[0].replace(" ", "\ ") + "_depth", shell=True)
-                    else:
-                        os.rmdir(str(self.png_dir))
-                        #rm = subprocess.run('rm -rf ' + str(self.png_dir).replace(" ", "\ "), shell=True)
-
-                #if self.save_meshes:
-                #    for o_id in self.object_ids:
-                #        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                #        vertices, faces = self.object_meshes[o_id]
-                #        save_obj(vertices, faces, obj_filename)
-            pbar.update(1)
-        pbar.close()
-
-
-    def trial(self,
-              filepath: Path,
-              temp_path_f: Path,
-              trial_num: int) -> None:
-        """
-        Run a trial. Write static and per-frame data to disk until the trial is done.
-
-        :param filepath: The path to this trial's hdf5 file.
-        :param temp_path: The path to the temporary file.
-        :param trial_num: The number of the current trial.
-        """
-       # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = self.seed + trial_num
-            random.seed(self.trial_seed)
-            np.random.seed(self.trial_seed)
-            self.var_rng = np.random.RandomState(self.var_rng_seed + trial_num)
-
-            print("rand var", trial_num, self.trial_seed, self.var_rng_seed)
-            #import ipdb; ipdb.set_trace()
-
-        else:
-            self.trial_seed = -1 # not used
-
-            raise ValueError("Please set randomize as 0 for reproducibility.")
-
-        # Clear the object IDs and other static data
-
-        self.clear_static_data()
-
-        if self.use_obi and self.obi is None:
-            from tdw.add_ons.obi import Obi
-            obi = Obi()
-            self.add_ons = [obi] #.extend([obi])
-            self.obi = obi
-
-        self._trial_num = trial_num
-
-        # Create the .hdf5 file.
-
-        commands = []
-        # Remove asset bundles (to prevent a memory leak).
-        if trial_num % 100 == 0:
-            commands.append({"$type": "unload_asset_bundles"})
-
-        # Add commands to start the trial.
-        commands.extend(self.get_trial_initialization_commands())
-        # Add commands to request output data.
-        commands.extend(self._get_send_data_commands())
-
-        # Send the commands and start the trial.
-        r_types = ['']
-        count = 0
-
-        resp = self.communicate(commands)
-
-        self._set_segmentation_colors(resp)
-        self.video_object_segmentation_colors = self.object_segmentation_colors
-
-        self._get_object_meshes(resp)
-        frame = 0
-        # Write static data to disk.
-        static_group = temp_path_f.create_group("static")
-        self._write_static_data(static_group)
-
-        # Add the first frame.
-        done = False
-        frames_grp = temp_path_f.create_group("frames")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-        self._write_frame_labels(frame_grp, resp, -1, False)
-
-        # Continue the trial. Send commands, and parse output data.
-        found_obi_seg = False
-        while not done:
-            frame += 1
-            # print('frame %d' % frame)
-            cmd = self.get_per_frame_commands(resp, frame)
-            if not found_obi_seg and self.use_obi and frame > 1:
-                from tdw.output_data import IdPassSegmentationColors
-                cmd.extend([{"$type": "send_id_pass_segmentation_colors",
-                     "frequency": "once"}])
-
-                #print("frame", frame)
-                #print(self.obi.actors)
-
-            resp = self.communicate(cmd) #self.get_per_frame_commands(resp, frame))
-            if not found_obi_seg and self.use_obi and frame > 1:
-                found_obi_seg = self._set_obi_segmentation_colors(resp)
-                if found_obi_seg:
-                    self.video_obi_object_segmentation_colors = self.obi_object_segmentation_colors
-
-            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-
-            # Sometimes the build freezes and has to reopen the socket.
-            # This prevents such errors from throwing off the frame numbering
-            if ('imag' not in r_ids) or ('tran' not in r_ids):
-                print("retrying frame %d, response only had %s" % (frame, r_ids))
-                frame -= 1
-                continue
-
-            frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-
-            # Write whether this frame completed the trial and any other trial-level data
-            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
-
-        if self.use_obi:
-            self.write_static_obi_data(static_group, resp)
-
-        # Cleanup.
-        commands = []
-        for o_id in self.object_ids:
-            commands.append({"$type": self._get_destroy_object_command_name(o_id),
-                             "id": int(o_id)})
-        self.communicate(commands)
-        if self.use_obi:
-            self.obi.reset()
-        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-        if self.save_labels:
-            meta = OrderedDict()
-            meta = get_labels_from(temp_path_f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-            self.trial_metadata.append(meta)
-            self._post_write_static_data(static_group, meta)
-
-            # Save the trial-level metadata
-            json_str =json.dumps(self.trial_metadata, indent=4)
-            self.meta_file.write_text(json_str, encoding='utf-8')
-            print("TRIAL %d LABELS" % self._trial_num)
-            print(json.dumps(self.trial_metadata[-1], indent=4))
-
-        # Save out the target/zone segmentation mask
-        static_group.create_dataset("num_reset", data=self.num_interactions - 1)
-
-        frame_id = self.start_frame_for_prediction
-        id_filename = os.path.join(str(filepath.parent).split('.hdf5')[0], "pngs_" + str(filepath).split("/")[-1][:4], f"id_{frame_id:04}.png")
-        #_id = f['frames']['0000']['images']['_id']
-        #get PIL image
-        #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        _id_map = imageio.imread(id_filename)
-        #get colors
-        zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
-        if self.use_obi and len(zone_idx) == 0:
-            zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
-            zone_color = self.obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        else:
-            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-
-        target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
-        if self.use_obi and len(target_idx) == 0:
-            target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
-            target_color = self.obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
-        else:
-            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-
-        #get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        #as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        #save image
-        map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
-
-    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
-
-        if (self.force_wait != 0) and frame == self.force_wait:
-            if self.PRINT:
-                print("applied %s at time step %d" % (self.push_cmd, frame))
-            return [self.push_cmd]
-        else:
-            return []
-
-    def _write_static_data(self, static_group: h5py.Group) -> None:
-        super()._write_static_data(static_group)
-
-        # randomization
-        try:
-            static_group.create_dataset("room", data=self.room)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("seed", data=self.seed)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("randomize", data=self.randomize)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("trial_seed", data=self.trial_seed)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("trial_num", data=self._trial_num)
-        except (AttributeError,TypeError):
-            pass
-        static_group.create_dataset("var_rng_seed", data=self.var_rng_seed)
-        ## which objects are the zone, target, and probe
-        try:
-            static_group.create_dataset("zone_id", data=self.zone_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("target_id", data=self.target_id)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_id", data=self.probe_id)
-        except (AttributeError,TypeError):
-            pass
-
-        if self.use_ramp:
-            static_group.create_dataset("ramp_id", data=self.ramp_id)
-            if self.ramp_base_height > 0.0:
-                static_group.create_dataset("ramp_base_height", data=float(self.ramp_base_height))
-                static_group.create_dataset("ramp_base_id", data=self.ramp_base_id)
-
-        ## color and scales of primitive objects
-        try:
-            static_group.create_dataset("target_type", data=self.target_type)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("target_rotation", data=xyz_to_arr(self.target_rotation))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_type", data=self.probe_type)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("probe_mass", data=self.probe_mass)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_force", data=xyz_to_arr(self.push_force))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_position", data=xyz_to_arr(self.push_position))
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("push_time", data=int(self.force_wait))
-        except (AttributeError,TypeError):
-            pass
-
-        # distractors and occluders
-        try:
-            static_group.create_dataset("distractors", data=[r.name.encode('utf8') for r in self.distractors.values()])
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("occluders", data=[r.name.encode('utf8') for r in self.occluders.values()])
-        except (AttributeError,TypeError):
-            pass
-
-        self._write_class_specific_data(static_group)
-        static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
-        static_group.create_dataset("start_frame_for_prediction", data=self.start_frame_for_prediction)
-
 
     def _write_frame(self,
                      frames_grp: h5py.Group,
@@ -1333,26 +1663,52 @@ class Dominoes(RigidbodiesDataset):
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         frame, objs, tr, sleeping = super()._write_frame(frames_grp=frames_grp,
                                                          resp=resp,
-                                                         frame_num=frame_num)
+                                                         frame_num=frame_num + self.stframe_whole_video)
+
+        # map segmentation color to match frame 0
+        if self.video_object_segmentation_colors is not None and self.interact_id > 0:
+
+            if self.video_object_segmentation_colors.shape[0] != self.object_segmentation_colors.shape[0]:
+                import ipdb; ipdb.set_trace()
+            assert(self.video_object_segmentation_colors.shape[0] == self.object_segmentation_colors.shape[0])
+            nobjs = self.video_object_segmentation_colors.shape[0]
+            img_path = os.path.join(str(self.png_dir), f"id_{frame_num + self.stframe_whole_video:04}.png")
+            seg_image = imageio.imread(img_path)
+            id_map = np.zeros_like(seg_image)
+            for idx in range(nobjs):
+                color_dist = np.sum(abs(seg_image - self.object_segmentation_colors[idx][np.newaxis, np.newaxis, :]), axis=2)
+                id_map[color_dist == 0] = self.video_object_segmentation_colors[idx]
+
+            if self.use_obi:
+                nobiobjs = len(self.obi_object_segmentation_colors)
+
+                for idx in range(nobiobjs):
+                    color_dist = np.sum(abs(seg_image - self.obi_object_segmentation_colors[idx][np.newaxis, np.newaxis, :]), axis=2)
+                    id_map[color_dist == 0] = self.video_obi_object_segmentation_colors[idx]
+
+            imageio.imwrite(img_path, id_map)
+        #if self.use_obi:
+        #    # see if there is uncovered color, that should be obi color
+
+        #import ipdb; ipdb.set_trace()
 
         # If this is a stable structure, disregard whether anything is actually moving.
         return frame, objs, tr, sleeping and not (frame_num < 150)
 
     def _update_target_position(self, resp: List[bytes], frame_num: int) -> None:
-        if frame_num <= 0:
+        #print("frame_num", frame_num)
+        if frame_num <= 2:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
 
-            #print("get object position target", self.target_id)
-            #print(self.get_object_position(self.target_id, resp))
-            #print("target position", self.target_position)
-            object_position = self.get_object_position(self.target_id, resp)
-            target_position_new = object_position if object_position is not None else self.target_position
+            object_pos = self.get_object_position(self.target_id, resp)
+            target_position_new = object_pos if object_pos is not None else self.target_position
             try:
                 self.target_delta_position += (target_position_new - xyz_to_arr(self.target_position))
                 self.target_position = arr_to_xyz(target_position_new)
             except TypeError:
                 if not self.obi:
+                    import ipdb; ipdb.set_trace()
                     print("Failed to get a new object position, %s" % target_position_new)
 
     def _write_frame_labels(self,
@@ -1360,8 +1716,8 @@ class Dominoes(RigidbodiesDataset):
                             resp: List[bytes],
                             frame_num: int,
                             sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
-
-        labels, resp, frame_num, done = super()._write_frame_labels(frame_grp, resp, frame_num, sleeping)
+        frame_num_tmp = frame_num
+        labels, resp, frame_num, done = super()._write_frame_labels(frame_grp, resp, frame_num + self.stframe_whole_video, sleeping)
 
         # Whether this trial has a target or zone to track
         has_target = (not self.remove_target) or self.replace_target
@@ -1373,7 +1729,7 @@ class Dominoes(RigidbodiesDataset):
 
         # Whether target moved from its initial position, and how much
         if has_target:
-            self._update_target_position(resp, frame_num)
+            self._update_target_position(resp, frame_num_tmp)
             has_moved = np.sqrt((self.target_delta_position**2).sum()) > self.target_motion_thresh
             labels.create_dataset("target_delta_position", data=self.target_delta_position)
             labels.create_dataset("target_has_moved", data=has_moved)
@@ -1405,7 +1761,8 @@ class Dominoes(RigidbodiesDataset):
         return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 300
+
+        return frame - self.stframe_whole_video > 300
 
     def get_rotation(self, rot_range):
         if rot_range is None:
@@ -1450,43 +1807,71 @@ class Dominoes(RigidbodiesDataset):
                 "id": o_id}
         return cmd
 
-    def _get_zone_location(self, scale):
-        return {
-            "x": 0.5 * self.collision_axis_length + scale["x"] + 0.1,
-            "y": 0.0 if not self.remove_zone else 10.0,
-            "z": 0.0 if not self.remove_zone else 10.0
-        }
+    def _get_zone_location(self, scale, islasttrial):
+        if islasttrial:
+            return {
+                "x": self.total_num_dominoes * self.spacing - 0.5 + 0.2,
+                #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z": 0.0 if not self.remove_zone else 10.0
+            }
+        else:
+            return {
+                "x": -1.1,
+                #0.5 * self.trial_collision_axis_length + scale["x"] + 0.1,
+                "y": 0.0 if not self.remove_zone else 10.0,
+                "z": 0.0 if not self.remove_zone else 10.0
+            }
 
-
-    def _place_target_zone(self) -> List[dict]:
+    def element_wise_equal(self, x, y):
+        for ele in x:
+            if x[ele] != y[ele]:
+                return False
+        return True
+    def _place_target_zone(self, interact_id) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
+        if not self.repeat_trial: # sample from scratch
 
-        record, data = self.random_primitive(self._zone_types,
-                                             scale=self.zone_scale_range,
-                                             color=self.zone_color,
-                                             add_data=False
-        )
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.zone = record
-        self.zone_type = data["name"]
-        self.zone_color = rgb
-        self.zone_id = o_id
-        self.zone_scale = scale
+            record, data = self.random_primitive(self._zone_types,
+                                                 scale=self.zone_scale_range,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.zone = record
+            self.zone_type = data["name"]
+            self.zone_color = rgb
+            self.zone_id = o_id
+            self.zone_scale = scale
+        else:
+            # dry pass to get the obj id counter correct
+            record, data = self.random_primitive([self.zone],
+                                                 scale=self.zone_scale,
+                                                 color=self.zone_color,
+                                                 add_data=False
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            assert(record == self.zone)
+            assert(o_id == self.zone_id)
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(self.element_wise_equal(scale, self.zone_scale))
+            assert(np.array_equal(rgb, self.zone_color))
+
 
         if any((s <= 0 for s in scale.values())):
             self.remove_zone = True
             self.scales = self.scales[:-1]
             self.colors = self.colors[:-1]
             self.model_names = self.model_names[:-1]
-
+        self.distinct_ids = np.append(self.distinct_ids, -1)
         # place it just beyond the target object with an effectively immovable mass and high friction
-        self.zone_location_tmp = self._get_zone_location(scale)
+
         commands = []
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=(self.zone_location or self.zone_location_tmp),
+                position=(self.zone_location or self._get_zone_location(scale, interact_id == self.num_interactions - 1)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 scale=scale,
                 material=self.zone_material,
@@ -1500,7 +1885,6 @@ class Dominoes(RigidbodiesDataset):
                 add_data=(not self.remove_zone),
                 make_kinematic=True # zone shouldn't move
             ))
-
         # get rid of it if not using a target object
         if self.remove_zone:
             commands.append(
@@ -1510,49 +1894,127 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_target_object(self) -> List[dict]:
+    def _place_star_object(self, interact_id) -> List[dict]:
         """
         Place a primitive object at one end of the collision axis.
         """
-
+        distinct_id = 1
+        self.distinct_ids = np.append(self.distinct_ids, distinct_id)
         # create a target object
-        record, data = self.random_primitive(self._target_types,
-                                             scale=self.target_scale_range,
-                                             color=self.target_color,
+        #if not self.repeat_trial: # sample from scratch
+        star_type = self.star_object["type"]
+        star_scale = self.star_object["scale"]
+        star_mass = self.star_object["mass"]
+        star_color = self.star_object["color"]
+
+        # select an object
+        # record, data = self.random_primitive(self._target_types,
+        #                                      scale=self.target_scale_range,
+        #                                      color=self.target_color,
+        #                                      add_data=False
+        # )
+
+        record, data = self.random_primitive([star_type],
+                                             scale=star_scale,
+                                             color=star_color,
                                              add_data=False
         )
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.target = record
-        self.target_type = data["name"]
-        self.target_color = rgb
-        self.target_scale = self.middle_scale = scale
-        self.target_id = o_id
+
+        assert(o_id == 2), "make sure the star object is always with the same id"
+        self.star_id = o_id
+
+        # else:
+        #     # object properties don't change
+        #     record = self.target
+        #     scale = self.target_scale
+        #     o_id = self.target_id
+        #     rgb = self.target_color
+
 
         if any((s <= 0 for s in scale.values())):
             self.remove_target = True
 
         # Where to put the target
-        if self.target_rotation is None:
-            self.target_rotation = self.get_rotation(self.target_rotation_range)
 
-        if self.target_position is None:
-            self.target_position = {
-                "x": 0.5 * self.collision_axis_length,
-                "y": 0. if not self.remove_target else 10.0,
-                "z": 0. if not self.remove_target else 10.0
-            }
+        if interact_id < self.num_interactions - 1:
+            # try avoiding sampling the last one
+
+            if star_mass > self.normal_mass * 2: # heavy object
+
+                bias = np.random.uniform(0,1) < 0.9
+                if bias:
+                    pos_id = random.choice(range(1, self.total_num_dominoes))
+                else:
+                    pos_id = random.choice(range(self.total_num_dominoes))
+
+
+            elif star_mass < self.normal_mass * 0.5: #light object
+                bias = np.random.uniform(0,1) < 0.9
+                if bias:
+                    pos_id = 0
+                else:
+                    pos_id = random.choice(range(self.total_num_dominoes))
+
+            else:
+                pos_id = pos_id = random.choice(range(self.total_num_dominoes))
+                #random.choice(range(self.total_num_dominoes -1))
+
+            # creating informative example by
+            # trying to put heavy object not at right most,
+            # and light object at the right most
+
+            #self.target_pos_id = random.choice(range(self.total_num_dominoes))
+        else:
+            self.target_pos_id = self.total_num_dominoes - 1
+            pos_id = random.choice(range(self.total_num_dominoes))
+            # put last
+            if self.star_putfirst:
+                pos_id = 0
+            else:
+                pos_id = random.choice(range(1, self.total_num_dominoes))
+
+        # carpet, target, middle, middle | prob
+        star_position = {
+            "x": pos_id * self.spacing - 0.5,
+            "y": 0. if not self.remove_target else 10.0,
+            "z": 0. if not self.remove_target else 10.0
+        }
+        star_rotation = self.get_rotation(self.target_rotation_range)
+
+        self.star_pos_id = pos_id
+        self.posid_to_objid = dict()
+        self.posid_to_objid[pos_id] = dict()
+        self.posid_to_objid[pos_id]["o_id"] = o_id
+        self.posid_to_objid[pos_id]["rot"] = star_rotation
+        self.posid_to_objid[pos_id]["mass"] = star_mass
+        self.posid_to_objid[pos_id]["scale"] = star_scale
+        self.middle_scale = scale
+        if (interact_id < self.num_interactions - 1) or \
+           ((interact_id == self.num_interactions - 1) and\
+           pos_id == self.total_num_dominoes - 1):
+            self.target = record
+            self.target_type = data["name"]
+            self.target_color = rgb
+            self.target_scale = scale
+            self.target_id = o_id
+            if self.target_rotation is None:
+                self.target_rotation = star_rotation
+            if self.target_position is None:
+                self.target_position = star_position
 
         # Commands for adding hte object
         commands = []
+
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=self.target_position,
-                rotation=self.target_rotation,
+                position=star_position,
+                rotation=star_rotation,
                 scale=scale,
                 material=self.target_material,
                 color=rgb,
-                mass=2.0,
+                mass=star_mass, #2.0,
                 scale_mass=False,
                 dynamic_friction=0.5,
                 static_friction=0.5,
@@ -1571,14 +2033,26 @@ class Dominoes(RigidbodiesDataset):
 
         return commands
 
-    def _place_and_push_probe_object(self) -> List[dict]:
+    def _place_and_push_probe_object(self, interact_id) -> List[dict]:
         """
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
         exclude = not (self.monochrome and self.match_probe_and_target_color)
-        record, data = self.random_primitive(self._probe_types,
-                                             scale=self.probe_scale_range,
-                                             color=self.probe_color,
+
+        distinct_id = 0
+        #random.choice([x for x in range(self.num_distinct_objects) if x not in self.distinct_ids])
+
+        self.distinct_ids = np.append(self.distinct_ids, distinct_id)
+        # create a target object
+        #if not self.repeat_trial: # sample from scratch
+        probe_type = self.candidate_dict[distinct_id]["type"]
+        probe_scale = self.candidate_dict[distinct_id]["scale"]
+        probe_mass = self.candidate_dict[distinct_id]["mass"]
+        probe_color = self.candidate_dict[distinct_id]["color"]
+
+        record, data = self.random_primitive([probe_type],
+                                             scale=probe_scale,
+                                             color=probe_color,
                                              exclude_color=(self.target_color if exclude else None),
                                              exclude_range=0.25,
                                              add_data=False)
@@ -1587,22 +2061,47 @@ class Dominoes(RigidbodiesDataset):
         self.probe_type = data["name"]
         self.probe_scale = scale
         self.probe_id = o_id
+        self.probe_mass = probe_mass
 
         # Add the object with random physics values
         commands = []
 
+        pos_id_list = [x for x in range(self.total_num_dominoes)]
+        pos_id_list.remove(self.star_pos_id)
+        pos_id = pos_id_list[0]
+
+        self.posid_to_objid[pos_id] = dict()
+        self.posid_to_objid[pos_id]["o_id"] = o_id
         ### better sampling of random physics values
-        self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
+        #self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
+        self.probe_initial_position = {"x": pos_id * self.spacing
+         - 0.5, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
+
+        self.posid_to_objid[pos_id]["rot"] = rot
+        self.posid_to_objid[pos_id]["mass"] = probe_mass
+        self.posid_to_objid[pos_id]["scale"] = self.probe_scale
+        if ((interact_id == self.num_interactions - 1) and\
+           pos_id == self.total_num_dominoes - 1):
+            self.target = record
+            self.target_type = data["name"]
+            self.target_color = rgb
+            self.target_scale = scale
+            self.target_id = o_id
+            if self.target_rotation is None:
+                self.target_rotation = rot
+            if self.target_position is None:
+                self.target_position = self.probe_initial_position
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
 
-        if self.probe_has_friction:
-            probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
-        else:
-            probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
+        # if self.probe_has_friction:
+        #     probe_physics_info = {'dynamic_friction': 0.1, 'static_friction': 0.1, 'bounciness': 0.6}
+        # else:
+        probe_physics_info = {'dynamic_friction': 0.5, 'static_friction': 0.5, 'bounciness': 0}
+
+        #probe_physics_info = {'dynamic_friction': 0.01, 'static_friction': 0.01, 'bounciness': 0}
 
         commands.extend(
             self.add_primitive(
@@ -1612,7 +2111,7 @@ class Dominoes(RigidbodiesDataset):
                 scale=scale,
                 material=self.probe_material,
                 color=rgb,
-                mass=self.probe_mass,
+                mass=probe_mass,
                 scale_mass=False,
                 o_id=o_id,
                 add_data=True,
@@ -1621,46 +2120,102 @@ class Dominoes(RigidbodiesDataset):
             ))
 
         # Set its collision mode
+        # drag the right most object
+        # object to push is either the probe object or the target object
+        push_oid = self.posid_to_objid[0]["o_id"]
+        rot_y = self.posid_to_objid[0]['rot']['y']
+        push_mass = self.posid_to_objid[0]['mass']
+        push_scale = self.posid_to_objid[0]['scale']
+
         commands.extend([
             {"$type": "set_object_drag",
-             "id": o_id,
+             "id": push_oid,
              "drag": 0, "angular_drag": 0}])
 
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
-            scale_range=self.probe_mass * np.array(self.force_scale_range),
+            scale_range=push_mass * np.array(self.force_scale_range),
             angle_range=self.force_angle_range)
         self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, -rot['y'], degrees=True)
+            self.push_force, -rot_y, degrees=True)
 
         self.push_position = self.probe_initial_position
 
         if self.PRINT:
-            print("PROBE MASS", self.probe_mass)
+            print("PROBE MASS", push_mass)
             print("PUSH FORCE", self.push_force)
         if self.use_ramp:
-            self.push_cmd = self._get_push_cmd(o_id, None)
+            self.push_cmd = self._get_push_cmd(push_oid, None)
         else:
             self.push_position = {
                 k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    self.probe_scale, rot['y'])[k]
+                    push_scale, rot_y)[k]
                 for k,v in self.push_position.items()}
             self.push_position = {
                 k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
                 for k,v in self.push_position.items()}
 
-            self.push_cmd = self._get_push_cmd(o_id, self.push_position)
+            self.push_cmd = self._get_push_cmd(push_oid, self.push_position)
 
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
         if self.PRINT:
             print("force wait", self.force_wait)
-
         if self.force_wait == 0:
             commands.append(self.push_cmd)
 
         return commands
+
+
+    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
+        #variables = static_group.create_group("variables")
+        static_group.create_dataset("remove_middle", data=self.remove_middle)
+        if self.middle_type is not None:
+            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.trial_num_middle_objects)])
+            static_group.create_dataset("middle_type", data=self.middle_type)
+        try:
+            static_group.create_dataset("num_dominoes", data=self.total_num_dominoes)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("remove_dominoes", data=self.remove_middle)
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_mass", data=self.star_object["mass"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_type", data=self.star_object["color"])
+        except (AttributeError,TypeError):
+            pass
+        try:
+            static_group.create_dataset("star_scale", data=self.star_object["scale"])
+        except (AttributeError,TypeError):
+            pass
+
+
+    def _write_static_data(self, static_group: h5py.Group) -> None:
+        super()._write_static_data(static_group)
+        static_group.create_dataset("distinct_ids", data=self.distinct_ids)
+
+        # about the distinct_objects
+        distinct_group = static_group.create_group("distinct_objects")
+        colors = np.stack([self.candidate_dict[id_]["color"] for id_ in range(self.num_distinct_objects)], axis=0)
+
+        distinct_scales = [self.candidate_dict[id_]["scale"] for id_ in range(self.num_distinct_objects)]
+        scales = np.stack([xyz_to_arr(_s) for _s in distinct_scales])
+        distinct_group.create_dataset("scales", data=scales)
+        distinct_group.create_dataset("colors", data=colors)
+        distinct_group.create_dataset("masses", data=[self.candidate_dict[id_]["mass"] for id_ in range(self.num_distinct_objects)])
+
+
+        self._write_class_specific_data(static_group)
+
+        static_group.create_dataset("video_object_segmentation_colors", data=self.video_object_segmentation_colors)
+
+
 
     def _place_ramp_under_probe(self) -> List[dict]:
 
@@ -1687,7 +2242,6 @@ class Dominoes(RigidbodiesDataset):
 
         # optionally add base
         cmds.extend(self._add_ramp_base_to_ramp(color=rgb))
-        #self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
 
         # add the ramp
         cmds.extend(
@@ -1709,14 +2263,14 @@ class Dominoes(RigidbodiesDataset):
 
         return cmds
 
-    def _add_ramp_base_to_ramp(self, color=None) -> None:
+    def _add_ramp_base_to_ramp(self, color=None, sample_ramp_base_height=True) -> None:
 
         cmds = []
 
         if color is None:
             color = self.random_color(exclude=self.target_color)
-
-        self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
+        if sample_ramp_base_height:
+            self.ramp_base_height = random.uniform(*get_range(self.ramp_base_height_range))
         if self.ramp_base_height < 0.01:
             self.ramp_base_scale = copy.deepcopy(self.ramp_scale)
             return []
@@ -1806,12 +2360,12 @@ class Dominoes(RigidbodiesDataset):
                                                      seed=self.trial_seed)
                     c['color'] = {'r': rgb[0], 'g': rgb[1], 'b': rgb[2], 'a': 1.0}
 
-    def _build_intermediate_structure(self) -> List[dict]:
-        """
-        Abstract method for building a physically interesting intermediate structure between the probe and the target.
-        """
-        commands = []
-        return commands
+    # def _build_intermediate_structure(self) -> List[dict]:
+    #     """
+    #     Abstract method for building a physically interesting intermediate structure between the probe and the target.
+    #     """
+    #     commands = []
+    #     return commands
 
     def _set_distractor_objects(self) -> None:
 
@@ -2187,11 +2741,13 @@ class MultiDominoes(Dominoes):
                  port: int = None,
                  middle_objects=None,
                  num_middle_objects=1,
+                 num_distinct_objects=3,
                  middle_color=None,
                  middle_scale_range=None,
                  middle_rotation_range=None,
                  middle_mass_range=[2.,7.],
                  horizontal=False,
+                 spacing=0.5,
                  spacing_jitter=0.2,
                  lateral_jitter=0.2,
                  middle_material=None,
@@ -2208,16 +2764,32 @@ class MultiDominoes(Dominoes):
         self.middle_mass_range = middle_mass_range
         self.middle_rotation_range = middle_rotation_range
         self.middle_color = middle_color
+
+
+        self._star_types = self._middle_types
+        self.star_scale_range = self.middle_scale_range
+        self._candidate_types = self._middle_types
+        self.candidate_scale_range = self.middle_scale_range
+
         self.randomize_colors_across_trials = False if (middle_color is not None) else True
         self.middle_material = self.get_material_name(middle_material)
         self.horizontal = horizontal
         self.remove_middle = remove_middle
+        self.num_distinct_objects = num_distinct_objects
 
         # How many middle objects and their spacing
         self.num_middle_objects = num_middle_objects
-        self.spacing = self.collision_axis_length / (self.num_middle_objects + 1.)
+        self.spacing = spacing #self.collision_axis_length / (self.num_middle_objects + 1.)
         self.spacing_jitter = spacing_jitter
         self.lateral_jitter = lateral_jitter
+
+
+        self.trial_num_middle_objects = self.num_middle_objects
+        # random.choice(range(self.num_middle_objects + 1))
+        self.trial_collision_axis_length = self.spacing * (self.trial_num_middle_objects + 1)
+        self.total_num_dominoes = self.trial_num_middle_objects + 2
+        self.position_ids = range(self.total_num_dominoes)
+
 
     def set_middle_types(self, olist):
         if isinstance(olist, str):
@@ -2232,19 +2804,13 @@ class MultiDominoes(Dominoes):
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
+        self.distinct_ids = np.empty(dtype=np.int32, shape=0)
         self.middle_type = None
         self.distractors = OrderedDict()
         self.occluders = OrderedDict()
 
         if self.randomize_colors_across_trials:
             self.middle_color = None
-
-    def _write_class_specific_data(self, static_group: h5py.Group) -> None:
-        static_group.create_dataset("remove_middle", data=self.remove_middle)
-        if self.middle_type is not None:
-            static_group.create_dataset("middle_objects", data=[self.middle_type.encode('utf8') for _ in range(self.num_middle_objects)])
-            static_group.create_dataset("middle_type", data=self.middle_type)
-
 
 
     @staticmethod
@@ -2266,59 +2832,108 @@ class MultiDominoes(Dominoes):
 
         return funcs
 
-    def _build_intermediate_structure(self) -> List[dict]:
+    def _build_intermediate_structure(self, interact_id) -> List[dict]:
         # set the middle object color
         if self.monochrome:
             self.middle_color = self.random_color(exclude=self.target_color)
 
-        return self._place_middle_objects() if bool(self.num_middle_objects) else []
+        return self._place_middle_objects(interact_id) if bool(self.trial_num_middle_objects) else []
 
-    def _place_middle_objects(self) -> List[dict]:
+    def _place_middle_objects(self, interact_id) -> List[dict]:
 
-        offset = -0.5 * self.collision_axis_length
-        min_offset = offset + self.target_scale["x"]
-        max_offset = 0.5 * self.collision_axis_length - self.target_scale["x"]
+        offset = -0.5 * self.trial_collision_axis_length
+        #min_offset = offset + self.target_scale["x"]
+        #max_offset = 0.5 * self.trial_collision_axis_length - self.target_scale["x"]
+
+
+        #self.target_pos_id = random.choice(range(self.total_num_dominoes))
+
+        pos_id_list = [x for x in range(self.total_num_dominoes)]
+        pos_id_list.remove(self.star_pos_id)
+        pos_id_list = pos_id_list[1:]
 
         commands = []
+        if interact_id == self.num_interactions-1 and self.remove_middle:
+            # only remove object when at the last trial
+            # don't remove the left most domino
+            # otherwise it will cause problem when
+            # detemining the "target" object
+            pos_id_list_tmp = copy.deepcopy(pos_id_list)
+            if pos_id_list_tmp[-1] == self.total_num_dominoes - 1:
+                pos_id_list_tmp.remove(self.total_num_dominoes - 1)
 
-        if self.remove_middle:
-            rm_idx = random.choice(range(self.num_middle_objects))
+            if len(pos_id_list_tmp) == 0:
+                rm_pos_idx = -1
+            else:
+                rm_pos_idx = random.choice(pos_id_list_tmp)
         else:
-            rm_idx = -1
+            rm_pos_idx = -1
 
-        for m in range(self.num_middle_objects):
-            offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
-            offset = np.minimum(np.maximum(offset, min_offset), max_offset)
-            if offset >= max_offset:
-                print("couldn't place middle object %s" % str(m+1))
-                print("offset now", offset)
-                break
+        for m in range(self.trial_num_middle_objects):
+            offset = pos_id_list[m] * self.spacing - 0.5#random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
+            #offset = np.minimum(np.maximum(offset, min_offset), max_offset)
+            # if offset >= max_offset:
+            #     print("couldn't place middle object %s" % str(m+1))
+            #     print("offset now", offset)
+            #     break
 
-            if m == rm_idx:
-                continue
 
-            record, data = self.random_primitive(self._middle_types,
-                                                 scale=self.middle_scale_range,
-                                                 color=self.middle_color,
+            distinct_id = 0 #random.choice(range(self.num_distinct_objects))
+            self.distinct_ids = np.append(self.distinct_ids, distinct_id)
+            # create a target object
+            #if not self.repeat_trial: # sample from scratch
+            middle_type = self.candidate_dict[distinct_id]["type"]
+            middle_scale = self.candidate_dict[distinct_id]["scale"]
+            middle_mass = self.candidate_dict[distinct_id]["mass"]
+            middle_color = self.candidate_dict[distinct_id]["color"]
+
+
+            record, data = self.random_primitive([middle_type],
+                                                 scale=middle_scale,
+                                                 color=middle_color,
                                                  exclude_color=self.target_color
             )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+            self.posid_to_objid[pos_id_list[m]] = dict()
+            self.posid_to_objid[pos_id_list[m]]["o_id"] = o_id
             zpos = scale["z"] * random.uniform(-self.lateral_jitter, self.lateral_jitter)
             pos = arr_to_xyz([offset, 0., zpos])
             rot = self.get_y_rotation(self.middle_rotation_range)
+
+
             if self.horizontal:
                 rot["z"] = 90
                 pos["z"] += -np.sin(np.radians(rot["y"])) * scale["y"] * 0.5
                 pos["x"] += np.cos(np.radians(rot["y"])) * scale["y"] * 0.5
+
+            if pos_id_list[m] == rm_pos_idx:
+                pos["z"] += 3.0 # move to background
+
+            self.posid_to_objid[pos_id_list[m]]["rot"] = rot
+            self.posid_to_objid[pos_id_list[m]]["mass"] = middle_mass
+            self.posid_to_objid[pos_id_list[m]]["scale"] = middle_scale
+
             self.middle_type = data["name"]
             self.middle_scale = {k:max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
+
+            # if((interact_id == self.num_interactions - 1) and\
+            #    pos_id_list[m] == self.total_num_dominoes - 1): #left most
+            #     self.target = record
+            #     self.target_type = data["name"]
+            #     self.target_color = rgb
+            #     self.target_scale = scale
+            #     self.target_id = o_id
+            #     if self.target_rotation is None:
+            #         self.target_rotation = rot
+            #     if self.target_position is None:
+            #         self.target_position = pos
 
             commands.extend(
                 self.add_physics_object(
                     record=record,
                     position=pos,
                     rotation=rot,
-                    mass=random.uniform(*get_range(self.middle_mass_range)),
+                    mass=middle_mass,
                     dynamic_friction=0.5,
                     static_friction=0.5,
                     bounciness=0.,
@@ -2338,6 +2953,19 @@ class MultiDominoes(Dominoes):
                  "scale_factor": scale,
                  "id": o_id}])
 
+            if (interact_id == self.num_interactions - 1) and\
+               pos_id_list[m] == self.total_num_dominoes - 1:
+                self.target = record
+                self.target_type = data["name"]
+                self.target_color = rgb
+                self.target_scale = scale
+                self.target_id = o_id
+                if self.target_rotation is None:
+                    self.target_rotation = rot
+                if self.target_position is None:
+                    self.target_position = pos
+
+
         return commands
 
 
@@ -2347,18 +2975,21 @@ if __name__ == "__main__":
 
     args = get_args("dominoes")
 
+    print("gpu", args.gpu)
     if platform.system() == 'Linux':
         if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
         else:
-            os.environ["DISPLAY"] = ":0"
+            os.environ["DISPLAY"] = ":"
 
     DomC = MultiDominoes(
         port=args.port,
         room=args.room,
         model_libraries=args.model_libraries,
         num_middle_objects=args.num_middle_objects,
+        num_distinct_objects=args.num_distinct_objects,
         randomize=args.random,
+        star_putfirst=args.star_putfirst,
         seed=args.seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
@@ -2377,12 +3008,12 @@ if __name__ == "__main__":
         target_color=args.tcolor,
         probe_color=args.pcolor,
         middle_color=args.mcolor,
-        collision_axis_length=args.collision_axis_length,
         force_scale_range=args.fscale,
         force_angle_range=args.frot,
         force_offset=args.foffset,
         force_offset_jitter=args.fjitter,
         force_wait=args.fwait,
+        spacing=args.spacing,
         spacing_jitter=args.spacing_jitter,
         lateral_jitter=args.lateral_jitter,
         middle_scale_range=args.mscale,

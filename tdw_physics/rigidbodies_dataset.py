@@ -5,7 +5,12 @@ import h5py
 import numpy as np
 import pkg_resources
 import io
+import copy
 import json
+import scipy
+import math
+import trimesh
+from scipy.spatial.transform import Rotation as R
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from tdw.librarian import ModelRecord
 from tdw.tdw_utils import TDWUtils
@@ -129,6 +134,270 @@ def get_random_xyz_transform(generator):
     return s
 
 
+def get_intrinsics_from_projection_matrix(proj_matrix, size):
+    H, W = size
+    vfov = 2.0 * math.atan(1.0/proj_matrix[1][1]) * 180.0/ np.pi
+    vfov = vfov / 180.0 * np.pi
+    tan_half_vfov = np.tan(vfov / 2.0)
+    tan_half_hfov = tan_half_vfov * H / float(H)
+    fx = W / 2.0 / tan_half_hfov  # focal length in pixel space
+    fy = H / 2.0 / tan_half_vfov
+
+    pix_T_cam = np.array([[fx, 0, W / 2.0],
+                           [0, fy, H / 2.0],
+                                   [0, 0, 1]])
+    return pix_T_cam
+
+def split_intrinsics(K):
+    # K is B x 3 x 3 or B x 4 x 4
+    fx = K[:,0,0]
+    fy = K[:,1,1]
+    x0 = K[:,0,2]
+    y0 = K[:,1,2]
+    return fx, fy, x0, y0
+
+def Pixels2Camera_np(x,y,z,fx,fy,x0,y0):
+    # x and y are locations in pixel coordinates, z is a depth image in meters
+    # their shapes are B x H x W
+    # fx, fy, x0, y0 are scalar camera intrinsics
+    # returns xyz, sized [B,H*W,3]
+    # there is no randomness here
+
+    B, H, W = list(z.shape)
+
+    fx = np.reshape(fx, [B,1,1])
+    fy = np.reshape(fy, [B,1,1])
+    x0 = np.reshape(x0, [B,1,1])
+    y0 = np.reshape(y0, [B,1,1])
+
+    # unproject
+    EPS = 1e-6
+    x = ((z+EPS)/fx)*(x-x0)
+    y = ((z+EPS)/fy)*(y-y0)
+
+    x = np.reshape(x, [B,-1])
+    y = np.reshape(y, [B,-1])
+    z = np.reshape(z, [B,-1])
+    xyz = np.stack([x,y,z], axis=2)
+    return xyz
+
+def apply_4x4(RT, xyz):
+    if isinstance(xyz, np.ndarray):
+        append_bdim = False
+        if len(xyz.shape) == 2:
+            append_bdim = True
+            xyz = xyz[np.newaxis,...]
+            RT = RT[np.newaxis,...]
+
+        B, N, _ = list(xyz.shape)
+        ones = np.ones_like(xyz[:,:,0:1])
+        xyz1 = np.concatenate([xyz, ones], 2)
+        xyz1_t = np.transpose(xyz1, (0, 2, 1))
+        # this is B x 4 x N
+        xyz2_t = np.matmul(RT, xyz1_t)
+        xyz2 = np.transpose(xyz2_t, (0, 2, 1))
+        xyz2 = xyz2[:,:,:3]
+        if append_bdim:
+            xyz2 = xyz2[0]
+        return xyz2
+    else:
+        B, N, _ = list(xyz.shape)
+        ones = torch.ones_like(xyz[:,:,0:1])
+        xyz1 = torch.cat([xyz, ones], 2)
+        xyz1_t = torch.transpose(xyz1, 1, 2)
+        # this is B x 4 x N
+        xyz2_t = torch.matmul(RT, xyz1_t)
+        xyz2 = torch.transpose(xyz2_t, 1, 2)
+        xyz2 = xyz2[:,:,:3]
+        return xyz2
+
+
+def get_fov_from_intrinsic(pix_T_cam):
+    w = pix_T_cam[0,2]*2
+    h = pix_T_cam[1,2]*2
+    fx = pix_T_cam[0,0]
+    fy = pix_T_cam[1,1]
+    fov_x = np.rad2deg(2 * np.arctan2(w, 2 * fx))
+    fov_y = np.rad2deg(2 * np.arctan2(h, 2 * fy))
+
+    return (fov_x, fov_y)
+def meshgrid2d_py(Y, X):
+    grid_y = np.linspace(0.0, Y-1, Y)
+    grid_y = np.reshape(grid_y, [Y, 1])
+    grid_y = np.tile(grid_y, [1, X])
+
+    grid_x = np.linspace(0.0, X-1, X)
+    grid_x = np.reshape(grid_x, [1, X])
+    grid_x = np.tile(grid_x, [Y, 1])
+
+    return grid_y, grid_x
+
+
+def Camera2Pixels_np(xyz, pix_T_cam):
+    # xyz is shaped N x 3
+    # pix_T_cam: 3x3
+    # returns xy, shaped B x H*W x 2
+
+    fx, fy = pix_T_cam[0,0], pix_T_cam[1,1]
+    x0, y0 = pix_T_cam[0,2], pix_T_cam[1,2]
+
+    #x, y, z = np.unstack(xyz, dim=-1)
+    x, y, z = np.split(xyz, 3, axis=-1)
+    B = list(z.shape)[0]
+
+    EPS = 1e-4
+    z = np.maximum(z, EPS * np.ones_like(z))
+    x = (x*fx)/z + x0
+    y = (y*fy)/z + y0
+
+    xy = np.concatenate([x, y], axis=-1)
+    return xy
+
+def pix_to_camrays(x,y, pix_T_cam, world_T_camtri):
+    """
+    x : [n]
+    y : [n]
+    pix_T_cam: 3x3
+    """
+    fx, fy, tx, ty = pix_T_cam[0,0], pix_T_cam[1,1], pix_T_cam[0,2], pix_T_cam[1,2]
+    X = (x + 0.5 -tx)/fx
+    Y = (-1) * (y + 0.5 -ty)/fy # make everything into trimesh coordiante
+    vts = np.stack([X,Y,-np.ones_like(X)], axis=1).reshape([-1,3])
+
+    # unitize
+    vts = vts/np.linalg.norm(vts, axis=1)[..., np.newaxis]
+    world_T_camtri_ = copy.deepcopy(world_T_camtri)
+    world_T_camtri_[:3,3] = 0
+    vts2 = apply_4x4(world_T_camtri_, vts)
+
+    ori = np.ones_like(vts2) * world_T_camtri[:3,3]
+
+    return ori, vts2
+
+def pixel_to_depth_from_scene(combined, xv, yv, pix_T_cam, world_T_camtri):
+    ori, vts2 = pix_to_camrays(xv, yv, pix_T_cam, world_T_camtri)
+    points, index_ray, index_tri = combined.ray.intersects_location(
+        ori, vts2, multiple_hits=False)
+    # # for each hit, find the distance along its vector
+    if points.shape[0] == 0:
+        return np.array([]), np.array([])
+    depth_ = trimesh.util.diagonal_dot(points - ori[0],
+                                      vts2[index_ray])
+    return depth_, index_ray
+
+
+
+from pycocotools import mask as cocomask
+class ObiSegsHelper():
+
+    def __init__(self, image_size, camera_data):
+        self.H, self.W = image_size
+        # get camera extrinsic and intrinsic
+        cam_T_world = np.reshape(camera_data['camera_matrix'], [4,4])
+        world_T_cam = np.linalg.inv(cam_T_world)
+        rot = np.array([[-1, 0, 0, 0],
+                        [0, -1, 0, 0],
+                        [0, 0, -1, 0],
+                        [0, 0, 0, 1]])
+        world_T_cam  = np.dot(world_T_cam , rot)
+        cam_T_world = np.linalg.inv(world_T_cam)
+
+        proj_matrix = np.reshape(camera_data["projection_matrix"], [4,4])
+        pix_T_cam = get_intrinsics_from_projection_matrix(proj_matrix, size=(self.H,self.W))
+        [self.fov_x, self.fov_y] = get_fov_from_intrinsic(pix_T_cam)
+
+        self.pix_T_cam = pix_T_cam
+        self.cam_T_world = cam_T_world
+
+        rot = np.array([[1, 0, 0, 0],
+                        [0, -1, 0, 0],
+                        [0, 0, -1, 0],
+                        [0, 0, 0, 1]])
+        self.world_T_camtri = np.dot(world_T_cam, rot)
+        self.camera_far_plane=100
+        self.camera_near_plane=0.1
+        self.sigma = 1.5
+        self.thres = 5.0 #1.0
+
+    def get_obi_segs(self, data, timestep, n_obis):
+
+        segs = []
+        for obi_id in range(n_obis):
+            #1. construct scene
+            positions = data["frames"][f"{timestep:04}"]["objects"]["positions"]
+            rotations = data["frames"][f"{timestep:04}"]["objects"]["rotations"]#x,y,z,w
+            obj_meshes = []
+            object_ids = data["static"]["object_ids"]
+            for idx, object_id in enumerate(object_ids):
+                vertices = data["static"]["mesh"][f"vertices_{idx}"]
+                faces = data["static"]["mesh"][f"faces_{idx}"]
+                mesh = trimesh.Trimesh(vertices=vertices * data["static"]["scale"][idx],
+                                   faces=faces)
+                rot = np.eye(4)
+                rot[:3, :3] = R.from_quat(rotations[idx]).as_matrix()
+                mesh.apply_transform(rot)
+                mesh.apply_translation(positions[idx])
+                mesh.visual.face_colors = [255, 100, 100, 255]
+                obj_meshes.append(mesh)
+
+
+            combined = trimesh.util.concatenate(obj_meshes) # + [floor, frontwall, backwall, leftwall, rightwall])
+            scene = combined.scene()
+            scene.camera.resolution = [self.H, self.W]
+            scene.camera.fov = [self.fov_x, self.fov_y]
+            scene.camera_transform = self.world_T_camtri
+            scene.camera.z_near = self.camera_near_plane
+            scene.camera.z_far = self.camera_far_plane
+
+            #2. compute visible points
+            particle_positions = data['frames'][f"{timestep:04}"]['objects']['particles_positions']
+            if "static0" in data and timestep < data["static"]["start_frame_of_the_clip"]:
+                idx = data['static0']["obi_object_ids"].tolist()[obi_id]
+            else:
+                idx = data['static']["obi_object_ids"].tolist()[obi_id]
+
+            canvas = np.zeros((self.H,self.W), np.uint8)
+            #canvas_before = np.zeros((self.H,self.W))
+            if str(idx) in particle_positions:
+                pts = particle_positions[str(idx)]
+                pts_cam = apply_4x4(self.cam_T_world, pts)
+                pts_px = Camera2Pixels_np(pts_cam , self.pix_T_cam).astype(np.int32).clip(-1,256)
+                selected_idx = np.where((pts_px[:,0] >= 0) * (pts_px[:,1] >=0) * (pts_px[:,0] < self.W) * (pts_px[:,1] < self.H))[0]
+                pts_px = pts_px[selected_idx]
+                pts_cam = pts_cam[selected_idx]
+
+                # canvas_before[pts_px[:, 1], pts_px[:, 0]] = 255
+                # canvas_before = scipy.ndimage.filters.gaussian_filter(canvas_before, [sigma, sigma], mode='constant')
+                # canvas_before = canvas_before * (1 - storage[timestep])
+                # canvas_before[canvas_before > thres] = 255
+                #canvas[canvas_before > thres] = 125
+
+                if pts_px.shape[0] > 0:
+
+                    #print("time", timestep, pts_px.shape)
+                    canvas[pts_px[:, 1], pts_px[:, 0]] = 255
+
+                    depth_, index_ray = pixel_to_depth_from_scene(combined, pts_px[:,0], pts_px[:,1], self.pix_T_cam, self.world_T_camtri)
+                    if index_ray.shape[0] > 0:
+                        index_ray = index_ray[pts_cam[index_ray, 2] > depth_] #occluded pixels
+                        pts_px = pts_px[index_ray]
+                        #print("remove pts, time", timestep, pts_px.shape)
+                        canvas[pts_px[:, 1], pts_px[:, 0]] = 0 #remove occluded pixels
+                canvas = scipy.ndimage.filters.gaussian_filter(canvas, [self.sigma, self.sigma], mode='constant')
+                canvas[canvas > self.thres] = 255
+
+            n_nonzeros = np.sum(canvas > 125)
+            if n_nonzeros == 0:
+              output =(timestep, 0)
+            else:
+              bi_mask = np.asfortranarray(canvas > 125)
+              rels = cocomask.encode(bi_mask)
+              output = (timestep, rels)
+
+            segs.append(output)
+        return segs
+
+
 class RigidbodiesDataset(TransformsDataset, ABC):
     """
     A dataset for Rigidbody (PhysX) physics.
@@ -175,7 +444,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         return rgb
 
 
-    def random_color_exclude_list(self, exclude_list=None, exclude_range=0.2, hsv_brightness=None):
+
+    def random_color_exclude_list(self, exclude_list=None, exclude_range=0.65, hsv_brightness=None):
         import colorsys
         if hsv_brightness is None:
             rgb = [random.random(), random.random(), random.random()]
@@ -192,7 +462,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
           for exclude in exclude_list:
 
             assert len(exclude) == 3, exclude
-            if any([np.abs(exclude[i] - rgb[i]) < exclude_range for i in range(3)]):
+            #if np.linalg.norm(exclude[i] - rgb[i]) < exclude_range:
+            if np.linalg.norm(np.array([exclude[i] - rgb[i] for i in range(3)])) < exclude_range:
               bad_trial = True
               break
           if bad_trial:

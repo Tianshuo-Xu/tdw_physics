@@ -295,7 +295,7 @@ class DropCloth(MultiDominoes):
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         self.star_object["material"] = random.choice(self.all_material_names)
 
-        self.star_object["deform"] = random.uniform(0,1.0)
+        self.star_object["deform"] = self.var_rng.uniform(0,1.0)
 
         #self.star_object["material"] =
         print("====star object mass", self.star_object["mass"])
@@ -392,6 +392,57 @@ class DropCloth(MultiDominoes):
             self._set_test_mode_colors(commands)
 
         return commands
+
+    def get_random_avatar_position(self,
+                                   radius_min: float,
+                                   radius_max: float,
+                                   y_min: float,
+                                   y_max: float,
+                                   center: Dict[str, float],
+                                   angle_min: float = 0,
+                                   angle_max: float = 360,
+                                   reflections: bool = False,
+                                   return_theta = False,
+                                   ) -> Dict[str, float]:
+        """
+        :param radius_min: The minimum distance from the center.
+        :param radius_max: The maximum distance from the center.
+        :param y_min: The minimum y positional coordinate.
+        :param y_max: The maximum y positional coordinate.
+        :param center: The centerpoint.
+        :param angle_min: The minimum angle of rotation around the centerpoint.
+        :param angle_max: The maximum angle of rotation around the centerpoint.
+
+        :return: A random position for the avatar around a centerpoint.
+        """
+
+        a_r = random.uniform(radius_min, radius_max)
+        a_x = center["x"] + a_r
+        a_z = center["z"] + a_r
+
+        rnd = random.uniform(0,1)
+        bad_range = [20, 45]
+        if rnd < (bad_range[0]-angle_min)/(bad_range[0]-angle_min + max(angle_max-bad_range[1],0)):
+            theta = np.radians(random.uniform(angle_min, bad_range[0]))
+
+        else:
+            theta = np.radians(random.uniform(bad_range[1],  angle_max))
+
+        #theta = np.radians(135) # #bad: -30, -40, -50 p.radians(random.uniform(angle_min, angle_max))
+        if reflections:
+            theta2 = random.uniform(angle_min+180, angle_max+180)
+            theta = random.choice([theta, theta2])
+
+        a_y = random.uniform(y_min, y_max)
+        a_x_new = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
+        a_z_new = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
+        a_x = a_x_new
+        a_z = a_z_new
+
+        if return_theta:
+            return {"x": a_x, "y": a_y, "z": a_z}, theta
+        else:
+            return {"x": a_x, "y": a_y, "z": a_z}
 
     def get_additional_command_when_removing_curtain(self, frame=0):
 
@@ -882,6 +933,8 @@ if __name__ == "__main__":
     DC = DropCloth(
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         height_range=[args.ymin, args.ymax],
         drop_scale_range=args.dscale,
         drop_jitter=args.jitter,

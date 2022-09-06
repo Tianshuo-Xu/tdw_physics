@@ -24,18 +24,18 @@ def split_info(filename):
 if "ccncluster" in socket.gethostname():
     data_root = "/mnt/fs4/hsiaoyut/physion++/analysis"
 else:
-    data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump"
+    data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini4"
 
-sname = "mass_dominoes_pp"
+sname = "friction_platform_pp"
 folder = os.path.join(data_root, sname)
 #import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "mass_dominoes-num_middle_objects=2-star_putfirst=1-remove_middle=1" #pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
-remove = "" #"simple_box1"
+restrict = "" #mass_dominoes-num_middle_objects=0-star_putfirst=0-remove_middle=0" #pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+remove = "-is_single_ramp=1-zdloc=1" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
-target_varname = "star_mass" #"star_mass" #"star_mass", "star_deform"
-merge_by =  "num_middle_objects" #"all""tscale"
+target_varname = "star_friction" #"star_mass" #"star_mass", "star_deform"
+merge_by =  "all" #"zld" #"all" #"num_middle_objects" #"all""tscale"
 #merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
@@ -67,9 +67,12 @@ for set_id, merge_var_name in enumerate(set_dict):
             #print(f['static']['cloth_material'])
             target_params.append(f["static"][target_varname])
             labels.append(float(f["static"]["does_target_contact_zone"]))
+            #print(f["static"]["seed"], f["static"]["randomize"], f["static"]["trial_seed"], f["static"]["trial_num"])
+            #import ipdb; ipdb.set_trace()
 
-        print(labels)
-        print(target_params)
+    print(labels)
+    print(target_params)
+    #import ipdb; ipdb.set_trace()
     """
 
     for hdf5_file in glob.glob(folder + "/*_001.hdf5"):
