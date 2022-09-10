@@ -566,7 +566,7 @@ if __name__ == '__main__':
         else:
             os.environ["DISPLAY"] = ":0"
 
-    print("PUSHING WITH FORCE %.2f" % args.fscale[0])
+    print('USE GPU: ', args.gpu)
     main(args)
 
     # for nm in MODEL_NAMES:
