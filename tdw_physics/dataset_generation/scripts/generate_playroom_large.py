@@ -457,31 +457,34 @@ def main(args):
         'buddah': 0.8
     }
 
-    if 'zoo_10obj_test' in args.dir:
-        models_simple = list(test_zoo_scale_dict.keys())
-        scale_dict = test_zoo_scale_dict
-    elif '20obj_test' in args.dir:
-        models_simple =  list(test_zoo_scale_dict.keys()) +  list(test_kitchen_scale_dict.keys())
-        scale_dict = test_zoo_scale_dict
-        scale_dict.update(test_kitchen_scale_dict)
-    elif 'zoo_10obj' in args.dir:
-        models_simple = list(zoo_scale_dict.keys())
-        scale_dict = zoo_scale_dict
-    elif '20obj' in args.dir:
-        models_simple =  list(zoo_scale_dict.keys()) +  list(kitchen_scale_dict.keys())
-        scale_dict = zoo_scale_dict
-        scale_dict.update(kitchen_scale_dict)
-    elif '30obj' in args.dir:
-        models_simple = list(zoo_scale_dict.keys()) + list(kitchen_scale_dict.keys()) + list(office_scale_dict)
-        scale_dict = zoo_scale_dict
-        scale_dict.update(kitchen_scale_dict)
-        scale_dict.update(office_scale_dict)
-    elif 'allobj' in args.dir:
-        models_simple = TRAIN_VAL_MODELS_NAMES
-        scale_dict = SCALE_DICT
+    # if 'zoo_10obj_test' in args.dir:
+    #     models_simple = list(test_zoo_scale_dict.keys())
+    #     scale_dict = test_zoo_scale_dict
+    # elif '20obj_test' in args.dir:
+    #     models_simple =  list(test_zoo_scale_dict.keys()) +  list(test_kitchen_scale_dict.keys())
+    #     scale_dict = test_zoo_scale_dict
+    #     scale_dict.update(test_kitchen_scale_dict)
+    # elif 'zoo_10obj' in args.dir:
+    #     models_simple = list(zoo_scale_dict.keys())
+    #     scale_dict = zoo_scale_dict
+    # elif '20obj' in args.dir:
+    #     models_simple =  list(zoo_scale_dict.keys()) +  list(kitchen_scale_dict.keys())
+    #     scale_dict = zoo_scale_dict
+    #     scale_dict.update(kitchen_scale_dict)
+    # elif '30obj' in args.dir:
+    #     models_simple = list(zoo_scale_dict.keys()) + list(kitchen_scale_dict.keys()) + list(office_scale_dict)
+    #     scale_dict = zoo_scale_dict
+    #     scale_dict.update(kitchen_scale_dict)
+    #     scale_dict.update(office_scale_dict)
+    # elif 'allobj' in args.dir:
+    #     models_simple = TRAIN_VAL_MODELS_NAMES
+    #     scale_dict = SCALE_DICT
 
-    else:
-        raise ValueError
+    # else:
+    #     raise ValueError
+
+    models_simple = TRAIN_VAL_MODELS_NAMES
+    scale_dict = SCALE_DICT
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
