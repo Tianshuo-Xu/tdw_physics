@@ -441,7 +441,7 @@ class Dataset(Controller, ABC):
 
         # Clear the object IDs and other static data
         self.clear_static_data()
-        print('\tObject ids after clear static state: ', self.object_ids)
+        # print('\tObject ids after clear static state: ', self.object_ids)
         self._trial_num = trial_num
 
         # Create the .hdf5 file.
@@ -464,7 +464,7 @@ class Dataset(Controller, ABC):
         count = 0
         resp = self.communicate(commands)
 
-        print('\tObject ids after sending commands: ', self.object_ids)
+        # print('\tObject ids after sending commands: ', self.object_ids)
 
         self._set_segmentation_colors(resp)
 
@@ -480,13 +480,13 @@ class Dataset(Controller, ABC):
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
         self._write_frame_labels(frames_grp, resp, -1, False)
 
-        print('\tObject ids before looping: ', self.object_ids)
+        # print('\tObject ids before looping: ', self.object_ids)
 
         # Continue the trial. Send commands, and parse output data.
         a_pos_dict = {}
         while not done:
             frame += 1
-            print('frame %d' % frame)
+
             self.communicate([{"$type": "simulate_physics", "value": True}])
 
             resp = self.communicate(self.get_per_frame_commands(resp, frame))
@@ -572,19 +572,17 @@ class Dataset(Controller, ABC):
                 # Write whether this frame completed the trial and any other trial-level data
                 # labels_grp, _, _, done = self._write_frame_labels(frame, resp, frame, done)
 
-                print('\tObject ids after end of frame %d: ' % frame, self.object_ids)
-
                 if frame == end_frame:
                     break
 
         # Cleanup.
         commands = []
-        print('Object ids before destroy: ', self.object_ids)
+        # print('Object ids before destroy: ', self.object_ids)
         for o_id in self.object_ids:
             commands.append({"$type": self._get_destroy_object_command_name(o_id),
                              "id": int(o_id)})
         for cmd in commands:
-            print('Destroy: ', cmd)
+            # print('Destroy: ', cmd)
             self.communicate(cmd)
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop

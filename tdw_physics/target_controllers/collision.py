@@ -206,7 +206,7 @@ class Collision(Dominoes):
 
         # Teleport the avatar to a reasonable position
 
-        print('Warning fixed initial camera position')
+       #  print('Warning fixed initial camera position')
 
         a_pos = {'x': 0.0, 'y': 2.5, 'z': 2.5}
 

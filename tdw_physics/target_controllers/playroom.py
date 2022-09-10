@@ -311,22 +311,22 @@ class Playroom(Collision):
                                 zone_material=None, apply_force_to='probe',
                                 **kwargs) -> None:
 
-        print("UPDATE CONTROLLER STATE")
+        # print("UPDATE CONTROLLER STATE")
         self.clear_static_data()
         if probe is not None:
             self.set_probe_types([probe])
-            print("probe: %s" % probe)
+            # print("probe: %s" % probe)
         if target is not None:
             self.set_target_types([target])
-            print("target: %s" % target)
+            # print("target: %s" % target)
         if distractor is not None:
             self.set_distractor_types([distractor])
-            print("distractor: %s" % distractor)
+            # print("distractor: %s" % distractor)
         if occluder is not None:
             self.set_occluder_types([occluder])
-            print("occluder: %s" % occluder)
+            # print("occluder: %s" % occluder)
 
-        print("MATERIALS")
+        # print("MATERIALS")
         if probe_material is not None:
             self.probe_material = probe_material
             print("probe %s" % self.probe_material)
@@ -511,7 +511,7 @@ class Playroom(Collision):
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
 
-        print('Warning fixed initial camera position')
+        # print('Warning fixed initial camera position')
         a_pos = {'x': 0.0, 'y': 3.0, 'z': 3.0}
 
         # Set the camera parameters
