@@ -392,7 +392,7 @@ class ClothHit(MultiDominoes):
             self.candidate_dict[distinct_id]["scale"] = get_random_xyz_transform(self.candidate_scale_range)
             self.candidate_dict[distinct_id]["color"] = non_star_color#[0.9774568,  0.87879388, 0.40082996]
             self.candidate_dict[distinct_id]["mass"] = mass
-            self.candidate_dict[distinct_id]["friction"] = 0.01
+            self.candidate_dict[distinct_id]["friction"] = 0.2 #0.0001
 
 
 
@@ -407,7 +407,6 @@ class ClothHit(MultiDominoes):
         #     self.trial_seed = -1 # not used
 
         self.offset = [0, 0]
-
         # Place target zone
         commands.extend(self._place_target_zone(interact_id))
 
@@ -531,10 +530,13 @@ class ClothHit(MultiDominoes):
                               "id": o_id,
                               "position": self.zone_location}
 
-            self.zone_hold_force_wait =25
+            if self.zone_dloc == 2:
+                self.zone_hold_force_wait =25
+            else:
+                self.zone_hold_force_wait = 0
+                self.zone_hold_cmd = None
         else:
             self.zone_hold_force_wait = 0
-
 
         return commands
 
@@ -562,7 +564,7 @@ class ClothHit(MultiDominoes):
                 #random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1),
                 return {
                     "x": self.offset[0] - 0.5,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                    "y": 2.0 if not self.remove_zone else 10.0,
+                    "y": 0.5 if not self.remove_zone else 10.0,
                     "z": self.offset[1] + 0 +  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
@@ -575,12 +577,12 @@ class ClothHit(MultiDominoes):
     def get_additional_command_when_removing_curtain(self, frame=0):
 
         if frame < 10:
-            return [self.hold_cmd] + [self.zone_hold_cmd]
+            return [self.hold_cmd] + [self.zone_hold_cmd] if self.zone_hold_cmd else []
         elif frame == 10:
             self.is_push = True
-            return [self.push_cmd] if self.push_cmd is not None else [] + [self.zone_hold_cmd]
+            return [self.push_cmd] if self.push_cmd is not None else [] + [self.zone_hold_cmd] if self.zone_hold_cmd else []
         else:
-            return []+ [self.zone_hold_cmd]
+            return []+ [self.zone_hold_cmd] if self.zone_hold_cmd else []
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int, force_wait=None) -> List[dict]:
         output = []
@@ -729,7 +731,7 @@ class ClothHit(MultiDominoes):
         #theta_degree = theta * (1 + middle_id) + np.random.uniform(-20, 20, 1)[0]
 
         if interact_id == 0:
-            self.middle_position = {"x":-1, "y": 0.3, "z": 0}
+            self.middle_position = {"x":-1, "y": np.random.uniform(0.25, 0.35), "z": np.random.uniform(-0.1, 0.1)}
         else:
             self.middle_position = {"x":0.6, "y": 1.5, "z": 0}
 
@@ -879,19 +881,24 @@ class ClothHit(MultiDominoes):
 
         if interact_id == 0:
             self.target_position = {"x": 0.5, "y": 1.2, "z": 0} #1.2 for soft, y:0.9
+            angle = -90
             self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                    object_id=o_id,
                                    position=self.target_position,
-                                   rotation={"x": 0, "y": 0, "z": -90}, #-20
-                                   tether_positions={TetherParticleGroup.west_edge: TetherType(object_id=o_id, is_static=True),
+                                   rotation={"x": 0, "y": 0, "z": angle}, #-20
+                                   tether_positions={TetherParticleGroup.north_edge: TetherType(object_id=o_id, is_static=True),
+                                   TetherParticleGroup.south_edge: TetherType(object_id=o_id, is_static=True),
+                                   TetherParticleGroup.west_edge: TetherType(object_id=o_id, is_static=True),
                                    TetherParticleGroup.east_edge: TetherType(object_id=o_id, is_static=True)})
 
         else:
             self.target_position = {"x": 0.5, "y": 0.80, "z": 0} #1.2 for soft
+            angle = random.uniform(23, 28) if self.zone_dloc == 2 else random.uniform(18,23)
             self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                    object_id=o_id,
                                    position=self.target_position,
-                                   rotation={"x": 0, "y": 0, "z": random.uniform(-152, -157)}, #-155 is good
+                                   rotation={"x": 0, "y": 0, "z": angle}, #random.uniform(20, 25)
+                                   #rotation={"x": 0, "y": 0, "z": random.uniform(-152, -157)} if self.zone_dloc == 2 else  {"x": 0, "y": 0, "z": random.uniform(-150, -155)}, #-155 is good
                                    tether_positions={TetherParticleGroup.west_edge: TetherType(object_id=o_id, is_static=True),
                                                      TetherParticleGroup.east_edge: TetherType(object_id=o_id, is_static=True)})
 
@@ -906,6 +913,62 @@ class ClothHit(MultiDominoes):
 
         # Create an object to drop.
         commands = []
+
+        # place legs (supporter) for the cloth
+        stone_color = {"r": 0.5, "g": 0.5, "b": 0.5, "a": 1.}
+        dims = [[1,1,1], [1,1,-1], [-1,-1,1],[-1,-1,-1]]#, []
+
+        for dim in dims:
+            y = self.target_position['y'] * self.obi_scale_factor + dim[1] * self.obi_scale_factor * np.sin(np.radians(angle))
+            record, data = self.random_primitive(
+                object_types=self.get_types("cube"),
+                scale={"x": 0.05, "y":y, "z": 0.05},
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+            pos = {
+                "x": self.target_position['x'] * self.obi_scale_factor + dim[0]  * self.obi_scale_factor * np.cos(np.radians(angle)),
+                "y": 0,
+                "z": self.target_position['z'] * self.obi_scale_factor + dim[2]  * self.obi_scale_factor ,
+            }
+
+
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=1000,
+                dynamic_friction=1.0,
+                static_friction=1.0,
+                bounciness=0,
+                o_id=o_id,
+                add_data=True)
+            )
+
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
+
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": stone_color,
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id},
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
 
         return commands
 

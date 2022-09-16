@@ -241,6 +241,8 @@ class FluidSlope(MultiDominoes):
         self.fric_range= [0.01, 0.01] #[0.01, 0.2] #0.65] #0.01 ~ 0.2
         self.ramp_y_range=[0.6, 0.8]
 
+        self.start_frame_for_prediction = 90
+
         self.is_single_ramp = is_single_ramp
         self.add_second_ramp = add_second_ramp
         self.num_interactions = 1
@@ -353,6 +355,9 @@ class FluidSlope(MultiDominoes):
         o_id = self._get_next_object_id() + self.obi_unique_ids * 5
         self.obi_unique_ids += 1
 
+        self.obi_object_ids = np.append(self.obi_object_ids, o_id)
+        self.obi_object_type = [(o_id, 'fluid')]
+
         vis = [1.5, 0.00001, 0.001, 0.01, 1.0] #water
         #vis = [2.2, 2.0, 0.001, 0.01, 1.0]
         #vis = [3.0, 5.0, 0.001, 0.01, 1.0]
@@ -403,7 +408,7 @@ class FluidSlope(MultiDominoes):
 
         self.drop_type = "fluid"
         self.target_color = {"r": 0, "g": 0, "b":1}
-        self.target_id = 1 #o_id # this is the target object as far as we're concerned for collision detection
+        self.target_id = o_id #o_id # this is the target object as far as we're concerned for collision detection
 
         commands = []
         #import ipdb; ipdb.set_trace()
@@ -704,21 +709,21 @@ class FluidSlope(MultiDominoes):
         """
         # create a target object
 
-        record, data = self.random_primitive(self._target_types,
-                                             scale=self.target_scale_range,
-                                             color=self.target_color,
-                                             add_data=False)
-                                             # add_data=(not self.remove_target)
-        o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
-        self.target = record
-        self.target_type = data["name"]
-        self.target_color = rgb
-        self.target_scale = self.middle_scale = scale
-        self.target_id = o_id
+        # record, data = self.random_primitive(self._target_types,
+        #                                      scale=self.target_scale_range,
+        #                                      color=self.target_color,
+        #                                      add_data=False)
+        #                                      # add_data=(not self.remove_target)
+        # o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+        # self.target = record
+        # self.target_type = data["name"]
+        # self.target_color = rgb
+        # self.target_scale = self.middle_scale = scale
+        # self.target_id = o_id
 
-        # Where to put the target
-        if self.target_rotation is None:
-            self.target_rotation = self.get_rotation(self.target_rotation_range)
+        # # Where to put the target
+        # if self.target_rotation is None:
+        #     self.target_rotation = self.get_rotation(self.target_rotation_range)
 
         # Add the object with random physics values
         commands = []
@@ -741,107 +746,77 @@ class FluidSlope(MultiDominoes):
 
             commands.extend(self._place_ramp_under_probe())
 
-            # self.probe_initial_position['x'] += 0.9*self.target_lift #HACK rotation might've led to the object falling of the back of the ramp, so we're moving it forward
-
-        # commands.extend(
-        #     self.add_physics_object(
-        #         record=record,
-        #         position=self.probe_initial_position,
-        #         rotation=rot,
-        #         mass=self.probe_mass,
-        #         # dynamic_friction=0.5,
-        #         # static_friction=0.5,
-        #         # bounciness=0.1,
-        #         dynamic_friction=0.4,
-        #         static_friction=0.4,
-        #         bounciness=0,
-        #         o_id=o_id))
-
-        # commands.extend(
-        #     self.add_primitive(
-        #         record=record,
-        #         position=self.probe_initial_position,
-        #         rotation=rot,
-        #         mass=self.probe_mass,
-        #         material=self.target_material,
-        #         color=rgb,
-        #         scale=scale,
-        #         # dynamic_friction=0.5,
-        #         # static_friction=0.5,
-        #         # bounciness=0.1,
-        #         dynamic_friction=self.zone_friction,
-        #         static_friction=self.zone_friction,
-        #         bounciness=0,
-        #         o_id=o_id,
-        #         add_data=True
-        #     ))
-
-        # Set the target material
-        # commands.extend(
-        #     self.get_object_material_commands(
-        #         record, o_id, self.get_material_name(self.target_material)))
-
-        # the target is the probe
-        # self.target_position = self.probe_initial_position
-
-        # # Scale the object and set its color.
-        # # commands.extend([
-        # #     {"$type": "set_color",
-        # #      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
-        # #      "id": o_id},
-        #     # {"$type": "scale_object",
-        #     #  "scale_factor": scale,
-        #     #  "id": o_id}])
-
-        # # Set its collision mode
-        # commands.extend([
-        #     # {"$type": "set_object_collision_detection_mode",
-        #     #  "mode": "continuous_speculative",
-        #     #  "id": o_id},
-        #     {"$type": "set_object_drag",
-        #      "id": o_id,
-        #      "drag": 0, "angular_drag": 0}])
-
-
-        # # Apply a force to the target object
-        # self.push_force = self.get_push_force(
-        #     scale_range=self.probe_mass * np.array(self.force_scale_range),
-        #     angle_range=self.force_angle_range,
-        #     yforce=self.fupforce)
-        # self.push_force = self.rotate_vector_parallel_to_floor(
-        #     self.push_force, -rot['y'], degrees=True)
-
-        # self.push_position = self.probe_initial_position
-        # if self.use_ramp:
-        #     self.push_cmd = {
-        #         "$type": "apply_force_to_object",
-        #         "force": self.push_force,
-        #         "id": int(o_id)
-        #     }
-        # else:
-        #     self.push_position = {
-        #         k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-        #             self.target_scale, rot['y'])[k]
-        #         for k,v in self.push_position.items()}
-        #     self.push_position = {
-        #         k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
-        #         for k,v in self.push_position.items()}
-
-        #     self.push_cmd = {
-        #         "$type": "apply_force_at_position",
-        #         "force": self.push_force,
-        #         "position": self.push_position,
-        #         "id": int(o_id)
-        #     }
-
-        # # decide when to apply the force
-        # self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
-        # print("force wait", self.force_wait)
-
-        # if self.force_wait == 0:
-        #     commands.append(self.push_cmd)
 
         return commands
+
+    def get_object_target_collision(self, obj_id: int, target_id: int, resp: List[bytes]):
+
+        target_is_obi = True if (target_id in  self.obi_object_ids.tolist()) else False
+        object_is_obi = True if (obj_id in self.obi_object_ids.tolist()) else False
+
+
+        actor_pos = dict()
+        for actor_id in self.obi.actors:
+           actor_pos[actor_id] = self.obi.actors[actor_id].positions * self.obi_scale_factor
+
+        if target_is_obi:
+            if target_id not in actor_pos:
+                return [],[]
+            obi_position = actor_pos[target_id]
+        else:
+            o_id = target_id
+
+        if object_is_obi:
+            if obj_id not in actor_pos:
+                return [], []
+            obi_position = actor_pos[obj_id]
+        else:
+            o_id = obj_id
+        obj_info = self.bo_dict[o_id]
+        obj_posrot = self.tr_dict[o_id]
+        obj_vertices, _ = self.object_meshes[o_id]
+        obj_scale = xyz_to_arr(self.scales[self.object_ids.tolist().index(o_id)])
+
+        if not self.is_single_ramp :
+            if self.zone_type == "cube":
+                xmin, xmax = min(obj_info['left'][0], obj_info['right'][0]), max(obj_info['left'][0], obj_info['right'][0])
+                zmin, zmax = min(obj_info['front'][2], obj_info['back'][2]), max(obj_info['front'][2], obj_info['right'][2])
+                ymax = obj_info['top'][1]
+                contact_points = obi_position[(obi_position[:,0] > xmin) * (obi_position[:,0] < xmax)]
+                contact_points = contact_points[(contact_points[:,2] > zmin) * (contact_points[:,2] < zmax)]
+                #print(ymax)
+                #print(np.unique(contact_points[:,1])[:10])
+                contact_points = contact_points[(contact_points[:,1] - ymax) < 0.02]
+
+            else:
+                raise ValueError
+        else:
+            if self.zone_type == "cube":
+                xmin, xmax = min(obj_info['left'][0], obj_info['right'][0]), max(obj_info['left'][0], obj_info['right'][0])
+                zmin, zmax = min(obj_info['front'][2], obj_info['back'][2]), max(obj_info['front'][2], obj_info['right'][2])
+                pos = obj_posrot["pos"]
+                rot = obj_posrot["rot"]
+                rotm = np.eye(4)
+                rotm[:3, :3] = R.from_quat(rot).as_matrix()
+                rotm[:3, 3] = pos
+
+                nv = obj_vertices.shape[0]
+                trans_ver = np.matmul(rotm, np.concatenate([obj_vertices * obj_scale, np.ones((nv, 1))], 1).T).T[:,:3]
+                min_dist = np.min(scipy.spatial.distance_matrix(obi_position, trans_ver, p=2), axis=1)
+
+                ymax = obj_info['top'][1]
+                contact_points = obi_position[min_dist < 0.026]
+                #print(np.unique(min_dist)[:10])
+                #contact_points = contact_points[(contact_points[:,1] - ymax) < 0.02]
+
+            else:
+                raise ValueError
+
+        #print("number of contact points ", len(contact_points))
+        #if len(contact_points) > 0:
+        #    import ipdb; ipdb.set_trace()
+
+        return (contact_points, [])
 
 
     def _place_ledge(self) -> List[dict]:
@@ -901,7 +876,7 @@ class FluidSlope(MultiDominoes):
         return commands
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
-        return frame > 800
+        return frame > 600
 
     def _get_zone_location(self, scale):
         """Where to place the target zone? Right behind the target object."""
@@ -971,6 +946,8 @@ if __name__ == "__main__":
         room=args.room,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         height_range=[args.ymin, args.ymax],
         target_zone=args.zone,
         zone_location=args.zlocation,

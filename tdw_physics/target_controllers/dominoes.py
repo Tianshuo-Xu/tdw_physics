@@ -721,6 +721,7 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
 
+        self.video_obi_object_segmentation_colors = 0
         self.use_test_mode_colors = use_test_mode_colors
         self.use_obi = False
     def get_types(self,
@@ -1012,14 +1013,23 @@ class Dominoes(RigidbodiesDataset):
                                 use_parent_dir=False)
                         elif pass_mask in ["_id"]:
                             from pycocotools import mask as cocomask
+                            from tdw_physics.rigidbodies_dataset import ObiSegsHelper
+                            import time
+                            start_time = time.time()
                             mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
 
                             files = [os.path.join(self.png_dir, dfile) for dfile in os.listdir(self.png_dir) if dfile.startswith("id_")]
+                            H,W,C = imageio.imread(files[0]).shape
                             out_dict = {}
                             seg_colors = output["static"]["video_object_segmentation_colors"]
                             if self.use_obi:
-                                seg_colors = np.concatenate([seg_colors, output["static"]["video_obi_object_segmentation_colors"]])
+                               if output["static"]["video_obi_object_segmentation_colors"]:
+                                   seg_colors = np.concatenate([seg_colors, output["static"]["video_obi_object_segmentation_colors"]])
                             nobjs = seg_colors.shape[0]
+                            if self.use_obi:
+                                self.obi_seg = ObiSegsHelper((H, W), output["frames"]["0000"]["camera_matrices"])
+                            files.sort()
+
                             for file in files:
                                 seg_img = imageio.imread(file)
                                 frm_id = file[-8:-4]
@@ -1038,6 +1048,86 @@ class Dominoes(RigidbodiesDataset):
                                     rels['idx'] = idx
                                     rels_list.append(rels)
                                 out_dict[frm_id] = rels_list
+                            print("total time for normal seg", time.time() - start_time)
+                            start_time = time.time()
+                            if self.use_obi:
+                                import multiprocessing
+                                nchunks = 1
+                                n_obis = self.obi_object_ids.shape[0]
+
+                                if nchunks == 1:
+                                    obi_segs = []
+                                    for file_id, file in enumerate(files):
+                                        #import ipdb; ipdb.set_trace()
+                                        frm_id = int(file[-8:-4])
+                                        seg = self.obi_seg.get_obi_segs(output, frm_id, n_obis)
+                                        obi_segs.append(seg)
+                                        if frm_id % 50 == 0:
+                                            print(frm_id, file_id, "/", len(files))
+                                    result_list = obi_segs
+                                else:
+                                    st_eds = [(int(x[0][-8:-4]), int(x[-1][-8:-4])) for x in np.array_split(files, nchunks)]
+
+                                    def run_chunk(st, ed, queue):
+                                        obi_segs = []
+                                        for frm_id in range(st,ed+1):
+                                            seg = self.obi_seg.get_obi_segs(output, frm_id, n_obis)
+                                            obi_segs.append(seg)
+                                            # if self.start_frame_for_prediction == frm_id:
+                                            #     if self.zone_is_obi:
+                                            #         imageio.imsave(mp4_filename + "_obi_map.png", seg[0])[..., np.newaxis] * ZONE_COLOR
+                                            #     elif self.target_is_obi:
+                                            #         imageio.imsave(mp4_filename + "_obi_map.png", seg[0][..., np.newaxis] * TARGET_COLOR)
+                                        print("nframes", len(obi_segs))
+                                        queue.put(obi_segs)
+
+                                    queues = [] #multiprocessing.Queue()
+                                    processes = []
+                                    for st_ed in st_eds:
+                                        queue =  multiprocessing.Queue()
+                                        p = multiprocessing.Process(target=run_chunk, args=(st_ed[0], st_ed[1], queue))
+                                        processes.append(p)
+                                        queues.append(queue)
+                                    for process in processes:
+                                        process.start()
+                                    for process in processes:
+                                        process.join()
+
+                                    # nframes x nobi_object
+                                    result_list = []
+                                    for queue in queues:
+                                        while not queue.empty():
+                                            result_list += queue.get()
+
+                                for obi_id in range(n_obis):
+                                    counter = 0
+                                    for frels in result_list:
+                                        frm_id, rels = frels[obi_id]
+                                        assert(frm_id == counter), f"{frm_id}, {counter}"
+                                        if not isinstance(rels, int):
+                                           rels['counts'] = rels['counts'].decode('utf8')
+                                           rels['idx'] = obi_id + nobjs
+                                           out_dict[f"{frm_id:04}"].append(rels)
+                                        counter += 1
+
+                                print("total time for obi seg", time.time() - start_time, len(result_list))
+                                if self.zone_is_obi or self.target_is_obi:
+                                    try:
+                                        frm_id, rels = result_list[self.start_frame_for_prediction][0]
+                                    except:
+                                        import ipdb; ipdb.set_trace()
+                                    if isinstance(rels, int):
+                                        seg = np.zeros((H, W), np.uint8)
+                                    else:
+                                        #rels['counts'] = rels['counts'].decode('utf8')
+                                        rgn = cocomask.decode(rels)
+                                        seg = (rgn * 255).astype(np.uint8)
+                                    if self.zone_is_obi:
+                                        imageio.imsave(mp4_filename + "_obi_map.png", seg[..., np.newaxis] * ZONE_COLOR)
+                                    elif self.target_is_obi:
+                                        imageio.imsave(mp4_filename + "_obi_map.png", seg[..., np.newaxis] * TARGET_COLOR)
+
+
                                 #if int(frm_id) % 20 ==0:
                                 #    print('%d/%d\n'%(int(frm_id), len(files)))
                                     #break
@@ -1199,25 +1289,33 @@ class Dominoes(RigidbodiesDataset):
         _id_map = imageio.imread(id_filename)
         #get colors
         zone_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.zone_id]
+        self.zone_is_obi = False
+        self.target_is_obi = False
         if self.use_obi and len(zone_idx) == 0:
             zone_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.zone_id]
             zone_color = self.obi_object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+            self.zone_is_obi = True
         else:
             zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
 
         target_idx = [i for i,o_id in enumerate(self.object_ids) if o_id == self.target_id]
+
         if self.use_obi and len(target_idx) == 0:
             target_idx = [i for i,o_id in enumerate(self.obi_object_ids) if o_id == self.target_id]
-            target_color = self.obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+            if len(self.obi_object_segmentation_colors):
+                target_color = self.obi_object_segmentation_colors[target_idx[0] if len(target_idx) else 0]
+            else:
+                target_color = None
+            self.target_is_obi = True
         else:
             target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
 
         #get individual maps
         zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        target_map = (_id_map == target_color).min(axis=-1, keepdims=True) if target_color else np.zeros_like(_id_map, np.bool)
         #colorize
         zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
+        target_map = target_map * TARGET_COLOR if target_color else target_map
         joint_map = zone_map + target_map
         # add alpha
         alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255

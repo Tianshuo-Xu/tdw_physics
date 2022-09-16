@@ -1,9 +1,9 @@
 
 
 #### mass ###
-controller="tdw_physics/target_controllers/dominoes_var.py"
-ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128 --num 30
+# controller="tdw_physics/target_controllers/dominoes_var.py"
+# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+# python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/mass_dominoes_pp/pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain  --height 128 --width 128 --num 30
 
 
 # controller="tdw_physics/target_controllers/waterpush_var.py"
@@ -60,9 +60,9 @@ python $controller @$ARGS_PATH/dominoes_pp/pilot_dominoes_2distinct_1middle_tdwr
 
 
 ### fluid with slop, no reset
-# controller="tdw_physics/target_controllers/fluidslope.py"
-# ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
-# python $controller @$ARGS_PATH/fluidslope_pp/pilot_it2_drop_simple_box/commandline_args.txt --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidslope_pp/_pppilot_it2_drop_simple_box --height 512 --width 512
+controller="tdw_physics/target_controllers/fluidslope.py"
+ARGS_PATH=$HOME"/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs"
+python $controller @$ARGS_PATH/fluidslope_pp/pilot_it2_drop_simple_box/commandline_args.txt --training_data_mode --dir /media/htung/Extreme\ SSD/fish/tdw_physics/dump/fluidslope_pp/_pppilot_it2_drop_simple_box --height 256 --width 256 --seed 0
 #0.40 for sticy object, 0.3 for water
 
 

@@ -2,7 +2,7 @@
 import os
 
 
-scenario_name = "friction_collision"
+scenario_name = "deform_clothhit"
 
 template_config = f"/home/htung/Documents/2021/physics-benchmarking-neurips2021-htung/stimuli/generation/configs/{scenario_name}_pp/commandline_args_template.txt"
 prefix = f"{scenario_name}"
@@ -68,14 +68,14 @@ exclude["friction_collision"] = []
 variables["deform_clothhang"] = dict()
 variables["deform_clothhang"]["zdloc"] = ["1","2"]
 variables["deform_clothhang"]["target"] = ["sphere","cube","cylinder","pipe","pyramid"]
-variables["deform_clothhang"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
+#variables["deform_clothhang"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
 exclude["deform_clothhang"] = []
 
 
 variables["deform_clothhit"] = dict()
 variables["deform_clothhit"]["zdloc"] = ["1","2"]
 variables["deform_clothhit"]["target"] = ["sphere","cube","cylinder","pipe","pyramid"]
-variables["deform_clothhit"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
+#variables["deform_clothhit"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
 exclude["deform_clothhit"] = []
 
 variables["deform_clothdrop"] = dict()
@@ -83,6 +83,11 @@ variables["deform_clothdrop"]["zdloc"] = ["1","2"]
 exclude["deform_clothdrop"] = []
 
 
+variables["viscosity_fluidslope"] = dict()
+variables["viscosity_fluidslope"]["zdloc"] = ["1","2"]
+variables["viscosity_fluidslope"]["is_single_ramp"] = ["0","1"]
+#variables["deform_clothhang"]["tscale"] = ["[0.15,0.15]", "[0.18,0.18]", "[0.2,0.2]"]
+exclude["viscosity_fluidslope"] = []
 
 
 f = open(template_config, 'r')

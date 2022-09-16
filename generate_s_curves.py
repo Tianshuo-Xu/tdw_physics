@@ -22,20 +22,21 @@ def split_info(filename):
     return info_dict
 
 if "ccncluster" in socket.gethostname():
-    data_root = "/mnt/fs4/hsiaoyut/physion++/analysis"
+    #data_root = "/mnt/fs4/hsiaoyut/physion++/analysis"
+    data_root = "/mnt/fs4/hsiaoyut/physion++/data_v1"
 else:
     data_root = "/media/htung/Extreme SSD/fish/tdw_physics/dump_mini4"
 
-sname = "friction_platform_pp"
+sname = "deform_clothhang_pp"
 folder = os.path.join(data_root, sname)
 #import ipdb; ipdb.set_trace()
 filenames = os.listdir(folder)
-restrict = "" #mass_dominoes-num_middle_objects=0-star_putfirst=0-remove_middle=0" #pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
-remove = "-is_single_ramp=1-zdloc=1" #"simple_box1"
+restrict = "sphere" #deform_clothhang-zdloc=1" #mass_dominoes-num_middle_objects=0-star_putfirst=0-remove_middle=0" #pilot_dominoes_2distinct_1middle_tdwroom_fixedcam_curtain" #"pilot_it2_drop_simple_box" #"bouncy_platform-use_blocker_with_hole=1" #"target_cone-tscale_0.35,0.5,0.35"
+remove = ""#"-is_single_ramp=1-zdloc=1" #"simple_box1"
 filenames = [filename for filename in filenames if restrict in filename]
 
-target_varname = "star_friction" #"star_mass" #"star_mass", "star_deform"
-merge_by =  "all" #"zld" #"all" #"num_middle_objects" #"all""tscale"
+target_varname = "star_deform" #"star_mass" #"star_mass", "star_deform"
+merge_by = "target" # "all" #"zld" #"all" #"num_middle_objects" #"all""tscale"
 #merge_by = "tscale"
 
 set_dict = collections.defaultdict(list)
@@ -48,7 +49,7 @@ for filename in filenames:
         set_dict[info_dict[merge_by]].append(filename)
     else:
         set_dict[filename].append(filename)
-#import ipdb; ipdb.set_trace()
+import ipdb; ipdb.set_trace()
 
 for set_id, merge_var_name in enumerate(set_dict):
     target_params = []
@@ -57,9 +58,10 @@ for set_id, merge_var_name in enumerate(set_dict):
     for filename in tqdm(set_dict[merge_var_name]):
         if remove and remove in filename:
             continue
+        #print(filename)
+        pkl_filenames = [os.path.join(folder, filename, x) for x in os.listdir(os.path.join(folder, filename)) if x.endswith(".pkl")]
 
-
-        for pkl_file in glob.glob(os.path.join(folder, filename) + "/*.pkl"):
+        for pkl_file in pkl_filenames: # glob.glob(os.path.join(folder, filename) + "/*.pkl"):
             print(pkl_file)
             with open(pkl_file, "rb") as f:
                 f = pickle.load(f)

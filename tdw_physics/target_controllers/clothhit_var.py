@@ -233,6 +233,7 @@ class ClothHit(MultiDominoes):
         self.camera_radius = camera_radius
         self.camera_min_angle = camera_min_angle
         self.camera_max_angle = camera_max_angle
+
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
         self._material_types = ["Fabric", "Leather", "Metal", "Paper", "Plastic"]
@@ -841,6 +842,7 @@ class ClothHit(MultiDominoes):
 
 
         if interact_id == 0:
+            angle = 0
             self.target_position = {"x": 0.5, "y": 0.40, "z": 0}
             self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                object_id=o_id,
@@ -853,10 +855,13 @@ class ClothHit(MultiDominoes):
 
         else:
             self.target_position = {"x": 0.5, "y": 0.80, "z": 0} #1.2 for soft
+            #angle = random.uniform(-152, -157)
+            angle = random.uniform(23, 28) if self.zone_dloc == 2 else random.uniform(18, 23)
             self.obi.create_cloth_sheet(cloth_material=cloth_material, #cloth_material_names[run_id],
                                    object_id=o_id,
                                    position=self.target_position,
-                                   rotation={"x": 0, "y": 0, "z": random.uniform(-152, -157)}, #-155 is good
+                                   rotation={"x": 0, "y": 0, "z": angle}, #random.uniform(20, 25)
+                                   #rotation={"x": 0, "y": 0, "z": angle}, #-155 is good
                                    tether_positions={TetherParticleGroup.west_edge: TetherType(object_id=o_id, is_static=True),
                                                      TetherParticleGroup.east_edge: TetherType(object_id=o_id, is_static=True)})
 
@@ -866,10 +871,69 @@ class ClothHit(MultiDominoes):
         self.obi.set_solver(scale_factor= self.obi_scale_factor, substeps=4)
 
 
+
+
+        # place legs (supporter) for the cloth
+        stone_color = {"r": 0.5, "g": 0.5, "b": 0.5, "a": 1.}
+        dims = [[1,1,1], [1,1,-1], [-1,-1,1],[-1,-1,-1]]#, []
+
+        for dim in dims:
+            y = self.target_position['y'] * self.obi_scale_factor + dim[1] * self.obi_scale_factor * np.sin(np.radians(angle))
+            record, data = self.random_primitive(
+                object_types=self.get_types("cube"),
+                scale={"x": 0.05, "y":y, "z": 0.05},
+                color=self.random_color(exclude=self.target_color),
+            )
+            o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
+
+            pos = {
+                "x": self.target_position['x'] * self.obi_scale_factor + dim[0]  * self.obi_scale_factor * np.cos(np.radians(angle)),
+                "y": 0,
+                "z": self.target_position['z'] * self.obi_scale_factor + dim[2]  * self.obi_scale_factor ,
+            }
+
+
+            commands.extend(self.add_physics_object(
+                record=record,
+                position=pos,
+                rotation=TDWUtils.VECTOR3_ZERO,
+                mass=1000,
+                dynamic_friction=1.0,
+                static_friction=1.0,
+                bounciness=0,
+                o_id=o_id,
+                add_data=True)
+            )
+
+            # Set the middle object material
+            commands.extend(
+                self.get_object_material_commands(
+                    record, o_id, self.get_material_name(self.zone_material)))
+
+            # Scale the object and set its color.
+            commands.extend([
+                {"$type": "set_color",
+                    "color": stone_color,
+                    "id": o_id},
+                {"$type": "scale_object",
+                    "scale_factor": scale,
+                    "id": o_id}])
+
+            # make it a "kinematic" object that won't move
+            commands.extend([
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id},
+                {"$type": "set_kinematic_state",
+                "id": o_id,
+                "is_kinematic": True,
+                "use_gravity": True}])
+
+
         # self.target_id = o_id #for internal purposes, the other object is the target
         # self.object_color = rgb
         # Create an object to drop.
-        commands = []
+        #commands = []
 
         return commands
 
@@ -953,13 +1017,13 @@ class ClothHit(MultiDominoes):
     def _get_zone_location(self, scale, islast):
         """Where to place the target zone? Right behind the target object."""
         BUFFER = 0
-
         if not islast:
             return {
                 "x": self.offset[0] + random.uniform(self.collision_axis_length - 1.5, self.collision_axis_length - 1.7),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
                 "y": random.uniform(0.5, 0.8) if not self.remove_zone else 10.0,
                 "z": self.offset[1] + (- 1.0) * random.uniform(0.8, 1.0) + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
             }
+
         else:
             if self.zone_dloc == 2:
                 return {
@@ -986,11 +1050,11 @@ if __name__ == "__main__":
     args = get_drop_args("drop")
 
     import platform, os
-    # if platform.system() == 'Linux':
-    #     if args.gpu is not None:
-    #         os.environ["DISPLAY"] = ":0." + str(args.gpu)
-    #     else:
-    #         os.environ["DISPLAY"] = ":0"
+    if platform.system() == 'Linux':
+        if args.gpu is not None:
+            os.environ["DISPLAY"] = ":" + str(args.gpu + 1)
+        else:
+            os.environ["DISPLAY"] = ":"
 
     DC = ClothHit(
         randomize=args.random,
