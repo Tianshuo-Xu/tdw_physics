@@ -14,12 +14,17 @@ from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
 from tdw_physics.dataset_generation.scripts.playroom_selection import (
     EXCLUDE_MODEL, EXCLUDE_CATEGORY, CATEGORY_SCALE_FACTOR, MODEL_SCALE_FACTOR)
 
+
+#numpy seed
+np.random.seed(0)
+
 RECORDS = []
 for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
     RECORDS.extend(lib.records)
 
-
+# random.seed(0)
 MODELS = list(set([r for r in RECORDS if not r.do_not_use and not r.name in EXCLUDE_MODEL and not 'composite' in r.name]))
+# breakpoint()
 MODEL_NAMES = sorted(list(set([r.name for r in MODELS])))
 
 CATEGORIES = sorted(list(set([r.wcategory for r in RECORDS])))
@@ -59,7 +64,7 @@ for model in ALL_FLEX_MODELS:
 rng = np.random.RandomState(seed=0)
 HOLD_OUT_MODELS = [r for r in rng.choice(ALL_FLEX_MODELS, 200) if r in SCALE_DICT.keys()][0:100]
 TRAIN_VAL_MODELS = [r for r in MODELS if r.name not in HOLD_OUT_MODELS and r.name in SCALE_DICT.keys()]
-TRAIN_VAL_MODELS_NAMES = [r.name for r in TRAIN_VAL_MODELS]
+TRAIN_VAL_MODELS_NAMES = sorted([r.name for r in TRAIN_VAL_MODELS])
 
 def _record_usable(record_name):
     if 'composite' in record_name:
@@ -203,6 +208,7 @@ def build_simple_scenario(models, num_trials, seed, num_distractors, room, permu
     room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
     rng = np.random.RandomState(seed=(seed + room_seed[room]))
 
+    # breakpoint()
 
     scenarios = []
     for i in range(num_trials):
@@ -489,11 +495,14 @@ def main(args):
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=10000, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True)
+    scenarios = build_simple_scenario(models_simple, num_trials=1, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True)
+
+    # breakpoint()
 
     print('Number of models: ', len(models_simple))
 
     start, end = args.start, (args.end or len(scenarios))
+
 
 
     # for i,sc in enumerate(scenarios[start:end]):

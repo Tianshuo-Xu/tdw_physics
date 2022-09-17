@@ -78,6 +78,12 @@ def get_playroom_args(dataset_dir: str, parse=True):
                         help="amount of z jitter applied to the target zone")
 
     ### probe
+    parser.add_argument("--movement_seed",
+                        type=int,
+                        default=0,
+                        help="seed for placing the first object")
+
+    ### probe
     parser.add_argument("--plift",
                         type=float,
                         default=0.0,
@@ -266,8 +272,11 @@ class Playroom(Collision):
                  size_max=4.0,
                  distractor_material=None,
                  occluder_material=None,
+                 movement_seed=0,
                  **kwargs):
 
+        self.movement_seed = movement_seed
+        self.rng_seed = np.random.RandomState(seed=self.movement_seed)
         self.probe_categories = probe_categories
         self.target_categories = target_categories
         self.size_min = size_min
@@ -490,7 +499,9 @@ class Playroom(Collision):
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 
-        self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
+        self.target_position = {'x': float(positions[0][0]) + self.rng_seed.random()/3, 'y': 0., 'z': float(positions[0][1]) + self.rng_seed.random()/3}
+
+        self.first_obj_pos = self.target_position.copy()
         # Choose and place a target object.
         commands.extend(self._place_target_object())
 
@@ -598,6 +609,7 @@ if __name__ == "__main__":
 
     PC = Playroom(
         launch_build=launch_build,
+        movement_seed=args.movement_seed,
         port=args.port,
         room=args.room,
         randomize=args.random,
