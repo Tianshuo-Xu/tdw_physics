@@ -16,13 +16,16 @@ from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 def handle_random_transform_args(args):
 
     if args is not None:
-        if type(args) in [float,int,bool,list,dict]: # don't apply any parsing to simple datatypes
+        # don't apply any parsing to simple datatypes
+        if type(args) in [float, int, bool, list, dict]:
             return args
         try:
             args = json.loads(args)
         except:
-            try: args = eval(args) #this allows us to read dictionaries etc.
-            except: args = str_to_xyz(args)
+            try:
+                args = eval(args)  # this allows us to read dictionaries etc.
+            except:
+                args = str_to_xyz(args)
 
         if hasattr(args, 'keys'):
             if 'class' in args:
@@ -38,7 +41,7 @@ def handle_random_transform_args(args):
                 assert "z" in args, args
         elif hasattr(args, '__len__'):
             if len(args) == 3:
-                args = {k:args[i] for i, k in enumerate(["x","y","z"])}
+                args = {k: args[i] for i, k in enumerate(["x", "y", "z"])}
             else:
                 assert len(args) == 2, (args, len(args))
         else:
@@ -138,7 +141,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  port: int = 1071,
                  monochrome: bool = False,
                  send_full_collision_data: bool = False,
-                 collision_noise_range = None,
+                 collision_noise_range=None,
                  **kwargs):
 
         TransformsDataset.__init__(self, port=port, **kwargs)
@@ -151,33 +154,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # Whether to send the full collision data
         self._send_full_collision_data = send_full_collision_data
 
-        # how to generate collision noise
-        print("noise range", collision_noise_range)
-        self.set_collision_noise_generator(collision_noise_range)
-        if self.collision_noise_generator is not None:
-            print("example noise", self.collision_noise_generator())
-
-    def set_collision_noise_generator(self, noise_range):
-        if noise_range is None:
-            self.collision_noise_generator = None
-        elif hasattr(noise_range, 'keys'):
-            assert all([k in noise_range.keys() for k in ['x', 'y', 'z']])
-            self.collision_noise_generator = lambda: {
-                'x': random.uniform(noise_range['x'][0], noise_range['x'][1]),
-                'y': random.uniform(noise_range['y'][0], noise_range['y'][1]),
-                'z': random.uniform(noise_range['z'][0], noise_range['z'][1])
-            }
-        elif hasattr(noise_range, '__len__'):
-            assert len(noise_range) == 2, len(noise_range)
-            self.collision_noise_generator = lambda: {
-                'x': random.uniform(noise_range[0], noise_range[1]),
-                'y': random.uniform(noise_range[0], noise_range[1]),
-                'z': random.uniform(noise_range[0], noise_range[1])
-            }
-        else:
-            raise ValueError("%s cannot be interpreted as a noise range" \
-                             % noise_range)
-
     def clear_static_data(self) -> None:
         super().clear_static_data()
 
@@ -185,16 +161,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         self.static_frictions = np.empty(dtype=np.float32, shape=0)
         self.dynamic_frictions = np.empty(dtype=np.float32, shape=0)
         self.bouncinesses = np.empty(dtype=np.float32, shape=0)
-        self.colors = np.empty(dtype=np.float32, shape=(0,3))
+        self.colors = np.empty(dtype=np.float32, shape=(0, 3))
         self.scales = []
 
-    def _xyz_to_arr(self, xyz : dict):
+    def _xyz_to_arr(self, xyz: dict):
         arr = np.array(
-            [xyz[k] for k in ["x","y","z"]], dtype=np.float32)
+            [xyz[k] for k in ["x", "y", "z"]], dtype=np.float32)
         return arr
 
-    def _arr_to_xyz(self, arr : np.ndarray):
-        xyz = {k:arr[i] for i,k in enumerate(["x","y","z"])}
+    def _arr_to_xyz(self, arr: np.ndarray):
+        xyz = {k: arr[i] for i, k in enumerate(["x", "y", "z"])}
         return xyz
 
     def random_color(self, exclude=None, exclude_range=0.33):
@@ -219,8 +195,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         while any([np.abs(exclude[i] - rgb[i]) < exclude_range for i in range(3)]):
             rgb = [rng.random(), rng.random(), rng.random()]
 
-        return rgb        
-        
+        return rgb
 
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
@@ -228,7 +203,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     def _add_name_scale_color(self, record, data) -> None:
         self.model_names.append(record.name)
         self.scales.append(data['scale'])
-        self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1,3))], axis=0)
+        self.colors = np.concatenate(
+            [self.colors, np.array(data['color']).reshape((1, 3))], axis=0)
 
     def random_primitive(self,
                          object_types: List[ModelRecord],
@@ -238,7 +214,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                          exclude_range: float = 0.25,
                          add_data: bool = True,
                          random_obj_id: bool = False
-    ) -> dict:
+                         ) -> dict:
         obj_record = random.choice(object_types)
         s = self.get_random_scale_transform(scale)
 
@@ -266,7 +242,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            bounciness: float,
                            o_id: Optional[int] = None,
                            add_data: Optional[bool] = True
-    ) -> List[dict]:
+                           ) -> List[dict]:
         """
         Get commands to add an object and assign physics properties. Write the object's static info to the .hdf5 file.
 
@@ -296,8 +272,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         if add_data:
             self.masses = np.append(self.masses, mass)
-            self.dynamic_frictions = np.append(self.dynamic_frictions, dynamic_friction)
-            self.static_frictions = np.append(self.static_frictions, static_friction)
+            self.dynamic_frictions = np.append(
+                self.dynamic_frictions, dynamic_friction)
+            self.static_frictions = np.append(
+                self.static_frictions, static_friction)
             self.bouncinesses = np.append(self.bouncinesses, bounciness)
 
         # Log the physics info per object for easy reference in a controller.
@@ -372,15 +350,15 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # add the physics stuff
         cmds.extend(
             self.add_physics_object(
-                record = record,
-                position = position,
-                rotation = rotation,
-                mass = mass,
-                dynamic_friction = dynamic_friction,
-                static_friction = static_friction,
-                bounciness = bounciness,
-                o_id = o_id,
-                add_data = add_data))
+                record=record,
+                position=position,
+                rotation=rotation,
+                mass=mass,
+                dynamic_friction=dynamic_friction,
+                static_friction=static_friction,
+                bounciness=bounciness,
+                o_id=o_id,
+                add_data=add_data))
 
         # scale the object
         cmds.append(
@@ -394,7 +372,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 self.get_object_material_commands(
                     record, o_id, self.get_material_name(material)))
 
-            color = color if color is not None else self.random_color(exclude=exclude_color)
+            color = color if color is not None else self.random_color(
+                exclude=exclude_color)
             cmds.append(
                 {"$type": "set_color",
                  "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
@@ -422,7 +401,6 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         return cmds
 
-
     def add_ramp(self,
                  record: ModelRecord,
                  position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
@@ -439,7 +417,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                  ) -> List[dict]:
 
         # get a named ramp or choose a random one
-        ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records \
+        ramp_records = {r.name: r for r in MODEL_LIBRARIES['models_full.json'].records
                         if 'ramp' in r.name}
         if record.name not in ramp_records.keys():
             record = ramp_records[random.choice(sorted(ramp_records.keys()))]
@@ -450,15 +428,15 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         info = PHYSICS_INFO[record.name]
         cmds.extend(
             self.add_physics_object(
-                record = record,
-                position = position,
-                rotation = rotation,
-                mass = mass or info.mass,
-                dynamic_friction = dynamic_friction or info.dynamic_friction,
-                static_friction = static_friction or info.static_friction,
-                bounciness = bounciness or info.bounciness,
-                o_id = o_id,
-                add_data = add_data))
+                record=record,
+                position=position,
+                rotation=rotation,
+                mass=mass or info.mass,
+                dynamic_friction=dynamic_friction or info.dynamic_friction,
+                static_friction=static_friction or info.static_friction,
+                bounciness=bounciness or info.bounciness,
+                o_id=o_id,
+                add_data=add_data))
 
         if o_id is None:
             o_id = cmds[-1]["id"]
@@ -490,7 +468,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
              "use_gravity": True}])
 
         if add_data:
-            self._add_name_scale_color(record, {'color': color, 'scale': scale})
+            self._add_name_scale_color(
+                record, {'color': color, 'scale': scale})
             # self.model_names.append(record.name)
             # self.colors = np.concatenate([self.colors, np.array(color).reshape((1,3))], axis=0)
             # self.scales.append(scale)
@@ -525,11 +504,13 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # Add some objects.
         for i in range(random.randint(min_num_objects, max_num_objects)):
             o_id = small_ids.pop(0)
-            force_dir = np.array([random.uniform(-0.125, 0.125), random.uniform(0.7, 1), random.uniform(-0.125, 0.125)])
+            force_dir = np.array(
+                [random.uniform(-0.125, 0.125), random.uniform(0.7, 1), random.uniform(-0.125, 0.125)])
             force_dir = force_dir / np.linalg.norm(force_dir)
             min_force = self.physics_info[o_id].mass * 2
             max_force = self.physics_info[o_id].mass * 4
-            force = TDWUtils.array_to_vector3(force_dir * random.uniform(min_force, max_force))
+            force = TDWUtils.array_to_vector3(
+                force_dir * random.uniform(min_force, max_force))
             per_frame_commands.append([{"$type": "apply_force_to_object",
                                         "force": force,
                                         "id": o_id}])
@@ -558,16 +539,22 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         ## physical
         static_group.create_dataset("mass", data=self.masses)
-        static_group.create_dataset("static_friction", data=self.static_frictions)
-        static_group.create_dataset("dynamic_friction", data=self.dynamic_frictions)
+        static_group.create_dataset(
+            "static_friction", data=self.static_frictions)
+        static_group.create_dataset(
+            "dynamic_friction", data=self.dynamic_frictions)
         static_group.create_dataset("bounciness", data=self.bouncinesses)
 
         ## size and colors
         static_group.create_dataset("color", data=self.colors)
-        static_group.create_dataset("scale", data=np.stack([xyz_to_arr(_s) for _s in self.scales], 0))
-        static_group.create_dataset("scale_x", data=[_s["x"] for _s in self.scales])
-        static_group.create_dataset("scale_y", data=[_s["y"] for _s in self.scales])
-        static_group.create_dataset("scale_z", data=[_s["z"] for _s in self.scales])
+        static_group.create_dataset("scale", data=np.stack(
+            [xyz_to_arr(_s) for _s in self.scales], 0))
+        static_group.create_dataset(
+            "scale_x", data=[_s["x"] for _s in self.scales])
+        static_group.create_dataset(
+            "scale_y", data=[_s["y"] for _s in self.scales])
+        static_group.create_dataset(
+            "scale_z", data=[_s["z"] for _s in self.scales])
 
         if self.save_meshes:
             mesh_group = static_group.create_group("mesh")
@@ -580,14 +567,16 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:
-        frame, objs, tr, done = super()._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame_num)
+        frame, objs, tr, done = super()._write_frame(
+            frames_grp=frames_grp, resp=resp, frame_num=frame_num)
         num_objects = len(self.object_ids)
         # Physics data.
         velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))
         angular_velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))
         # Collision data.
         collision_ids = np.empty(dtype=np.int32, shape=(0, 2))
-        collision_relative_velocities = np.empty(dtype=np.float32, shape=(0, 3))
+        collision_relative_velocities = np.empty(
+            dtype=np.float32, shape=(0, 3))
         collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
         collision_states = np.empty(dtype=str, shape=(0, 1))
         # Environment Collision data.
@@ -623,27 +612,36 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             elif r_id == "coll":
                 co = Collision(r)
                 collision_states = np.append(collision_states, co.get_state())
-                collision_ids = np.append(collision_ids, [co.get_collider_id(), co.get_collidee_id()])
-                collision_relative_velocities = np.append(collision_relative_velocities, co.get_relative_velocity())
+                collision_ids = np.append(
+                    collision_ids, [co.get_collider_id(), co.get_collidee_id()])
+                collision_relative_velocities = np.append(
+                    collision_relative_velocities, co.get_relative_velocity())
                 for i in range(co.get_num_contacts()):
                     collision_contacts = np.append(collision_contacts, (co.get_contact_normal(i),
                                                                         co.get_contact_point(i)))
             elif r_id == "enco":
                 en = EnvironmentCollision(r)
-                env_collision_ids = np.append(env_collision_ids, en.get_object_id())
+                env_collision_ids = np.append(
+                    env_collision_ids, en.get_object_id())
                 for i in range(en.get_num_contacts()):
                     env_collision_contacts = np.append(env_collision_contacts, (en.get_contact_normal(i),
                                                                                 en.get_contact_point(i)))
-        objs.create_dataset("velocities", data=velocities.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("angular_velocities", data=angular_velocities.reshape(num_objects, 3), compression="gzip")
+        objs.create_dataset("velocities", data=velocities.reshape(
+            num_objects, 3), compression="gzip")
+        objs.create_dataset("angular_velocities", data=angular_velocities.reshape(
+            num_objects, 3), compression="gzip")
         collisions = frame.create_group("collisions")
-        collisions.create_dataset("object_ids", data=collision_ids.reshape((-1, 2)), compression="gzip")
+        collisions.create_dataset(
+            "object_ids", data=collision_ids.reshape((-1, 2)), compression="gzip")
         collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
                                   compression="gzip")
-        collisions.create_dataset("contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
-        collisions.create_dataset("states", data=collision_states.astype('S'), compression="gzip")
+        collisions.create_dataset(
+            "contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
+        collisions.create_dataset(
+            "states", data=collision_states.astype('S'), compression="gzip")
         env_collisions = frame.create_group("env_collisions")
-        env_collisions.create_dataset("object_ids", data=env_collision_ids, compression="gzip")
+        env_collisions.create_dataset(
+            "object_ids", data=env_collision_ids, compression="gzip")
         env_collisions.create_dataset("contacts", data=env_collision_contacts.reshape((-1, 2, 3)),
                                       compression="gzip")
         return frame, objs, tr, sleeping
@@ -693,7 +691,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             {
                 "$type": "apply_force_to_object",
                 "force": force,
-                "id": o_id                
+                "id": o_id
             }
         ]
         return cmds
@@ -709,8 +707,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 co = Collision(r)
                 coll_ids = [co.get_collider_id(), co.get_collidee_id()]
                 if [obj_id, target_id] == coll_ids or [target_id, obj_id] == coll_ids:
-                    contact_points = [co.get_contact_point(i) for i in range(co.get_num_contacts())]
-                    contact_normals = [co.get_contact_normal(i) for i in range(co.get_num_contacts())]
+                    contact_points = [co.get_contact_point(
+                        i) for i in range(co.get_num_contacts())]
+                    contact_normals = [co.get_contact_normal(
+                        i) for i in range(co.get_num_contacts())]
 
         return (contact_points, contact_normals)
 
@@ -724,7 +724,9 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             if r_id == 'enco':
                 en = EnvironmentCollision(r)
                 if en.get_object_id() == obj_id:
-                    contact_points = [np.array(en.get_contact_point(i)) for i in range(en.get_num_contacts())]
-                    contact_normals = [np.array(en.get_contact_normal(i)) for i in range(en.get_num_contacts())]
+                    contact_points = [np.array(en.get_contact_point(
+                        i)) for i in range(en.get_num_contacts())]
+                    contact_normals = [np.array(en.get_contact_normal(
+                        i)) for i in range(en.get_num_contacts())]
 
         return (contact_points, contact_normals)

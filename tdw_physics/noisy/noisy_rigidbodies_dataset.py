@@ -12,6 +12,7 @@ from tdw_physics.noisy.noisy_utils import rotmag2vec, vec2rotmag,\
         rad2deg, deg2rad
 import os
 import json
+import warnings
 
 XYZ = ['x', 'y', 'z']
 
@@ -105,6 +106,7 @@ class IsotropicRigidNoiseParams(RigidNoiseParams):
 
 
 NO_NOISE = RigidNoiseParams()
+
 
 
 class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
@@ -244,6 +246,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     """ INCOMPLETE - Adds force but not relative """
 
+    """
+    Helper function that takes in a collision momenum transfer vector, then calculates the momentum to apply
+    in the next timestep to actualize the collision noise
+    """
+    def _calculate_collision_differential(self, momentum: Dict[str, float]) -> Dict[str, float]:
+        warnings.warn('NOT IMPLEMENTED YET - ADDS CONSTANT 1,1,1 MOMENTUM')
+        return {'x':1, 'y': 1, 'z': 1}
+
+
+
     def set_collision_noise_generator(self,
                                       noise_obj: RigidNoiseParams):
         # Only make noise if there is noise to be added
@@ -282,7 +294,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         raise NotImplementedError()
 
-    """ Ensures collision data is sent pre/post """
+    """ Ensures collision data is sent pre (change for post) """
 
     def _get_send_data_commands(self) -> List[dict]:
         commands = super()._get_send_data_commands()
@@ -290,8 +302,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         commands = [c for c in commands if c['$type'] != 'send_collisions']
         commands.extend([{"$type": "send_collisions",
                           "enter": True,
-                          "exit": True,
-                          "stay": True,
+                          "exit": False,
+                          "stay": False,
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])

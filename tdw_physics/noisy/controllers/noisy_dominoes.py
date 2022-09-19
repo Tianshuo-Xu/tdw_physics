@@ -617,7 +617,6 @@ class Dominoes(NoisyRigidbodiesDataset):
                  probe_initial_height=0.0,
                  randomize_object_size=False,
                  send_full_collision_data=False,
-                 collision_noise_range=None,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -629,7 +628,6 @@ class Dominoes(NoisyRigidbodiesDataset):
         ## initializes static data and RNG
         super().__init__(port=port,
                          send_full_collision_data=send_full_collision_data,
-                         collision_noise_range=collision_noise_range,
                          **kwargs)
 
         ## which room to use
