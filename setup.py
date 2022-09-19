@@ -27,7 +27,7 @@ setup(
                       'pillow',
                       'weighted-collection',
                       'stopit',
-                      'tdw==1.8.29',
+                      'tdw>=1.9.16',
                       'matplotlib',
                       'trimesh'],
 )
