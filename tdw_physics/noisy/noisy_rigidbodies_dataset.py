@@ -323,6 +323,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 agent_id = co.get_collider_id()
                 patient_id = co.get_collidee_id()
                 relative_velocity = co.get_relative_velocity()
+                impulse = co.get_impulse()
                 num_contacts = co.get_num_contacts()
                 contact_points = [co.get_contact_point(i)
                                   for i in range(num_contacts)]
@@ -333,6 +334,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     'agent_id': agent_id,
                     'patient_id': patient_id,
                     'relative_velocity': relative_velocity,
+                    'impulse': impulse,
                     'num_contacts': num_contacts,
                     'contact_points': contact_points,
                     'contact_normals': contact_normals,
@@ -342,6 +344,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 if False:
                     print("agent: %d ---> patient %d" % (agent_id, patient_id))
                     print("relative velocity", relative_velocity)
+                    print("impulse", impulse)
                     print("contact points", contact_points)
                     print("contact normals", contact_normals)
                     print("state", state)
