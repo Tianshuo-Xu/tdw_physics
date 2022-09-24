@@ -386,11 +386,19 @@ class Dataset(Controller, ABC):
                         self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
-                with timeout(seconds=780):
-                    self.trial(filepath=filepath,
-                               temp_path=temp_path,
-                               trial_num=trial_num,
-                               unload_assets_every=unload_assets_every)
+                # try:
+                #     with timeout(seconds=30):
+                try:
+                    with timeout(seconds=300):
+                        self.trial(filepath=filepath,
+                                       temp_path=temp_path,
+                                       trial_num=trial_num,
+                                       unload_assets_every=unload_assets_every)
+                except TimeoutError:
+                    # breakpoint()
+                    pass
+                #     print("*************** skipped trial:", i)
+                #     pass
 
                 # # Save an MP4 of the stimulus
                 # if self.save_movies:
@@ -628,9 +636,9 @@ class Dataset(Controller, ABC):
             map_img.save(filepath.parent.joinpath(filepath.stem+"_map.png"))
         '''
 
-        # Close the file.
+        # # Close the file.
         f.close()
-        # Move the file.
+        # # Move the file.
         try:
             temp_path.replace(filepath)
         except OSError:
