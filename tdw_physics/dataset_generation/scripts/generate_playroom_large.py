@@ -66,6 +66,10 @@ HOLD_OUT_MODELS = [r for r in rng.choice(ALL_FLEX_MODELS, 200) if r in SCALE_DIC
 TRAIN_VAL_MODELS = [r for r in MODELS if r.name not in HOLD_OUT_MODELS and r.name in SCALE_DICT.keys()]
 TRAIN_VAL_MODELS_NAMES = sorted([r.name for r in TRAIN_VAL_MODELS])
 
+rng__ = np.random.RandomState(seed=0)
+temp_lst = sorted([r.name for r in TRAIN_VAL_MODELS if r.name in ALL_FLEX_MODELS])
+VAL_MODELS = list(rng__.permutation(temp_lst))
+
 def _record_usable(record_name):
     if 'composite' in record_name:
         non_composite_name = record_name.split('_composite')[0]
@@ -532,7 +536,7 @@ def main(args):
     # else:
     #     raise ValueError
 
-    models_simple = moving_models # TRAIN_VAL_MODELS_NAMES
+    models_simple = VAL_MODELS #moving_models # TRAIN_VAL_MODELS_NAMES
     scale_dict = SCALE_DICT
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
