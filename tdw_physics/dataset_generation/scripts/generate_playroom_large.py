@@ -13,6 +13,7 @@ from tdw_physics.util import MODEL_LIBRARIES, none_or_str, none_or_int
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
 from tdw_physics.dataset_generation.scripts.playroom_selection import (
     EXCLUDE_MODEL, EXCLUDE_CATEGORY, CATEGORY_SCALE_FACTOR, MODEL_SCALE_FACTOR)
+import h5py
 
 RECORDS = []
 for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
@@ -59,6 +60,16 @@ for model in ALL_FLEX_MODELS:
 rng = np.random.RandomState(seed=0)
 HOLD_OUT_MODELS = [r for r in rng.choice(ALL_FLEX_MODELS, 200) if r in SCALE_DICT.keys()][0:100]
 TRAIN_VAL_MODELS = [r for r in MODELS if r.name not in HOLD_OUT_MODELS and r.name in SCALE_DICT.keys()]
+
+# TRAIN_VAL_CATEGORIES = [r.wcategory for r in TRAIN_VAL_MODELS]
+# for r in RECORDS:
+#     if r.name in HOLD_OUT_MODELS:
+#         if r.wcategory in TRAIN_VAL_CATEGORIES:
+#             print(r.name, r.wcategory)
+#         else:
+#             print('no', r.name, r.wcategory)
+# breakpoint()
+VAL_MODELS = [r.name for r in TRAIN_VAL_MODELS if r.name in ALL_FLEX_MODELS]
 TRAIN_VAL_MODELS_NAMES = [r.name for r in TRAIN_VAL_MODELS]
 
 def _record_usable(record_name):
@@ -100,6 +111,10 @@ def get_args(dataset_dir: str):
                         type=int,
                         default=NUM_MOVING_MODELS,
                         help="number of models that will move")
+    parser.add_argument("--load_cfg_path",
+                        type=str,
+                        default=None,
+                        help="load_cfg_from_folder")
     parser.add_argument("--num_static_models",
                         type=int,
                         default=NUM_STATIC_MODELS,
@@ -116,6 +131,9 @@ def get_args(dataset_dir: str):
                         action="store_true",
                         help="Whether to lump all the static models together for every split")
     parser.add_argument("--validation_set",
+                        action="store_true",
+                        help="Create the validation set using the remaining models")
+    parser.add_argument("--testing_set",
                         action="store_true",
                         help="Create the validation set using the remaining models")
     parser.add_argument("--randomize_moving_object",
@@ -199,14 +217,20 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_simple_scenario(models, num_trials, seed, num_distractors, room, permute=True):
+def build_simple_scenario(models, num_trials, seed, num_distractors, room, permute=True, load_cfg=None):
+
     room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
     rng = np.random.RandomState(seed=(seed + room_seed[room]))
 
 
     scenarios = []
     for i in range(num_trials):
-        permute_models = rng.permutation(models) if permute else models
+        if load_cfg is not None:
+            f = h5py.File(os.path.join(load_cfg, f'sc{i:04d}.hdf5'), "r")
+            breakpoint()
+
+        else:
+            permute_models = rng.permutation(models) if permute else models
 
         scene = {
             'probe': permute_models[0],
@@ -377,16 +401,16 @@ def main(args):
     for s in static_splits:
         all_static_models.extend(s)
 
-    ## create the scenarios
-    if not args.validation_set:
-        moving_models = moving_splits[args.split]
-        static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
-    else:
-        print("remaining", remaining_splits)
-        validation_models = []
-        for models in remaining_splits:
-            validation_models.extend(models)
-        moving_models = static_models = validation_models
+    # ## create the scenarios
+    # if not args.validation_set:
+    #     moving_models = moving_splits[args.split]
+    #     static_models = static_splits[args.split % num_static_splits] if not args.use_all_static_models else all_static_models
+    # else:
+    #     print("remaining", remaining_splits)
+    #     validation_models = []
+    #     for models in remaining_splits:
+    #         validation_models.extend(models)
+    #     moving_models = static_models = validation_models
 
     # scenarios = build_scenarios(moving_models, static_models,
     #                             args.num_trials_per_model, seed=args.category_seed,
@@ -483,13 +507,24 @@ def main(args):
     # else:
     #     raise ValueError
 
-    models_simple = TRAIN_VAL_MODELS_NAMES
+
     scale_dict = SCALE_DICT
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=10000, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True)
+
+    if args.testing_set:
+        models_simple = HOLD_OUT_MODELS
+        print('Generate test with %d models' % len(models_simple))
+    elif args.validation_set:
+        models_simple = VAL_MODELS
+        print('Generate validation with %d models' % len(models_simple))
+    else:
+        models_simple = TRAIN_VAL_MODELS_NAMES
+        print('Generate train with %d models' % len(models_simple))
+
+    scenarios = build_simple_scenario(models_simple, num_trials=10000, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True, load_cfg=args.load_cfg_path)
 
     print('Number of models: ', len(models_simple))
 

@@ -2,19 +2,19 @@ import os
 import shutil
 import glob
 
-root_dir = '/ccn2/u/honglinc/tdw_playroom_v2_train/'
+root_dir = '/ccn2/u/honglinc/datasets/tdw_playroom_v2_val/'
 # datasets = ['archviz_house_split_0', 'archviz_house_split_1', 'archviz_house_split_2', 'archviz_house_split_3',
 #             'mm_craftroom_1b_split_0', 'mm_craftroom_1b_split_1', 'mm_craftroom_1b_split_2', 'mm_craftroom_1b_split_3',
 #             'tdw_room_split_0', 'tdw_room_split_1', 'tdw_room_split_2', 'tdw_room_split_3',
 #             'box_split_0', 'box_split_1', 'box_split_2', 'box_split_3'
 #             ]
 
-datasets = ['mm_craftroom_1b_allobj', 'tdw_room_allobj', 'box_allobj']
+datasets = ['mm_craftroom_1b_val', 'box_val', 'tdw_room_val']
 
 datasets = [os.path.join(root_dir, d) for d in datasets]
-save_dir = '/ccn2/u/honglinc/tdw_playroom_v2_train_combine'
-start_idx = 2961
-end_idx = 5000
+save_dir = '/ccn2/u/honglinc/datasets/tdw_playroom_v2_val_combine'
+start_idx = 0
+end_idx = 200
 
 count = start_idx * len(datasets)
 
