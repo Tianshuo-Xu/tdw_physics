@@ -93,10 +93,31 @@ def get_args(dataset_dir: str):
     playroom_parser, playroom_postproc = get_playroom_args(dataset_dir, parse=False)
     parser = ArgumentParser(parents=[playroom_parser], conflict_handler='resolve')
 
+    parser.add_argument("--n_trials",
+                        type=int,
+                        default=1,
+                        help="num_trials")
+
+    parser.add_argument("--room_seed",
+                        type=int,
+                        default=-1,
+                        help="random seed for selecting room")
+
     parser.add_argument("--category_seed",
                         type=int,
                         default=0,
                         help="random seed for splitting categores")
+
+    parser.add_argument("--category_seed_2",
+                        type=int,
+                        default=0,
+                        help="random seed for splitting categores")
+
+    parser.add_argument("--category_seed_3",
+                        type=int,
+                        default=0,
+                        help="random seed for splitting categores")
+
     parser.add_argument("--models_per_split",
                         type=int,
                         default=125,
@@ -204,9 +225,13 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
 
     return model_splits
 
-def build_simple_scenario(models, num_trials, seed, num_distractors, room, permute=True):
+def build_simple_scenario(models, num_trials, seed, num_distractors, room, seed_2=0, seed_3=0, permute=True):
     room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
-    rng = np.random.RandomState(seed=(seed + room_seed[room]))
+    rng = np.random.RandomState(seed=(seed))
+
+    rng_2 = np.random.RandomState(seed=(seed_2))
+
+    rng_3 = np.random.RandomState(seed=(seed_3))
 
     # breakpoint()
 
@@ -214,10 +239,14 @@ def build_simple_scenario(models, num_trials, seed, num_distractors, room, permu
     for i in range(num_trials):
         permute_models = rng.permutation(models) if permute else models
 
+        permute_models_2 = rng_2.permutation(models) if permute else models
+
+        permute_models_3 = rng_3.permutation(models) if permute else models
+
         scene = {
             'probe': permute_models[0],
-            'target': permute_models[1],
-            'occluder': permute_models[2]
+            'target': permute_models_2[1],
+            'occluder': permute_models_3[2]
         }
 
         if num_distractors > 0:
@@ -295,6 +324,7 @@ def build_scenarios(moving_models,
 def build_controller(args, scale_dict, launch_build=True):
 
     C = Playroom(
+        movement_seed=args.movement_seed,
         launch_build=args.launch_build,
         port=args.port,
         room=args.room,
@@ -362,6 +392,19 @@ def build_controller(args, scale_dict, launch_build=True):
     return C
 
 def main(args):
+    rooms =  ['box', 'tdw_room','mm_craftroom_1b']
+
+    # print("***************** in main", args.room_seed)
+
+    if not args.room_seed == -1:
+
+        print("room_seed")
+
+        rng = np.random.RandomState(args.room_seed)
+
+        args.room = rng.choice(rooms)
+
+        print("*************", args.room)
 
     ## build the model splits
     category_splits = make_category_splits(
@@ -489,13 +532,13 @@ def main(args):
     # else:
     #     raise ValueError
 
-    models_simple = TRAIN_VAL_MODELS_NAMES
+    models_simple = moving_models # TRAIN_VAL_MODELS_NAMES
     scale_dict = SCALE_DICT
 
     # ['b05_02_088', '013_vray', 'giraffe_mesh', 'iphone_5_vr_white']
     # models_simple = ['b03_zebra', 'checkers', 'cgaxis_models_50_24_vray', 'b05_02_088', '013_vray', 'b03_852100_giraffe', 'iphone_5_vr_white', 'green_side_chair', 'red_side_chair', 'linen_dining_chair']
     # models_simple = static_models # ['green_side_chair', 'red_side_chair', 'linen_dining_chair']
-    scenarios = build_simple_scenario(models_simple, num_trials=1, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True)
+    scenarios = build_simple_scenario(models_simple, num_trials=args.n_trials, seed=args.category_seed, seed_2=args.category_seed_2, seed_3=args.category_seed_3, num_distractors=args.num_distractors, room=args.room, permute=True)
 
     # breakpoint()
 
@@ -571,9 +614,9 @@ if __name__ == '__main__':
     import platform, os
     if platform.system() == 'Linux':
         if args.gpu is not None:
-            os.environ["DISPLAY"] = ":0." + str(args.gpu)
+            os.environ["DISPLAY"] = ":" + str(args.gpu)
         else:
-            os.environ["DISPLAY"] = ":0"
+            os.environ["DISPLAY"] = ":"
 
     print('USE GPU: ', args.gpu)
     main(args)

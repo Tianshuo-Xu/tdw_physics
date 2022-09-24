@@ -76,9 +76,9 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
-
-        if platform.system() == 'Linux':
-            os.environ["DISPLAY"] = ":5"
+        #
+        # if platform.system() == 'Linux':
+        #     os.environ["DISPLAY"] = ":5"
 
 
             # if args.gpu is not None:
@@ -386,7 +386,7 @@ class Dataset(Controller, ABC):
                         self.png_dir.mkdir(parents=True)
 
                 # Do the trial.
-                with timeout(seconds=180):
+                with timeout(seconds=780):
                     self.trial(filepath=filepath,
                                temp_path=temp_path,
                                trial_num=trial_num,

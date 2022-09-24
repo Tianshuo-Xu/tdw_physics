@@ -276,7 +276,9 @@ class Playroom(Collision):
                  **kwargs):
 
         self.movement_seed = movement_seed
-        self.rng_seed = np.random.RandomState(seed=self.movement_seed)
+        # print("****", self.movement_seed)
+        if not self.movement_seed == -1:
+            self.rng_seed = np.random.RandomState(seed=self.movement_seed)
         self.probe_categories = probe_categories
         self.target_categories = target_categories
         self.size_min = size_min
@@ -499,7 +501,12 @@ class Playroom(Collision):
         point_generator = Points(n=3, r=radius, mindist=min_distance)
         positions = point_generator.points
 
-        self.target_position = {'x': float(positions[0][0]) + self.rng_seed.random()/3, 'y': 0., 'z': float(positions[0][1]) + self.rng_seed.random()/3}
+        if not self.movement_seed == -1:
+            p1 = (self.rng_seed.random() - 0.5)*1.2
+            p2 = (self.rng_seed.random() - 0.5)*1.2
+        else:
+            p1 = p2 = 0
+        self.target_position = {'x': float(positions[0][0]) + p1, 'y': 0., 'z': float(positions[0][1]) + p2}
 
         self.first_obj_pos = self.target_position.copy()
         # Choose and place a target object.
