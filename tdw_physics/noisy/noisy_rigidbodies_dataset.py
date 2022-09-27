@@ -224,8 +224,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                             c != nm_ap
                         ]
                 self._lasttime_collisions = new_collisions
-                #coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
-                #cmds.extend(coll_noise_cmds)
+                coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
+                cmds.extend(coll_noise_cmds)
 
         return cmds
 
@@ -233,7 +233,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         if data is None:
             return []
         o_id = data['patient_id']
-        force = self.collision_noise_generator()
+        force = self.collision_noise_generator(data)
         #print("collision noise", force)
         cmds = [
             {
@@ -247,7 +247,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     """ INCOMPLETE - Adds force but not relative """
 
     """
-    Helper function that takes in a collision momenum transfer vector, then calculates the momentum to apply
+    Helper function that takes in a collision momentum transfer vector, then calculates the momentum to apply
     in the next timestep to actualize the collision noise
     """
     def _calculate_collision_differential(self, momentum: Dict[str, float]) -> Dict[str, float]:
@@ -271,17 +271,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         else:
             """ NOTE MAKE THIS ALL RELATIVE | ADD INPUT """
             if ncd is None:
-
-                def cng():
-                    return rotmag2vec(dict([[k, 0] for k in XYZ]),
-                                      lognorm.rvs(ncm, 1))
-            elif ncm is None:
-                def cng():
+                def cng(input):
                     return rotmag2vec(dict([[k, vonmises.rvs(ncd[k], 0)]
                                             for k in XYZ]),
                                       1)
+            elif ncm is None:
+                def cng(input):
+                    return rotmag2vec(dict([[k, 0] for k in XYZ]),
+                                      lognorm.rvs(ncm, 1))
             else:
-                def cng():
+                def cng(input):
                     return rotmag2vec(dict([[k, vonmises.rvs(ncd[k], 0)]
                                             for k in XYZ]),
                                       lognorm.rvs(ncm, 1))
