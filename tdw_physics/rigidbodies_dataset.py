@@ -154,6 +154,11 @@ class RigidbodiesDataset(TransformsDataset, ABC):
     def get_random_scale_transform(self, scale):
         return get_random_xyz_transform(scale)
 
+    def _add_name_scale(self, record, data) -> None:
+        self.model_names.append(record.name)
+        self.scales.append(data['scale'])
+        # self.colors = np.concatenate([self.colors, np.array(data['color']).reshape((1, 3))], axis=0)
+
     def _add_name_scale_color(self, record, data) -> None:
         self.model_names.append(record.name)
         self.scales.append(data['scale'])
@@ -191,6 +196,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            position: Dict[str, float],
                            rotation: Dict[str, float],
                            mass: float,
+                           scale: Dict[str, float],
                            dynamic_friction: float,
                            static_friction: float,
                            bounciness: float,
@@ -206,11 +212,22 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         if add_data:
             self.add_transforms_data(position, rotation)
 
+            # # if add_data:
+            # data = {'name': record.name, 'id': o_id,
+            #         'scale': scale,
+            #         'mass': mass,
+            #         'dynamic_friction': dynamic_friction,
+            #         'static_friction': static_friction,
+            #         'bounciness': bounciness}
+            # self._add_name_scale(record, data)
+            # obj_list.append((record, data))
+
         return self.get_add_physics_object(model_name=record.name,
                                            object_id=o_id,
                                            position=position,
                                            rotation=rotation,
                                            mass=mass,
+                                           scale_factor=scale,
                                            library=lib,
                                            dynamic_friction=dynamic_friction,
                                            static_friction=static_friction,
@@ -274,8 +291,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                             library=library,
                                                             scale_factor=scale_factor,
                                                             kinematic=kinematic,
-                                                            gravity=gravity,
-                                                default_physics_values=default_physics_values,
+                                                            gravity=True,
+                                                            default_physics_values=default_physics_values,
                                                             mass=mass,
                                                             dynamic_friction=dynamic_friction,
                                                             static_friction=static_friction,
@@ -357,7 +374,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                  library=lib,
                                                  scale_factor=scale,
                                                  kinematic=make_kinematic,
-                                                 gravity=make_kinematic,
+                                                 gravity=True,
                                                  default_physics_values=default_physics_values,
                                                  mass=mass,
                                                  dynamic_friction=dynamic_friction,
@@ -537,6 +554,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                           "exit": True,
                           "stay": True,
                           "collision_types": ["obj", "env"]},
+                         {"$type": "send_static_rigidbodies",
+                          "frequency": "always"},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
 

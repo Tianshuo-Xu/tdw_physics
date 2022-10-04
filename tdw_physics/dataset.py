@@ -603,16 +603,26 @@ class Dataset(Controller, ABC):
         """
 
         a_r = random.uniform(radius_min, radius_max)
-        a_x = center["x"] + a_r
-        a_z = center["z"] + a_r
+        # a_x = center["x"] + a_r
+        # a_z = center["z"] + a_r
         theta = np.radians(random.uniform(angle_min, angle_max))
-        if reflections:
-            theta2 = random.uniform(angle_min+180, angle_max+180)
-            theta = random.choice([theta, theta2])
 
-        a_x = np.cos(theta) * (a_x - center["x"]) - np.sin(theta) * (a_z - center["z"]) + center["x"]
-        a_y = random.uniform(y_min, y_max) + center["y"]
-        a_z = np.sin(theta) * (a_x - center["x"]) + np.cos(theta) * (a_z - center["z"]) + center["z"]
+        a_y = random.uniform(y_min, y_max)
+
+        r_xy = np.sqrt(a_r**2 - a_y**2)
+
+
+
+
+        # if reflections:
+        #     theta2 = random.uniform(angle_min+180, angle_max+180)
+        #     theta = random.choice([theta, theta2])
+
+        a_x = np.cos(theta)*r_xy + center["x"]
+
+        a_z = np.sin(theta)*r_xy + center["z"]
+
+        a_y = a_y + center["y"]
 
         return {"x": a_x, "y": a_y, "z": a_z}
 
