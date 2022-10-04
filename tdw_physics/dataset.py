@@ -3,6 +3,8 @@ import platform
 from typing import List, Dict, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 import stopit
 from PIL import Image
@@ -32,6 +34,27 @@ MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
 # colors for the target/zone overlay
 ZONE_COLOR = [255,255,0]
 TARGET_COLOR = [255,0,0]
+
+def pad_right(x, sz=7):
+    ones = np.ones([x.shape[0], sz, x.shape[-1]])
+    return np.concatenate([x, ones], 1)
+
+
+def pad_below(x, sz=7):
+    ones = np.ones([sz, x.shape[1], x.shape[-1]])
+    return np.concatenate([x, ones], 0)
+
+
+def concat_img_horz(x_gt):
+    # x_gt is V x H x W x 3
+
+    full_tensor = x_gt[0]
+
+    for i in range(1, x_gt.shape[0]):
+        img = x_gt[i]
+        full_tensor = np.concatenate([pad_right(full_tensor), img], 1)
+
+    return full_tensor
 
 class Dataset(Controller, ABC):
     """
@@ -349,7 +372,7 @@ class Dataset(Controller, ABC):
         if self.num_views > 1:
             azimuth_grp = f.create_group("azimuth")
             # TODO: set as flag
-            multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=False)
+            multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=True)
 
         while not done:
             frame += 1
@@ -390,6 +413,35 @@ class Dataset(Controller, ABC):
             #
             # if frame > 5:
             #     break
+
+        #save_imgs for viz
+        for fr in range(1, frame + 1):
+            imgs = []
+            for pass_mask in self.save_passes:
+
+                all_imgs = []
+                for cam_no in range(self.num_views):
+                    filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
+                    img = plt.imread(filename)
+                    all_imgs.append(img)
+                all_imgs = np.stack(all_imgs)
+                all_imgs = concat_img_horz(all_imgs)
+                all_imgs = pad_below(all_imgs)
+                imgs.append(all_imgs[:, :, :3])
+
+            # breakpoint()
+
+            imgs = (np.concatenate(imgs, 0)*255).astype('uint8')
+
+            # breakpoint()
+
+            filename = os.path.join(self.png_dir, 'img_' + str(fr-1).zfill(4) + '.png')
+
+            Image.fromarray(imgs).resize((1024, 1024)).save(filename)
+
+
+
+        # breakpoint()
 
         # #write png file to png dir
         # for fr in range(frame+1):
@@ -467,6 +519,8 @@ class Dataset(Controller, ABC):
         except OSError:
             shutil.move(temp_path, filepath)
 
+        return imgs.shape
+
     def trial_loop(self,
                    num: int,
                    output_dir: str,
@@ -511,7 +565,7 @@ class Dataset(Controller, ABC):
                 # breakpoint()
 
                 # Do the trial.
-                self.trial(filepath,
+                shp = self.trial(filepath,
                            temp_path,
                            i,
                            unload_assets_every)
@@ -522,19 +576,19 @@ class Dataset(Controller, ABC):
                 # Save an MP4 of the stimulus
                 if self.save_movies:
 
-                    for pass_mask in self.save_passes:
-                        pass_mask = pass_mask + cam_suffix
+                    for pass_mask in ['_img']:
+                        pass_mask = pass_mask #+ cam_suffix
                         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
                             image_stem=pass_mask[1:] + '_',
                             png_dir=self.png_dir,
-                            size=[self._height, self._width],
+                            size=[shp[0], shp[1]],#[self._height, self._width],#
                             overwrite=True,
-                            remove_pngs=(True if save_frame is None else False),
+                            remove_pngs=False,
                             use_parent_dir=False)
 
-                        # breakpoint()
+                        breakpoint()
 
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))
