@@ -238,7 +238,7 @@ class Dataset(Controller, ABC):
         self.save_passes = save_passes
         if isinstance(self.save_passes, str):
             self.save_passes = self.save_passes.split(',')
-        self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
+        # self.save_passes = [p for p in self.save_passes if (p in self.write_passes)]
         self.save_movies = save_movies
 
         # whether to send and save meshes
@@ -391,16 +391,25 @@ class Dataset(Controller, ABC):
             # if frame > 5:
             #     break
 
-        #write png file to png dir
-        for fr in range(frame+1):
-
-            # breakpoint()
-
-            img = frames_grp[str(fr).zfill(4)]['images']['_img_cam0']
-            img = Image.open(io.BytesIO(np.array(img)))
-            filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
-            img.save(filename)
-
+        # #write png file to png dir
+        # for fr in range(frame+1):
+        #
+        #     # breakpoint()
+        #
+        #     img = frames_grp[str(fr).zfill(4)]['images']['_img_cam0']
+        #     img = Image.open(io.BytesIO(np.array(img)))
+        #     filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
+        #     img.save(filename)
+        #
+        #     img_id = frames_grp[str(fr).zfill(4)]['images']['_id_cam0']
+        #     img_id = Image.open(io.BytesIO(np.array(img_id)))
+        #     filename = os.path.join(self.png_dir, 'id_' + str(fr).zfill(4) + '.png')
+        #     img_id.save(filename)
+        #
+        #     img_depth = frames_grp[str(fr).zfill(4)]['images']['_depth_cam0']
+        #     img_depth = Image.fromarray(np.array(img_depth))
+        #     filename = os.path.join(self.png_dir, 'depth_' + str(fr).zfill(4) + '.png')
+        #     img_depth.save(filename)
 
         # Cleanup.
         commands = []
@@ -507,10 +516,14 @@ class Dataset(Controller, ABC):
                            i,
                            unload_assets_every)
 
+                #save only for cam0 "for now"
+                cam_suffix = '_cam0'
+
                 # Save an MP4 of the stimulus
                 if self.save_movies:
 
                     for pass_mask in self.save_passes:
+                        pass_mask = pass_mask + cam_suffix
                         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,

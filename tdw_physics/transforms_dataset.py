@@ -10,6 +10,7 @@ from tdw.controller import Controller
 from tdw.librarian import ModelRecord
 from tdw_physics.dataset import Dataset
 from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
+import matplotlib.pyplot as plt
 
 from PIL import Image
 
@@ -190,21 +191,30 @@ class TransformsDataset(Dataset, ABC):
                 for i in range(im.get_num_passes()):
                     pass_mask = im.get_pass_mask(i) + cam_suffix
                     # Reshape the depth pass array.
-                    if pass_mask == "_depth":
-                        image_data = TDWUtils.get_shaped_depth_pass(images=im, index=i)
+                    if pass_mask == "_depth" + cam_suffix:
+                        img_d = TDWUtils.get_shaped_depth_pass(images=im, index=i)
+                        image_data = TDWUtils.get_depth_values(img_d, width=img_d.shape[0], height=img_d.shape[1])[::-1, :]
+                        # breakpoint()
                     else:
                         image_data = im.get_image(i)
                     images.create_dataset(pass_mask, data=image_data, compression="gzip")
 
                     # Save PNGs
-                    if pass_mask in self.save_passes:
+                    # breakpoint()
+                    # breakpoint()
+                    sp_cam_suffix = [x+cam_suffix for x in self.save_passes]
+
+                    if pass_mask in sp_cam_suffix:
+                        # breakpoint()
                         filename = pass_mask[1:] + "_" + TDWUtils.zero_padding(frame_num, 4) + "." + im.get_extension(i)
                         path = self.png_dir.joinpath(filename)
-                        if pass_mask in ["_depth", "_depth_simple"]:
-                            Image.fromarray(TDWUtils.get_shaped_depth_pass(images=im, index=i)).save(path)
+                        if pass_mask in ["_depth" + cam_suffix, "_depth_simple" + cam_suffix]:
+                            #TODO: save as plt.imshow() fig
+                            plt.imsave(path, image_data)
                         else:
                             with open(path, "wb") as f:
                                 f.write(im.get_image(i))
+                        # breakpoint()
             # Add the camera matrices.
             elif r_id == "boun":
                 bo = Bounds(r)
