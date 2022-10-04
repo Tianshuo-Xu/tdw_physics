@@ -272,6 +272,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         # Use override physics values.
         #TODO: did you mean this the other way around?? if default_physics_values and model_name in PHYSICS_INFO: default_physics_values = False
         if default_physics_values and model_name in PHYSICS_INFO:
+
             default_physics_values = False
             mass = PHYSICS_INFO[model_name].mass
             dynamic_friction = PHYSICS_INFO[model_name].dynamic_friction

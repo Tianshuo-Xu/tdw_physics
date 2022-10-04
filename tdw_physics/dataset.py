@@ -341,6 +341,8 @@ class Dataset(Controller, ABC):
         frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
         self._write_frame_labels(frame_grp, resp, -1, False)
 
+        # TODO: write the pngs here for img, id, depth, etc.
+
         # print("num views", self.num_views)
 
         # Continue the trial. Send commands, and parse output data.
@@ -379,11 +381,26 @@ class Dataset(Controller, ABC):
                 frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp,
                                                                        frame_num=frame, view_num=0)
 
+            # TODO: write the pngs here for img, id, depth, etc. -- can make a function.
+
+            # breakpoint()
+
             # Write whether this frame completed the trial and any other trial-level data
             labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
-
+            #
             # if frame > 5:
             #     break
+
+        #write png file to png dir
+        for fr in range(frame+1):
+
+            # breakpoint()
+
+            img = frames_grp[str(fr).zfill(4)]['images']['_img_cam0']
+            img = Image.open(io.BytesIO(np.array(img)))
+            filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
+            img.save(filename)
+
 
         # Cleanup.
         commands = []
@@ -492,6 +509,7 @@ class Dataset(Controller, ABC):
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
+
                     for pass_mask in self.save_passes:
                         mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
                         cmd, stdout, stderr = pngs_to_mp4(
@@ -502,6 +520,8 @@ class Dataset(Controller, ABC):
                             overwrite=True,
                             remove_pngs=(True if save_frame is None else False),
                             use_parent_dir=False)
+
+                        # breakpoint()
 
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))
