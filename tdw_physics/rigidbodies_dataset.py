@@ -201,7 +201,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            static_friction: float,
                            bounciness: float,
                            o_id: Optional[int] = None,
-                           add_data: Optional[bool] = True
+                           add_data: Optional[bool] = True,
+                           default_physics_values = True
                            ) -> List[dict]:
 
         if o_id is None:
@@ -234,7 +235,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                            library=lib,
                                            dynamic_friction=dynamic_friction,
                                            static_friction=static_friction,
-                                           bounciness=bounciness)
+                                           bounciness=bounciness,
+                                           default_physics_values=default_physics_values)
 
     #TODO: in the controllers, replace add_physics_object with get_add_physics_object
     @staticmethod
@@ -455,8 +457,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
 
         # add the ramp
         info = PHYSICS_INFO[record.name]
-        cmds.extend(
-            self.add_physics_object(
+        cds, _ = self.add_physics_object(
                 record = record,
                 position = position,
                 rotation = rotation,
@@ -464,17 +465,18 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 dynamic_friction = dynamic_friction or info.dynamic_friction,
                 static_friction = static_friction or info.static_friction,
                 bounciness = bounciness or info.bounciness,
-                o_id = o_id,
-                add_data = add_data))
+                o_id = o_id, default_physics_values=False,
+                add_data = add_data, scale=scale)
+        cmds.extend(cds)
 
         if o_id is None:
             o_id = cmds[-1]["id"]
 
-        # scale the ramp
-        cmds.append(
-            {"$type": "scale_object",
-             "scale_factor": scale,
-             "id": o_id})
+        # # scale the ramp
+        # cmds.append(
+        #     {"$type": "scale_object",
+        #      "scale_factor": scale,
+        #      "id": o_id})
 
         # texture and color it
         cmds.extend(
