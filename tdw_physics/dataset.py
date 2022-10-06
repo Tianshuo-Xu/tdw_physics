@@ -437,7 +437,10 @@ class Dataset(Controller, ABC):
 
             filename = os.path.join(self.png_dir, 'img_' + str(fr-1).zfill(4) + '.png')
 
-            Image.fromarray(imgs).resize((1024, 1024)).save(filename)
+            im_arr = Image.fromarray(imgs)
+            shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
+            im_arr = im_arr.resize(shp)
+            im_arr.save(filename)
 
 
 
@@ -519,7 +522,7 @@ class Dataset(Controller, ABC):
         except OSError:
             shutil.move(temp_path, filepath)
 
-        return imgs.shape
+        return im_arr.size
 
     def trial_loop(self,
                    num: int,
@@ -536,12 +539,12 @@ class Dataset(Controller, ABC):
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
-        for f in output_dir.glob("*.hdf5"):
-            if int(f.stem) > exists_up_to:
-                exists_up_to = int(f.stem)
-
-        if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
+        # for f in output_dir.glob("*.hdf5"):
+        #     if int(f.stem) > exists_up_to:
+        #         exists_up_to = int(f.stem)
+        #
+        # if exists_up_to > 0:
+        #     print('Trials up to %d already exist, skipping those' % exists_up_to)
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
@@ -551,7 +554,7 @@ class Dataset(Controller, ABC):
             ## update the controller state
             # self.update_controller_state(**update_kwargs[i])
 
-            if not filepath.exists():
+            if True: #not filepath.exists():
                 if do_log:
                     start = time.time()
                     logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
@@ -578,7 +581,10 @@ class Dataset(Controller, ABC):
 
                     for pass_mask in ['_img']:
                         pass_mask = pass_mask #+ cam_suffix
-                        mp4_filename = str(filepath).split('.hdf5')[0] + pass_mask
+                        mp4_filename = str(filepath).split('.hdf5')[0].split('/')
+                        name = mp4_filename[-1]
+                        mp4_filename = '/'.join(mp4_filename[:-1]) + '_' + name + pass_mask
+
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
                             image_stem=pass_mask[1:] + '_',
@@ -588,7 +594,8 @@ class Dataset(Controller, ABC):
                             remove_pngs=False,
                             use_parent_dir=False)
 
-                        breakpoint()
+                        # print("saved:", mp4_filename)
+                        # breakpoint()
 
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))

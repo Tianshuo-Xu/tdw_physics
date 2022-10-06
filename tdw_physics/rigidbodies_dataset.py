@@ -207,7 +207,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         if o_id is None:
             o_id: int = self.get_unique_id()
 
-        lib = PHYSICS_INFO[record.name] if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+        # breakpoint()
+
+        lib = PHYSICS_INFO[record.name].library if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+
 
         if add_data:
             self.add_transforms_data(position, rotation)
@@ -318,7 +321,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         RigidbodiesDataset.BOUNCINESSES = np.append(RigidbodiesDataset.BOUNCINESSES, bounciness)
         # Cache the physics info.
         record = Controller.MODEL_LIBRARIANS[library].get_record(model_name)
-        lib = PHYSICS_INFO[record.name] if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+        lib = PHYSICS_INFO[record.name].library if record.name in PHYSICS_INFO.keys() else "models_flex.json"
         RigidbodiesDataset.PHYSICS_INFO[object_id] = PhysicsInfo(record=record,
                                                                  mass=mass,
                                                                  dynamic_friction=dynamic_friction,
@@ -357,7 +360,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             o_id = self._get_next_object_id()
 
 
-        lib = PHYSICS_INFO[record.name] if record.name in PHYSICS_INFO.keys() else "models_flex.json"
+        # breakpoint()
+
+
+        lib = PHYSICS_INFO[record.name].library if record.name in PHYSICS_INFO.keys() else "models_flex.json"
 
         # print("default_physics_values", default_physics_values)
 
