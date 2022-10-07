@@ -344,6 +344,8 @@ class Dataset(Controller, ABC):
         # Add commands to request output data.
 
 
+        # breakpoint()
+
 
         commands.extend(self._get_send_data_commands())
 
@@ -558,8 +560,14 @@ class Dataset(Controller, ABC):
         # if exists_up_to > 0:
         #     print('Trials up to %d already exist, skipping those' % exists_up_to)
 
+        # exists_up_to = 1
+
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
+
+            # if i==0:
+            #     continue
+
             filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
@@ -996,10 +1004,16 @@ class Dataset(Controller, ABC):
             if OutputData.get_data_type_id(r) == 'mesh':
                 meshes = Meshes(r)
                 nmeshes = meshes.get_num()
+                # breakpoint()
                 # print("len(Dataset.OBJECT_IDS)", len(Dataset.OBJECT_IDS), nmeshes)
-                assert (len(Dataset.OBJECT_IDS) == nmeshes)
+                # assert (len(Dataset.OBJECT_IDS) == nmeshes)
                 for index in range(nmeshes):
+
                     o_id = meshes.get_object_id(index)
+
+                    if o_id not in Dataset.OBJECT_IDS:
+                        continue
+
                     vertices = meshes.get_vertices(index)
                     faces = meshes.get_triangles(index)
                     self.object_meshes[o_id] = (vertices, faces)
