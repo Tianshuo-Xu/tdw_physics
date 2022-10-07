@@ -342,12 +342,22 @@ class Dataset(Controller, ABC):
         # Add commands to start the trial.
         commands.extend(self.get_trial_initialization_commands())
         # Add commands to request output data.
+
+
+
         commands.extend(self._get_send_data_commands())
+
+
 
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
+
+        # print(commands)
+
         resp = self.communicate(commands)
+
+        # breakpoint()
 
         self._set_segmentation_colors(resp)
 
@@ -360,6 +370,8 @@ class Dataset(Controller, ABC):
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
+
+
         # print("Hello***")
         frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
         self._write_frame_labels(frame_grp, resp, -1, False)
