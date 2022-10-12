@@ -391,7 +391,22 @@ class Dataset(Controller, ABC):
         while not done:
             frame += 1
             # print('frame %d' % frame)
-            resp = self.communicate(self.get_per_frame_commands(resp, frame))
+            # cmds, dict_masses = self.get_per_frame_commands(resp, frame)
+
+            cmds = self.get_per_frame_commands(resp, frame)
+
+
+            # mass_list = []
+            # for idx, object_id in enumerate(Dataset.OBJECT_IDS):
+            #     mass = dict_masses[object_id]
+            #     mass_list.append(mass)
+
+            # breakpoint()
+            # if 'mass_scaled' not in static_group.keys():
+            #     static_group.create_dataset(f"mass_scaled", data=np.array(mass_list))
+            # mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
+
+            resp = self.communicate(cmds)
             r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
 
             # Sometimes the build freezes and has to reopen the socket.
@@ -429,32 +444,33 @@ class Dataset(Controller, ABC):
             #     break
 
         #save_imgs for viz
-        for fr in range(1, frame + 1):
-            imgs = []
-            for pass_mask in self.save_passes:
+        if self.save_movies:
+            for fr in range(1, frame + 1):
+                imgs = []
+                for pass_mask in self.save_passes:
 
-                all_imgs = []
-                for cam_no in range(self.num_views):
-                    filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
-                    img = plt.imread(filename)
-                    all_imgs.append(img)
-                all_imgs = np.stack(all_imgs)
-                all_imgs = concat_img_horz(all_imgs)
-                all_imgs = pad_below(all_imgs)
-                imgs.append(all_imgs[:, :, :3])
+                    all_imgs = []
+                    for cam_no in range(self.num_views):
+                        filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
+                        img = plt.imread(filename)
+                        all_imgs.append(img)
+                    all_imgs = np.stack(all_imgs)
+                    all_imgs = concat_img_horz(all_imgs)
+                    all_imgs = pad_below(all_imgs)
+                    imgs.append(all_imgs[:, :, :3])
 
-            # breakpoint()
+                # breakpoint()
 
-            imgs = (np.concatenate(imgs, 0)*255).astype('uint8')
+                imgs = (np.concatenate(imgs, 0)*255).astype('uint8')
 
-            # breakpoint()
+                # breakpoint()
 
-            filename = os.path.join(self.png_dir, 'img_' + str(fr-1).zfill(4) + '.png')
+                filename = os.path.join(self.png_dir, 'img_' + str(fr-1).zfill(4) + '.png')
 
-            im_arr = Image.fromarray(imgs)
-            shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
-            im_arr = im_arr.resize(shp)
-            im_arr.save(filename)
+                im_arr = Image.fromarray(imgs)
+                shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
+                im_arr = im_arr.resize(shp)
+                im_arr.save(filename)
 
 
 
@@ -536,7 +552,10 @@ class Dataset(Controller, ABC):
         except OSError:
             shutil.move(temp_path, filepath)
 
-        return im_arr.size
+        if self.save_movies:
+            return im_arr.size
+        else:
+            return [2, 2]
 
     def trial_loop(self,
                    num: int,
@@ -553,12 +572,12 @@ class Dataset(Controller, ABC):
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
-        # for f in output_dir.glob("*.hdf5"):
-        #     if int(f.stem) > exists_up_to:
-        #         exists_up_to = int(f.stem)
-        #
-        # if exists_up_to > 0:
-        #     print('Trials up to %d already exist, skipping those' % exists_up_to)
+        for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
+
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
 
         # exists_up_to = 1
 

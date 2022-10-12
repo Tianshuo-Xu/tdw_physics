@@ -153,6 +153,11 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--save_labels", action='store_true', help="Whether to save out JSON labels for the full trial set.")
     parser.add_argument("--save_meshes", action='store_true', help="Whether to save meshes sent from the build")
     parser.add_argument("--unload_assets_every", type=int, default=10, help="Unload assets after how many trials")
+    parser.add_argument("--local", action='store_true', help="use_local_models")
+
+    args = parser.parse_args('')
+
+    # breakpoint()
 
     return parser
 
