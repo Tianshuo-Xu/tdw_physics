@@ -77,14 +77,18 @@ class Dataset(Controller, ABC):
                  randomize: int=0,
                  seed: int=0,
                  save_args=True,
+                 return_early=False,
                  **kwargs):
 
-        launch_build = False
+        # launch_build = False
 
         # save the command-line args
         self.save_args = save_args
         self._trial_num = None
         self.command_log = None
+
+        if return_early:
+            return
 
         super().__init__(port=port,
                         check_version=check_version,

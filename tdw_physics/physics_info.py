@@ -3,7 +3,7 @@ import pkg_resources
 import json
 from typing import Dict
 from tdw.librarian import ModelRecord, ModelLibrarian
-from tdw.controller import Controller
+from tdw_physics.controller import Controller
 
 
 class PhysicsInfo:

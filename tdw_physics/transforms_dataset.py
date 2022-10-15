@@ -6,7 +6,7 @@ import random
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Bounds
 from tdw_physics.dataset import Dataset
-from tdw.controller import Controller
+from tdw_physics.controller import Controller
 from tdw.librarian import ModelRecord
 from tdw_physics.dataset import Dataset
 from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES

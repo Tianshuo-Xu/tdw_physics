@@ -36,6 +36,20 @@ class Controller:
     HUMANOID_ANIMATION_LIBRARIANS: Dict[str, HumanoidAnimationLibrarian] = dict()
     ROBOT_LIBRARIANS: Dict[str, RobotLibrarian] = dict()
 
+    FLEX_MASSES = {'triangular_prism': 0.46650617387911586,
+     'torus': 0.13529902128268745,
+     'sphere': 0.5058756912820712,
+     'pyramid': 0.3749996282020332,
+     'platonic': 0.3170116821661435,
+     'pipe': 0.334848007433621,
+     'pentagon': 0.5944103105417653,
+     'octahedron': 0.4999997582702834,
+     'dumbbell': 0.8701171939416522,
+     'cylinder': 0.7653673769319456,
+     'cube': 1.0,
+     'cone': 0.2582547675685456,
+     'bowl': 0.0550834555398029}
+
     def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True):
         """
         Create the network socket and bind the socket to the port.
@@ -245,19 +259,7 @@ class Controller:
 
         if default_physics_values:
             # Use default physics values.
-            dict_volume = {'triangular_prism': 0.46650617387911586,
-            'torus': 0.13529902128268745,
-            'sphere': 0.5058756912820712,
-            'pyramid': 0.3749996282020332,
-            'platonic': 0.3170116821661435,
-            'pipe': 0.334848007433621,
-            'pentagon': 0.5944103105417653,
-            'octahedron': 0.4999997582702834,
-            'dumbbell': 0.8701171939416522,
-            'cylinder': 0.7653673769319456,
-            'cube': 1.0,
-            'cone': 0.2582547675685456,
-            'bowl': 0.0550834555398029}
+            dict_volume = Controller.FLEX_MASSES
 
 
 
@@ -267,7 +269,7 @@ class Controller:
             else:
                 mass = 500
 
-            breakpoint()
+            # breakpoint()
 
 
             commands.extend([{"$type": "set_mass",

@@ -11,7 +11,7 @@ from tdw.librarian import ModelRecord
 from abc import ABC
 import h5py
 import numpy as np
-from tdw.controller import Controller
+from tdw_physics.controller import Controller
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from tdw.tdw_utils import TDWUtils
 from tdw_physics.transforms_dataset import TransformsDataset
