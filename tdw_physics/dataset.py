@@ -13,7 +13,8 @@ import h5py, json
 from collections import OrderedDict
 import numpy as np
 import random
-from tdw.controller import Controller
+# from tdw.controller import Controller
+from .controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
@@ -78,7 +79,7 @@ class Dataset(Controller, ABC):
                  save_args=True,
                  **kwargs):
 
-        # launch_build = False
+        launch_build = False
 
         # save the command-line args
         self.save_args = save_args

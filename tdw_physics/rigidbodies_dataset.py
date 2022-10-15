@@ -4,7 +4,7 @@ import pkg_resources
 import io
 import json
 from tdw.tdw_utils import TDWUtils
-from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
+from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, StaticRigidbodies
 from typing import List, Tuple, Dict, Optional
 import tdw_physics
 from tdw.librarian import ModelRecord
@@ -604,6 +604,12 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         num_objects = len(Dataset.OBJECT_IDS)
         # Physics data.
         velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))
+
+        masses = np.empty(dtype=np.float32, shape=(num_objects, ))
+        sfrict = np.empty(dtype=np.float32, shape=(num_objects,))
+        dfrict = np.empty(dtype=np.float32, shape=(num_objects,))
+        bness = np.empty(dtype=np.float32, shape=(num_objects,))
+
         angular_velocities = np.empty(dtype=np.float32, shape=(num_objects, 3))
         # Collision data.
         collision_ids = np.empty(dtype=np.int32, shape=(0, 2))
@@ -638,6 +644,26 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                         print("ri_dict", ri_dict)
                         print([OutputData.get_data_type_id(r) for r in resp])
 
+            elif r_id == "srig":
+                srig = StaticRigidbodies(r)
+                ri_dict = dict()
+                for j in range(srig.get_num()):
+
+                    mass = srig.get_mass(j)
+                    dynamic_friction = srig.get_dynamic_friction(j)
+                    static_friction = srig.get_static_friction(j)
+                    bounciness = srig.get_bounciness(j)
+
+                    ri_dict.update({srig.get_id(j): {"mass": mass,
+                                                   "dfrict":dynamic_friction,
+                                                   "sfrict":static_friction,
+                                                   "bness":bounciness}})
+                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+                    masses[i] = ri_dict[o_id]["mass"]
+                    dfrict[i] = ri_dict[o_id]["dfrict"]
+                    sfrict[i] = ri_dict[o_id]["sfrict"]
+                    bness[i] = ri_dict[o_id]["bness"]
+
             elif r_id == "coll":
                 co = Collision(r)
                 collision_states = np.append(collision_states, co.get_state())
@@ -654,6 +680,12 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                                                 en.get_contact_point(i)))
 
         if not 'velocities' in objs.keys():
+
+            objs.create_dataset("masses", data=masses, compression="gzip")
+            objs.create_dataset("dfrict", data=dfrict, compression="gzip")
+            objs.create_dataset("sfrict", data=sfrict, compression="gzip")
+            objs.create_dataset("bness", data=bness, compression="gzip")
+
             objs.create_dataset("velocities", data=velocities.reshape(num_objects, 3), compression="gzip")
             objs.create_dataset("angular_velocities", data=angular_velocities.reshape(num_objects, 3), compression="gzip")
             collisions = frame.create_group("collisions")
