@@ -78,6 +78,7 @@ class Dataset(Controller, ABC):
                  seed: int=0,
                  save_args=True,
                  return_early=False,
+                 custom_build=None,
                  **kwargs):
 
         # launch_build = False
@@ -92,7 +93,8 @@ class Dataset(Controller, ABC):
 
         super().__init__(port=port,
                         check_version=check_version,
-                         launch_build=launch_build)
+                         launch_build=launch_build,
+                         custom_build=custom_build)
 
         # set random state
         self.randomize = randomize
@@ -553,11 +555,11 @@ class Dataset(Controller, ABC):
 
         # Close the file.
         f.close()
-        # Move the file.
-        try:
-            temp_path.replace(filepath)
-        except OSError:
-            shutil.move(temp_path, filepath)
+        # # Move the file.
+        # try:
+        #     temp_path.replace(filepath)
+        # except OSError:
+        shutil.move(temp_path, filepath)
 
         if self.save_movies:
             return im_arr.size
@@ -578,10 +580,12 @@ class Dataset(Controller, ABC):
 
         pbar = tqdm(total=num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-        exists_up_to = 0
+        exists_up_to = -1
         for f in output_dir.glob("*.hdf5"):
             if int(f.stem) > exists_up_to:
                 exists_up_to = int(f.stem)
+
+        exists_up_to += 1
 
         if exists_up_to > 0:
             print('Trials up to %d already exist, skipping those' % exists_up_to)

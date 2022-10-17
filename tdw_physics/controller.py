@@ -50,7 +50,7 @@ class Controller:
      'cone': 0.2582547675685456,
      'bowl': 0.0550834555398029}
 
-    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True):
+    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True, custom_build=None):
         """
         Create the network socket and bind the socket to the port.
 
@@ -69,7 +69,7 @@ class Controller:
 
         # Launch the build.
         if launch_build:
-            Controller.launch_build(port=port)
+            Controller.launch_build(port=port, custom_build=custom_build)
         context = zmq.Context()
         # noinspection PyUnresolvedReferences
         self.socket = context.socket(zmq.REP)
@@ -529,7 +529,7 @@ class Controller:
         return int.from_bytes(frame, byteorder='big')
 
     @staticmethod
-    def launch_build(port: int = 1071) -> None:
+    def launch_build(port: int = 1071, custom_build=None) -> None:
         """
         Launch the build. If a build doesn't exist at the expected location, download one to that location.
 
@@ -562,8 +562,11 @@ class Controller:
             success = True
         # Launch the build.
         if success:
-            Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(1071)])
-            # Popen([str(Build.BUILD_PATH.resolve()), "-port "+str(port)])
+            # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
+            if custom_build is not None:
+                Popen([custom_build, "-port " + str(port)])
+            else:
+                Popen([str(Build.BUILD_PATH.resolve()), "-port "+str(port)])
 
     def _check_build_version(self, version: str = __version__, build_version: str = None) -> None:
         """
