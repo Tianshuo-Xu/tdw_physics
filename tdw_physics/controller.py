@@ -11,6 +11,8 @@ from tdw.release.build import Build
 from tdw.release.pypi import PyPi
 from tdw.version import __version__
 from tdw.add_ons.add_on import AddOn
+import trimesh
+import numpy as np
 from tdw.physics_audio.object_audio_static import DEFAULT_OBJECT_AUDIO_STATIC_DATA
 from tdw.physics_audio.audio_material import AudioMaterial
 from tdw.physics_audio.audio_material_constants import STATIC_FRICTION, DYNAMIC_FRICTION, DENSITIES
@@ -50,7 +52,12 @@ class Controller:
      'cone': 0.2582547675685456,
      'bowl': 0.0550834555398029}
 
-    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True, custom_build=None):
+    TRIMESH_MESHES ={}
+
+    for key in FLEX_MASSES.keys():
+        TRIMESH_MESHES[key] = None
+
+    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True, custom_build=None, mesh_folder:str ='/mnt/fs3/rmvenkat/data/all_flex_meshes'):
         """
         Create the network socket and bind the socket to the port.
 
@@ -60,6 +67,15 @@ class Controller:
         """
 
         # A list of modules that will add commands on `communicate()`.
+
+        self.mesh_folder = mesh_folder
+
+        for key in Controller.FLEX_MASSES.keys():
+            Controller.TRIMESH_MESHES[key] = trimesh.load(os.path.join(mesh_folder, key + '.obj'))
+
+        # breakpoint()
+
+
         self.add_ons: List[AddOn] = list()
 
         # Compare the installed version of the tdw Python module to the latest on PyPi.
@@ -93,6 +109,9 @@ class Controller:
                 self._unity_version = v.get_unity_version()
                 self._is_standalone = v.get_standalone()
                 break
+
+
+
         # Compare the version of the tdw module to the build version.
         if check_version and launch_build:
             self._check_build_version()
@@ -198,7 +217,7 @@ class Controller:
                 "id": object_id}
 
     @staticmethod
-    def get_add_physics_object(model_name: str, object_id: int, position: Dict[str, float] = None, rotation: Dict[str, float] = None, library: str = "", scale_factor: Dict[str, float] = None, kinematic: bool = False, gravity: bool = True, default_physics_values: bool = True, mass: float = 1, dynamic_friction: float = 0.3, static_friction: float = 0.3, bounciness: float = 0.7, scale_mass: bool = True, density: float = 10) -> List[dict]:
+    def get_add_physics_object(model_name: str, object_id: int, position: Dict[str, float] = None, rotation: Dict[str, float] = None, library: str = "", scale_factor: Dict[str, float] = None, kinematic: bool = False, gravity: bool = True, default_physics_values: bool = True, mass: float = 1, dynamic_friction: float = 0.3, static_friction: float = 0.3, bounciness: float = 0.7, scale_mass: bool = True, density: float = 1) -> List[dict]:
         """
         Add an object to the scene with physics values (mass, friction coefficients, etc.).
 
@@ -220,6 +239,10 @@ class Controller:
         :return: A **list** of commands to add the object and apply physics values that the controller can then send via [`self.communicate(commands)`](#communicate).
         """
 
+        dynamic_friction = 0.5
+        static_friction = 0.5
+        bounciness = 0.4
+
         if library == "":
             library = "models_core.json"
         if library not in Controller.MODEL_LIBRARIANS:
@@ -227,6 +250,7 @@ class Controller:
         if position is None:
             position = {"x": 0, "y": 0, "z": 0}
         record = Controller.MODEL_LIBRARIANS[library].get_record(model_name)
+        # breakpoint()
         if position is None:
             position = {"x": 0, "y": 0, "z": 0}
         commands = [{"$type": "add_object",
@@ -257,17 +281,38 @@ class Controller:
                              "id": object_id,
                              "mode": "continuous_speculative"})
 
+
+        assert record.name != 'dumbbell', "Dumbbell not allowed"
+
         if default_physics_values:
             # Use default physics values.
             dict_volume = Controller.FLEX_MASSES
 
 
 
-            if record.name in list(dict_volume.keys()):
-                record.volume = dict_volume[record.name]
-                mass = record.volume * density
-            else:
-                mass = 500
+            # if record.name in list(dict_volume.keys()):
+            record.volume = dict_volume[record.name]
+            mass = record.volume * density
+
+
+
+            if scale_factor is not None:
+
+                mesh = Controller.TRIMESH_MESHES[record.name]
+                vertices = np.copy(mesh.vertices)
+                faces = mesh.faces
+
+                vertices[:, 0] *= scale_factor['x']
+                vertices[:, 1] *= scale_factor['y']
+                vertices[:, 2] *= scale_factor['z']
+                scaled_mesh_volume = trimesh.Trimesh(vertices, faces).volume
+                mass = scaled_mesh_volume*density
+
+                # print("record.name", record.name, scaled_mesh_volume)
+
+
+            # else:
+            #     mass = 500
 
             # breakpoint()
 
@@ -330,15 +375,24 @@ class Controller:
                               "static_friction": static_friction,
                               "bounciness": bounciness,
                               "id": object_id}])
+
+        # print("record.name", record.name, mass)
+
         if scale_factor is not None:
-            if scale_mass:
-                commands.append({"$type": "scale_object_and_mass",
-                                 "scale_factor": scale_factor,
-                                 "id": object_id})
-            else:
-                commands.append({"$type": "scale_object",
-                                 "scale_factor": scale_factor,
-                                 "id": object_id})
+
+            # if scale_mass:
+            #
+            #     # breakpoint()
+            #     # for key in scale_factor.keys():
+            #     #     scale_factor[key] += 1e-6
+            #
+            #     commands.append({"$type": "scale_object_and_mass",
+            #                      "scale_factor": scale_factor,
+            #                      "id": object_id})
+            # else:
+            commands.append({"$type": "scale_object",
+                             "scale_factor": scale_factor,
+                             "id": object_id})
         return commands
 
     @staticmethod
@@ -552,6 +606,8 @@ class Controller:
                 print(f"Python version is {__version__} but the build version is {build_version}.\n"
                       f"Downloading version {__version__} of the build now...")
                 need_to_download = True
+
+        # breakpoint()
 
         # Download a new version of the build.
         if need_to_download:

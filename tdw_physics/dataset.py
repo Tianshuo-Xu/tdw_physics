@@ -79,12 +79,15 @@ class Dataset(Controller, ABC):
                  save_args=True,
                  return_early=False,
                  custom_build=None,
+                 ffmpeg_executable='ffmpeg',
+                 path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
                  **kwargs):
 
         # launch_build = False
 
         # save the command-line args
         self.save_args = save_args
+        self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
 
@@ -94,7 +97,8 @@ class Dataset(Controller, ABC):
         super().__init__(port=port,
                         check_version=check_version,
                          launch_build=launch_build,
-                         custom_build=custom_build)
+                         custom_build=custom_build,
+                         mesh_folder=path_obj)
 
         # set random state
         self.randomize = randomize
@@ -344,8 +348,8 @@ class Dataset(Controller, ABC):
         f = h5py.File(str(temp_path.resolve()), "a")
 
         commands = []
-        # Remove asset bundles (to prevent a memory leak).
-        if trial_num % unload_assets_every == 0:
+        # # Remove asset bundles (to prevent a memory leak).
+        if trial_num%unload_assets_every == 0:
             commands.append({"$type": "unload_asset_bundles"})
 
         # Add commands to start the trial.
@@ -383,6 +387,8 @@ class Dataset(Controller, ABC):
         frames_grp = f.create_group("frames")
 
 
+
+
         # print("Hello***")
         frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
         self._write_frame_labels(frame_grp, resp, -1, False)
@@ -397,7 +403,7 @@ class Dataset(Controller, ABC):
             # TODO: set as flag
             multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=True)
 
-        while not done:
+        while (not done) and (frame < 250):
             frame += 1
             # print('frame %d' % frame)
             # cmds, dict_masses = self.get_per_frame_commands(resp, frame)
@@ -415,8 +421,7 @@ class Dataset(Controller, ABC):
             #     static_group.create_dataset(f"mass_scaled", data=np.array(mass_list))
             # mesh_group.create_dataset(f"vertices_{idx}", data=vertices)
 
-            resp = self.communicate(cmds)
-            r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+
 
             # Sometimes the build freezes and has to reopen the socket.
             # This prevents such errors from throwing off the frame numbering
@@ -428,6 +433,7 @@ class Dataset(Controller, ABC):
             # print()
 
             if self.num_views > 1:
+                resp = self.communicate(cmds)
                 for view_num in range(self.num_views):
                     # if view_num == 0 or frame == view_num:
                     camera_position = multi_camera_positions[view_num]
@@ -439,6 +445,8 @@ class Dataset(Controller, ABC):
                         resp=_resp, frame_num=frame, view_num=view_num)
 
             else:
+                resp = self.communicate(cmds)
+                r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
                 frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp,
                                                                        frame_num=frame, view_num=0)
 
@@ -513,45 +521,45 @@ class Dataset(Controller, ABC):
         self.communicate(commands)
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-        if self.save_labels:
-            meta = OrderedDict()
-            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-            self.trial_metadata.append(meta)
+        # if self.save_labels:
+        #     meta = OrderedDict()
+        #     meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+        #     self.trial_metadata.append(meta)
+        #
+        #     # Save the trial-level metadata
+        #     json_str = json.dumps(self.trial_metadata, indent=4)
+        #     self.meta_file.write_text(json_str, encoding='utf-8')
+        #     print("TRIAL %d LABELS" % self._trial_num)
+        #     print(json.dumps(self.trial_metadata[-1], indent=4))
 
-            # Save the trial-level metadata
-            json_str = json.dumps(self.trial_metadata, indent=4)
-            self.meta_file.write_text(json_str, encoding='utf-8')
-            print("TRIAL %d LABELS" % self._trial_num)
-            print(json.dumps(self.trial_metadata[-1], indent=4))
-
-        # Save out the target/zone segmentation mask
-        if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
-            try:
-                _id = f['frames']['0000']['images']['_id']
-            except:
-                # print("inside cam0")
-                _id = f['frames']['0000']['images']['_id_cam0']
-            # get PIL image
-            _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-            # get colors
-            zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
-            zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-            target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
-            target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-            # get individual maps
-            zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-            target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-            # colorize
-            zone_map = zone_map * ZONE_COLOR
-            target_map = target_map * TARGET_COLOR
-            joint_map = zone_map + target_map
-            # add alpha
-            alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-            joint_map = np.dstack((joint_map, alpha))
-            # as image
-            map_img = Image.fromarray(np.uint8(joint_map))
-            # save image
-            map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
+        # # Save out the target/zone segmentation mask
+        # if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
+        #     try:
+        #         _id = f['frames']['0000']['images']['_id']
+        #     except:
+        #         # print("inside cam0")
+        #         _id = f['frames']['0000']['images']['_id_cam0']
+        #     # get PIL image
+        #     _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        #     # get colors
+        #     zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
+        #     zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        #     target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
+        #     target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        #     # get individual maps
+        #     zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        #     target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        #     # colorize
+        #     zone_map = zone_map * ZONE_COLOR
+        #     target_map = target_map * TARGET_COLOR
+        #     joint_map = zone_map + target_map
+        #     # add alpha
+        #     alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        #     joint_map = np.dstack((joint_map, alpha))
+        #     # as image
+        #     map_img = Image.fromarray(np.uint8(joint_map))
+        #     # save image
+        #     map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
 
         # Close the file.
         f.close()
@@ -590,7 +598,7 @@ class Dataset(Controller, ABC):
         if exists_up_to > 0:
             print('Trials up to %d already exist, skipping those' % exists_up_to)
 
-        # exists_up_to = 1
+        # exists_up_to = 5
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
@@ -637,6 +645,7 @@ class Dataset(Controller, ABC):
 
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
+                            executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
                             image_stem=pass_mask[1:] + '_',
                             png_dir=self.png_dir,
                             size=[shp[0], shp[1]],#[self._height, self._width],#
@@ -655,11 +664,11 @@ class Dataset(Controller, ABC):
 
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
-                if self.save_meshes:
-                    for o_id in Dataset.OBJECT_IDS:
-                        obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
-                        vertices, faces = self.object_meshes[o_id]
-                        save_obj(vertices, faces, obj_filename)
+                # if self.save_meshes:
+                #     for o_id in Dataset.OBJECT_IDS:
+                #         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
+                #         vertices, faces = self.object_meshes[o_id]
+                #         save_obj(vertices, faces, obj_filename)
 
                 if do_log:
                     end = time.time()
@@ -759,8 +768,8 @@ class Dataset(Controller, ABC):
 
 
         # if reflections:
-        #     theta2 = random.uniform(angle_min+180, angle_max+180)
-        #     theta = random.choice([theta, theta2])
+        theta2 = random.uniform(angle_min+180, angle_max+180)
+        theta = random.choice([theta, theta2])
 
         a_x = np.cos(theta)*r_xy + center["x"]
 

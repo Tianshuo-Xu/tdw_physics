@@ -133,7 +133,8 @@ class TransformsDataset(Dataset, ABC):
                      "frequency": "always"},
                     {"$type": "send_segmentation_colors",
                      "ids": [int(oid) for oid in Dataset.OBJECT_IDS],
-                     "frequency": "once"}]
+                     "frequency": "once"}
+                ]
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int) -> \
             Tuple[h5py.Group, h5py.Group, dict, bool]:

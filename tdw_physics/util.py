@@ -159,6 +159,9 @@ def get_parser(dataset_dir: str, get_help: bool=False):
                         help="path to local models if they exist")
     parser.add_argument("--check_compat", action='store_true', help="check compatibility of phsics models")
     parser.add_argument("--custom_build", type=none_or_str, default=None, help="use custom build")
+    parser.add_argument("--ffmpeg_executable", type=none_or_str, default=None, help="ffmpeg exec")
+    parser.add_argument("--seed_global", type=int, default=1024, help="Global Seed")
+    parser.add_argument("--path_obj", type=none_or_str, default=None, help="path to flex obj files")
     # parser.add_argument("--return_early", action='store_true', help="check compatibility of phsics models")
 
     args = parser.parse_args('')
