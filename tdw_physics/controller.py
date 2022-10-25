@@ -217,7 +217,7 @@ class Controller:
                 "id": object_id}
 
     @staticmethod
-    def get_add_physics_object(model_name: str, object_id: int, position: Dict[str, float] = None, rotation: Dict[str, float] = None, library: str = "", scale_factor: Dict[str, float] = None, kinematic: bool = False, gravity: bool = True, default_physics_values: bool = True, mass: float = 1, dynamic_friction: float = 0.3, static_friction: float = 0.3, bounciness: float = 0.7, scale_mass: bool = True, density: float = 1) -> List[dict]:
+    def get_add_physics_object(model_name: str, object_id: int, position: Dict[str, float] = None, rotation: Dict[str, float] = None, library: str = "", scale_factor: Dict[str, float] = None, kinematic: bool = False, gravity: bool = True, default_physics_values: bool = True, mass: float = 1, dynamic_friction: float = 0.3, static_friction: float = 0.3, bounciness: float = 0.7, scale_mass: bool = True, density: float = 5) -> List[dict]:
         """
         Add an object to the scene with physics values (mass, friction coefficients, etc.).
 
@@ -241,7 +241,7 @@ class Controller:
 
         dynamic_friction = 0.5
         static_friction = 0.5
-        bounciness = 0.4
+        bounciness = 0.07
 
         if library == "":
             library = "models_core.json"

@@ -202,20 +202,26 @@ class Dataset(Controller, ABC):
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
+
+
         commands.extend([{"$type": "create_avatar",
                           "type": "A_Img_Caps_Kinematic",
                           "id": "a"},
                          {"$type": "set_target_framerate",
                           "framerate": self._framerate},
-                         {"$type": "set_pass_masks",
-                          "pass_masks": self.write_passes},
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
-                         {"$type": "send_images",
-                          "frequency": "always"},
                          {"$type": "set_anti_aliasing",
                           "mode": "subpixel"}
                          ])
+
+        if len(self.write_passes) != 0:
+            # breakpoint()
+            commands.append({"$type": "set_pass_masks",
+                          "pass_masks": self.write_passes})
+            commands.append({"$type": "send_images",
+                          "frequency": "always"})
+
         return commands
 
     def run(self, num: int, output_dir: str,
