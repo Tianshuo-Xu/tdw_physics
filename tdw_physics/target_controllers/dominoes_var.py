@@ -208,7 +208,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Don't actually put the target zone in the scene.")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
-                        default="1.75",
+                        default="2.0", #1.75
                         help="radial distance from camera to centerpoint")
     parser.add_argument("--camera_min_height",
                         type=float,
@@ -494,6 +494,7 @@ def get_args(dataset_dir: str, parse=True):
             args.save_meshes = True
             args.save_labels = True
             args.use_test_mode_colors = False
+            args.use_test_mode_params = False
 
         if args.debug_data_mode:
 
@@ -553,15 +554,18 @@ def get_args(dataset_dir: str, parse=True):
 
             assert args.random == 0, "You can't regenerate the testing data without --random 0"
             assert args.seed != -1, "Seed has to be specified but is instead the default"
-            assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
+            #assert all((('seed' not in a) for a in sys.argv[1:])), "You can't pass a new seed argument for generating the testing data; use the one in the commandline_args.txt config!"
+            args.seed = (args.seed * 1234) % 1999
+            args.var_rng_seed = (args.seed * 1111) % 1993
 
             # red and yellow target and zone
             args.use_test_mode_colors = False
 
-            args.write_passes = "_img,_id,_depth,_normals,_flow"
+            args.write_passes = "_img,_id"#"_img,_id,_depth,_normals,_flow"
             args.save_passes = "_img,_id"
             args.save_movies = True
             args.save_meshes = True
+            args.use_test_mode_params = True
         else:
             args.use_test_mode_colors = False
 
@@ -797,50 +801,53 @@ class Dominoes(RigidbodiesDataset):
         self.num_interactions = 2
         self.num_distinct_objects = 1
 
-        exists_up_to = 0
+        if self.specified_trial_id is None:
+            exists_up_to = 0
 
-        numbers = []
-        for f in output_dir.glob("*.pkl"):
-            print(f.stem, exists_up_to)
-            numbers.append(int(f.stem[:4]))
-            #if int(f.stem[:4]) > exists_up_to:
-            #    exists_up_to = int(f.stem[:4])
-
-
-                #subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
-                #if subvideos < self.num_interactions:
-                #    break
-                #    #exists_up_to = int(f.stem[:4])
-                #else:
+            numbers = []
+            for f in output_dir.glob("*.pkl"):
+                print(f.stem, exists_up_to)
+                numbers.append(int(f.stem[:4]))
+                #if int(f.stem[:4]) > exists_up_to:
                 #    exists_up_to = int(f.stem[:4])
-        numbers.sort()
-        for i in range(len(numbers)):
-            if i in numbers:
-                exists_up_to = i
-            else:
-                break
+                    #subvideos = len([x for x in os.listdir(output_dir) if x.startswith(f.stem[:4]) and x.endswith(".hdf5")])
+                    #if subvideos < self.num_interactions:
+                    #    break
+                    #    #exists_up_to = int(f.stem[:4])
+                    #else:
+                    #    exists_up_to = int(f.stem[:4])
+            numbers.sort()
+            for i in range(len(numbers)):
+                if i in numbers:
+                    exists_up_to = i
+                else:
+                    break
 
-        if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
+            if exists_up_to > 0:
+                print('Trials up to %d already exist, skipping those' % exists_up_to)
+        else:
+            exists_up_to = self.specified_trial_id
+            num = exists_up_to + 1
 
+        postfix = "_" + f"{self.sub_id:04}" if self.specified_trial_id is not None else ""
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
             object_info = None
             # see if the last iteraction is there, otherwise re-generate the trials
             #filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + "_" + TDWUtils.zero_padding(self.num_interactions - 1, 3) + ".hdf5")
-            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".pkl")
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + postfix + ".pkl")
 
             if not filepath.exists():
                 # file path here
-                filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+                filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + postfix + ".hdf5")
                 # Create the .hdf5 file.
                 temp_path_f = h5py.File(str(temp_path.resolve()), "a")
                 self.stframe_whole_video = 0
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4) + postfix)
                     if not self.png_dir.exists():
                         self.png_dir.mkdir(parents=True)
 
@@ -1183,9 +1190,15 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     def get_additional_command_when_removing_curtain(self, frame=0):
+        cmd = []
         if frame == self.force_wait:
-           return [self.push_cmd]
-        return []
+            cmd.append(self.push_cmd)
+
+        if frame < self.force_wait:
+            if self.hold_cmd:
+                cmd.append(self.hold_cmd)
+
+        return cmd
     def generate_static_object_info(self):
 
         # color for "star object"
@@ -1208,7 +1221,7 @@ class Dominoes(RigidbodiesDataset):
             self.star_object["color"] = self.random_color_exclude_list(exclude_list=[non_star_color], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
         self.sampled_star_mass = 10 ** self.var_rng.uniform(-1,1)
-        self.star_object["mass"] = (10 ** self.phyvar if self.phyvar > -10 else self.sampled_star_mass)
+        self.star_object["mass"] =  self.phyvar if self.phyvar > -10 else self.sampled_star_mass
 
         #np.random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
@@ -1491,18 +1504,19 @@ class Dominoes(RigidbodiesDataset):
         if self.use_obi:
             self.obi.reset()
 
-
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         if self.save_labels:
             meta = OrderedDict()
             meta = get_labels_from(temp_path_f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
             self.trial_metadata.append(meta)
+
             self._post_write_static_data(static_group, meta)
             # Save the trial-level metadata
             json_str =json.dumps(self.trial_metadata, indent=4)
             self.meta_file.write_text(json_str, encoding='utf-8')
             print("TRIAL %d LABELS" % self._trial_num)
             print(json.dumps(self.trial_metadata[-1], indent=4))
+
 
 
         if interact_id == self.num_interactions - 1:
@@ -1518,7 +1532,7 @@ class Dominoes(RigidbodiesDataset):
 
             #static_group.create_dataset("frame_id_map", data=frame_id)
 
-            id_filename = os.path.join(str(filepath.parent).split('.hdf5')[0], "pngs_" + str(filepath).split("/")[-1][:4], f"id_{frame_id:04}.png")
+            id_filename = os.path.join(str(filepath.parent).split('.hdf5')[0], "pngs_" + str(filepath).split("/")[-1][:-4], f"id_{frame_id:04}.png")
             #get PIL image
             _id_map = imageio.imread(id_filename)
             #_id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
@@ -1560,7 +1574,7 @@ class Dominoes(RigidbodiesDataset):
         return len(frames_grp)
 
     def get_stframe_pred(self):
-        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video
+        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video + 15
         return frame_id
 
     def get_types(self,
@@ -1809,14 +1823,10 @@ class Dominoes(RigidbodiesDataset):
     def _post_write_static_data(self, static_group: h5py.Group, meta) -> None:
         # write start_frame_id and red_hits_yellow label
         # randomization
-        try:
-            static_group.create_dataset("start_frame_after_curtain", data=self.start_frame_after_curtain)
-        except (AttributeError,TypeError):
-            pass
-        try:
-            static_group.create_dataset("start_frame_of_the_clip", data=self.stframe_whole_video)
-        except (AttributeError,TypeError):
-            pass
+        #try:
+        static_group.create_dataset("start_frame_after_curtain", data=self.start_frame_after_curtain)
+        static_group.create_dataset("start_frame_of_the_clip", data=self.stframe_whole_video)
+
 
         key_from_meta = ["does_target_contact_zone", 'first_target_contact_zone_frame']
 
@@ -1859,7 +1869,8 @@ class Dominoes(RigidbodiesDataset):
                 import ipdb; ipdb.set_trace()
             assert(self.video_object_segmentation_colors.shape[0] == self.object_segmentation_colors.shape[0])
             nobjs = self.video_object_segmentation_colors.shape[0]
-            img_path = os.path.join(str(self.png_dir), f"id_{frame_num + self.stframe_whole_video:04}.png")
+            #postfix = f"_{self.specified_trial_id}" if self.specified_trial_id is not None else ""
+            img_path = os.path.join(str(self.png_dir), f"id_{frame_num + self.stframe_whole_video:04}" + ".png")
             seg_image = imageio.imread(img_path)
             id_map = np.zeros_like(seg_image)
             for idx in range(nobjs):
@@ -1872,7 +1883,6 @@ class Dominoes(RigidbodiesDataset):
                 for idx in range(nobiobjs):
                     color_dist = np.sum(abs(seg_image - self.obi_object_segmentation_colors[idx][np.newaxis, np.newaxis, :]), axis=2)
                     id_map[color_dist == 0] = self.video_obi_object_segmentation_colors[idx]
-
             imageio.imwrite(img_path, id_map)
         #if self.use_obi:
         #    # see if there is uncovered color, that should be obi color
@@ -1937,19 +1947,19 @@ class Dominoes(RigidbodiesDataset):
                 self.target_on_ground = True
 
             labels.create_dataset("target_on_ground", data=self.target_on_ground)
-
         # Whether target has hit the zone
         if has_target and has_zone:
             c_points, c_normals = self.get_object_target_collision(
                 self.target_id, self.zone_id, resp)
             target_zone_contact = bool(len(c_points))
+
             labels.create_dataset("target_contacting_zone", data=target_zone_contact)
 
         return labels, resp, frame_num, done
 
     def is_done(self, resp: List[bytes], frame: int) -> bool:
 
-        return frame - self.stframe_whole_video > 300
+        return (frame - self.stframe_whole_video) > 300
 
     def get_rotation(self, rot_range):
         if rot_range is None:
@@ -2351,6 +2361,7 @@ class Dominoes(RigidbodiesDataset):
             print("force wait", self.force_wait)
         if self.force_wait == 0:
             commands.append(self.push_cmd)
+        self.hold_cmd = None
 
         return commands
 
@@ -2381,6 +2392,7 @@ class Dominoes(RigidbodiesDataset):
             static_group.create_dataset("star_scale", data=self.star_object["scale"])
         except (AttributeError,TypeError):
             pass
+        # star_id
 
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
@@ -3255,11 +3267,14 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
+        use_test_mode_params=args.use_test_mode_params
     )
 
     if bool(args.run):
         DomC.run(num=args.num,
+                 trial_id=args.trial_id,
+                 sub_id=args.sub_id,
                  output_dir=args.dir,
                  temp_path=args.temp,
                  width=args.width,

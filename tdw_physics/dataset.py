@@ -180,6 +180,8 @@ class Dataset(Controller, ABC):
 
     def run(self,
             num: int,
+            trial_id: int,
+            sub_id: int,
             output_dir: str,
             temp_path: str,
             width: int,
@@ -206,6 +208,8 @@ class Dataset(Controller, ABC):
 
         # If no temp_path given, place in local folder to prevent conflicts with other builds
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
+        self.specified_trial_id = None if trial_id < 0 else trial_id
+        self.sub_id = None if sub_id < 0 else sub_id
 
         self._height, self._width, self._framerate = height, width, framerate
         print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))

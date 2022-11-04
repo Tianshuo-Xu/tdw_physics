@@ -170,6 +170,7 @@ class Collision(Dominoes):
                  zone_dloc = -1,
                  fupforce = [0.,0.],
                  probe_lift = 0.,
+                 use_test_mode_params= None,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
@@ -179,10 +180,13 @@ class Collision(Dominoes):
         self.use_obi = False
 
 
+        self.use_test_mode_params = use_test_mode_params
+
         self._star_types = self._target_types
         self.star_scale_range = self.target_scale_range
         self._candidate_types = self._probe_types
         self.candidate_scale_range = self.probe_scale_range
+
 
         self.force_wait_range = [3, 3]
         self.zone_dloc = zone_dloc
@@ -198,6 +202,9 @@ class Collision(Dominoes):
 
         # Choose and place the target zone.
         self.offset = [random.uniform(-0.5, 0.5),random.uniform(-0.5, 0.5)]
+        if self.use_test_mode_params:
+            self.camera_aim = {"x": 0., "y": random.uniform(0.8, 1.0), "z": 0.} # fixed aim 1.0
+
         commands.extend(self._place_target_zone(interact_id))
 
         # Choose and place a target object.
@@ -287,7 +294,8 @@ class Collision(Dominoes):
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
         self.sampled_star_mass = 10 ** self.var_rng.uniform(-1,1)
-        self.star_object["mass"] = (10 ** self.phyvar if self.phyvar > -10 else self.sampled_star_mass) #random.choice([0.1, 2.0, 10.0])
+        self.star_object["mass"] =  self.phyvar if self.phyvar > -10 else self.sampled_star_mass
+
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
@@ -439,7 +447,11 @@ class Collision(Dominoes):
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
 
         #self.offset[1] +
-        self.probe_initial_position = {"x": self.offset[0] -0.5*self.collision_axis_length, "y": self.probe_lift, "z": self.offset[1] }
+
+        if self.use_test_mode_params:
+            self.probe_initial_position = {"x": self.offset[0] -0.4*self.collision_axis_length, "y": self.probe_lift, "z": self.offset[1]}
+        else:
+            self.probe_initial_position = {"x": self.offset[0] -0.5*self.collision_axis_length, "y": self.probe_lift, "z": self.offset[1]}
         rot = self.get_rotation(self.probe_rotation_range)
 
         if self.use_ramp:
@@ -523,7 +535,10 @@ class Collision(Dominoes):
         # decide when to apply the force
         self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
         if interact_id > 0:
-            self.force_wait = 30
+            if self.use_test_mode_params:
+                self.force_wait = 35
+            else:
+                self.force_wait = 30
 
         if self.PRINT:
             print("force wait", self.force_wait)
@@ -533,16 +548,13 @@ class Collision(Dominoes):
 
         return commands
 
-    def get_additional_command_when_removing_curtain(self, frame=0):
-        #print("curtain", frame, self.fluid_start_step)
-
-        if frame == self.force_wait:
-           return [self.push_cmd]
-        return []
-
-
     def get_stframe_pred(self):
-        frame_id = self.start_frame_after_curtain  + self.stframe_whole_video +15
+
+        if self.use_test_mode_params:
+            frame_id = self.start_frame_after_curtain  + self.stframe_whole_video +10
+
+        else:
+            frame_id = self.start_frame_after_curtain  + self.stframe_whole_video +15
         return frame_id
 
     def _place_target_zone(self, interact_id) -> List[dict]:
@@ -625,22 +637,25 @@ class Collision(Dominoes):
         if not islast:
             return {
                 "x": self.offset[0] + random.uniform(self.collision_axis_length - 1.5, self.collision_axis_length - 1.7),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                "y": random.uniform(0.5, 0.8) if not self.remove_zone else 10.0,
+                "y": (random.uniform(0.5, 0.8) if not self.remove_zone else 10.0) if not self.use_test_mode_params else 0.0,
                 "z": self.offset[1] + (float(random.uniform(-1, 1) > 0) * 2 - 1.0) * random.uniform(0.8, 1.0) + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
             }
         else:
+            y_height = 2.5 if not self.use_test_mode_params else 1.8
+
             if self.zone_dloc == 3:
                 return {
                     "x": self.offset[0] + random.uniform(self.collision_axis_length , self.collision_axis_length + 0.2),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "y": y_height if not self.remove_zone else 10.0,
                     "z": self.offset[1] + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
             elif self.zone_dloc == 2:
+                addrange = [0.6, 0.4] if not self.use_test_mode_params else [0.55, 0.45]
                 #right after the object
                 return {
-                   "x": self.offset[0] + random.uniform(self.collision_axis_length -0.6 , self.collision_axis_length-0.4),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                   "y": 2.5 if not self.remove_zone else 10.0,
+                   "x": self.offset[0] + random.uniform(self.collision_axis_length - addrange[0] , self.collision_axis_length-addrange[1]),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                   "y": y_height if not self.remove_zone else 10.0,
                    "z": self.offset[1] +  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
@@ -648,7 +663,7 @@ class Collision(Dominoes):
                 # zone location at the right boundary
                 return {
                     "x": self.offset[0] + random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "y": y_height if not self.remove_zone else 10.0,
                     "z": self.offset[1] +  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
             else:
@@ -786,11 +801,14 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
+        use_test_mode_params=args.use_test_mode_params
     )
 
     if bool(args.run):
         ColC.run(num=args.num,
+                 trial_id=args.trial_id,
+                 sub_id=args.sub_id,
                  output_dir=args.dir,
                  temp_path=args.temp,
                  width=args.width,

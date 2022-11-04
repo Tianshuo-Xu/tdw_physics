@@ -175,6 +175,7 @@ class WaterPush(Dominoes):
                  zone_dloc = -1,
                  fupforce = [0.,0.],
                  probe_lift = 0.,
+                 use_test_mode_params= None,
                  **kwargs):
         # initialize everything in common w / Multidominoes
         super().__init__(port=port, **kwargs)
@@ -189,10 +190,14 @@ class WaterPush(Dominoes):
         self.star_scale_range = self.target_scale_range
         self._candidate_types = self._probe_types
         self.candidate_scale_range = self.probe_scale_range
+        self.use_test_mode_params = use_test_mode_params
 
         self.force_wait_range = [3, 3]
         self.obi_unique_ids = 0
         self.camera_aim = {"x": 0., "y": 0.7, "z": 0.} # fixed aim
+
+        if self.use_test_mode_params:
+            self.camera_aim = {"x": 0.5, "y": 0.9, "z": 0.} # fixed aim 1.0
 
     def generate_static_object_info(self):
 
@@ -211,7 +216,11 @@ class WaterPush(Dominoes):
         self.star_object["type"] = random.choice(self._star_types)
         self.star_object["color"] = self.random_color_exclude_list(exclude_list=[[1.0, 0, 0], non_star_color, [1.0, 1.0, 0.0]], hsv_brightness=0.7)
         #colors[distinct_id] #np.array(self.random_color(None, 0.25))[0.9774568,  0.87879388, 0.40082996]#orange
-        self.star_object["mass"] = 10 **  self.var_rng.uniform(-1,1) #random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
+
+        self.sampled_star_mass = 10 ** self.var_rng.uniform(-1,1)
+        self.star_object["mass"] =  self.phyvar if self.phyvar > -10 else self.sampled_star_mass
+
+       # self.star_object["mass"] = 10 **  self.var_rng.uniform(-1,1) #random.uniform(-1,1) #random.choice([0.1, 2.0, 10.0])
         self.star_object["scale"] = get_random_xyz_transform(self.star_scale_range)
         print("====star object mass", self.star_object["mass"])
 
@@ -235,11 +244,11 @@ class WaterPush(Dominoes):
         commands = []
 
         # randomization across trials
-        if not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
-        else:
-            self.trial_seed = -1 # not used
+        # if not(self.randomize):
+        #     self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+        #     random.seed(self.trial_seed)
+        # else:
+        #     self.trial_seed = -1 # not used
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone(interact_id))
@@ -661,14 +670,18 @@ class WaterPush(Dominoes):
         if not islast:
             return {
                 "x": random.uniform(self.collision_axis_length - 1.5, self.collision_axis_length - 1.7),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                "y": random.uniform(1.0, 1.5) if not self.remove_zone else 10.0,
+                "y":(random.uniform(1.0, 1.5) if not self.remove_zone else 10.0) if not self.use_test_mode_params else 0.0,
                 "z":  random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
             }
         else:
             if self.zone_dloc == 3:
+                if self.use_test_mode_params: #object drops at lower position, make this more to the right
+                    rand_x= random.uniform(self.collision_axis_length-0.2, self.collision_axis_length)
+                else:
+                    rand_x= random.uniform(self.collision_axis_length, self.collision_axis_length + 0.2)
                 return {
                     "x": random.uniform(self.collision_axis_length , self.collision_axis_length + 0.2),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "y": 2.5 if not self.use_test_mode_params else 2.0,
                     "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
@@ -676,15 +689,20 @@ class WaterPush(Dominoes):
                 #right after the object
                 return {
                    "x": random.uniform(self.collision_axis_length -0.6 , self.collision_axis_length-0.4),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                   "y": 2.5 if not self.remove_zone else 10.0,
+                   "y": 2.5 if not self.use_test_mode_params else 2.0,
                    "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
 
             elif self.zone_dloc == 1:
                 # zone location at the right boundary
+                if self.use_test_mode_params: #object drops at lower position, make this more to the right
+                    rand_x= random.uniform(self.collision_axis_length - 1.3, self.collision_axis_length-1.15)
+                else:
+                    rand_x= random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1)
+
                 return {
-                    "x": random.uniform(self.collision_axis_length - 1.25, self.collision_axis_length-1.1),# + 0.5 * self.zone_scale_range['x'] + BUFFER,
-                    "y": 2.5 if not self.remove_zone else 10.0,
+                    "x": rand_x,# + 0.5 * self.zone_scale_range['x'] + BUFFER,
+                    "y": 2.5 if not self.use_test_mode_params else 2.0,
                     "z": 0.0 + random.uniform(-self.zjitter,self.zjitter) if not self.remove_zone else 10.0
                 }
             else:
@@ -821,11 +839,14 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
+        use_test_mode_params=args.use_test_mode_params
     )
 
     if bool(args.run):
         ColC.run(num=args.num,
+                 trial_id=args.trial_id,
+                 sub_id=args.sub_id,
                  output_dir=args.dir,
                  temp_path=args.temp,
                  width=args.width,

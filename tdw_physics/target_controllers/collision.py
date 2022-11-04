@@ -62,7 +62,7 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=str,
                         default="0.35,0.35,0.35",
                         help="scale of probe objects")
-    
+
     parser.add_argument("--plift",
                         type=float,
                         default=0.,
@@ -89,7 +89,7 @@ def get_collision_args(dataset_dir: str, parse=True):
                         default=0.5,
                         help="jitter around object centroid to apply force")
 
-    
+
     ###target
     parser.add_argument("--target",
                         type=str,
@@ -106,7 +106,7 @@ def get_collision_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.0,
                         help="Length of spacing between probe and target objects at initialization.")
-    
+
     ## collision specific arguments
     parser.add_argument("--fupforce",
                         type=str,
@@ -135,7 +135,7 @@ def get_collision_args(dataset_dir: str, parse=True):
     parser.add_argument("--distractor_aspect_ratio",
                         type=none_or_str,
                         default="[0.25,5.0]",
-                        help="The range of valid distractor aspect ratios")       
+                        help="The range of valid distractor aspect ratios")
     parser.add_argument("--occluder_categories",
                                       type=none_or_str,
                                       default=OCCLUDER_CATS,
@@ -144,7 +144,7 @@ def get_collision_args(dataset_dir: str, parse=True):
                                       type=none_or_str,
                                       default=DISTRACTOR_CATS,
                                       help="the category ids to sample distractors from")
- 
+
 
     def postprocess(args):
         args.fupforce = handle_random_transform_args(args.fupforce)
@@ -198,7 +198,7 @@ class Collision(Dominoes):
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
 
-        # Teleport the avatar to a reasonable position 
+        # Teleport the avatar to a reasonable position
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
@@ -232,7 +232,7 @@ class Collision(Dominoes):
 
         # test mode colors
         if self.use_test_mode_colors:
-            self._set_test_mode_colors(commands)        
+            self._set_test_mode_colors(commands)
 
         return commands
 
@@ -276,7 +276,7 @@ class Collision(Dominoes):
 
         if self.use_ramp:
             commands.extend(self._place_ramp_under_probe())
-        
+
         commands.extend(
             self.add_physics_object(
                 record=record,
@@ -288,7 +288,7 @@ class Collision(Dominoes):
                 # bounciness=0.1,
                 dynamic_friction=0.4,
                 static_friction=0.4,
-                bounciness=0,                
+                bounciness=0,
                 o_id=o_id))
 
         # Set the probe material
@@ -314,7 +314,7 @@ class Collision(Dominoes):
             {"$type": "set_object_drag",
              "id": o_id,
              "drag": 0, "angular_drag": 0}])
-            
+
 
         # Apply a force to the probe object
         self.push_force = self.get_push_force(
@@ -324,7 +324,7 @@ class Collision(Dominoes):
         self.push_force = self.rotate_vector_parallel_to_floor(
             self.push_force, 0, degrees=True)
 
-        self.push_position = self.probe_initial_position        
+        self.push_position = self.probe_initial_position
         if self.use_ramp:
             self.push_cmd = {
                 "$type": "apply_force_to_object",
@@ -381,7 +381,7 @@ class Collision(Dominoes):
         funcs = Dominoes.get_controller_label_funcs(classname)
 
         return funcs
-    
+
     def is_done(self, resp: List[bytes], frame: int) -> bool:
         return frame > 150 # End after X frames even if objects are still moving.
 
@@ -402,14 +402,14 @@ class Collision(Dominoes):
         self.occluder_min_z = self.middle_scale['z'] * 2.0
         self.occluder_min_size = 0.25
         self.occluder_max_size = 1.0
-        self.rescale_occluder_height = True    
-    
+        self.rescale_occluder_height = True
+
 
 if __name__ == "__main__":
     import platform, os
-    
+
     args = get_collision_args("collision")
-    
+
     if platform.system() == 'Linux':
         if args.gpu is not None:
             os.environ["DISPLAY"] = ":0." + str(args.gpu)
@@ -464,16 +464,18 @@ if __name__ == "__main__":
         num_occluders=args.num_occluders,
         occlusion_scale=args.occlusion_scale,
         occluder_aspect_ratio=args.occluder_aspect_ratio,
-        distractor_aspect_ratio=args.distractor_aspect_ratio,                
+        distractor_aspect_ratio=args.distractor_aspect_ratio,
         probe_lift = args.plift,
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors        
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):
         ColC.run(num=args.num,
+                 trial_id=args.trial_id,
+                 sub_id=args.sub_id,
                  output_dir=args.dir,
                  temp_path=args.temp,
                  width=args.width,

@@ -2458,6 +2458,8 @@ if __name__ == "__main__":
         num_middle_objects=args.num_middle_objects,
         randomize=args.random,
         seed=args.seed,
+        phyvar=args.phy_var,
+        var_rng_seed=args.var_rng_seed,
         target_zone=args.zone,
         zone_location=args.zlocation,
         zone_scale_range=args.zscale,
