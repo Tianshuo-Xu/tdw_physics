@@ -18,6 +18,8 @@ from .controller import Controller
 from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
+from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
+
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -99,6 +101,15 @@ class Dataset(Controller, ABC):
                          launch_build=launch_build,
                          custom_build=custom_build,
                          mesh_folder=path_obj)
+
+        # hdri_skybox = "table_mountain_1_4k"
+        # interior_scene_lighting = InteriorSceneLighting(hdri_skybox=hdri_skybox, aperture=8, focus_distance=2.5, ambient_occlusion_intensity=0.125, ambient_occlusion_thickness_modifier=3.5, shadow_strength=0.1)
+        # self.add_ons.append(interior_scene_lighting)
+
+        from tdw.add_ons.logger import Logger
+
+        logger = Logger(path="log.txt")
+        self.add_ons.append(logger)
 
         # set random state
         self.randomize = randomize
@@ -207,8 +218,10 @@ class Dataset(Controller, ABC):
         commands.extend([{"$type": "create_avatar",
                           "type": "A_Img_Caps_Kinematic",
                           "id": "a"},
-                         {"$type": "set_target_framerate",
-                          "framerate": self._framerate},
+                         # {"$type": "set_target_framerate",
+                         #  "framerate": 30},
+                         {"$type": "set_time_step",
+                          "time_step": 0.01},
                          {"$type": "set_field_of_view",
                           "field_of_view": self.get_field_of_view()},
                          {"$type": "set_anti_aliasing",
@@ -445,6 +458,7 @@ class Dataset(Controller, ABC):
                     camera_position = multi_camera_positions[view_num]
                     commands = self.move_camera_commands(camera_position, [])
                     _resp = self.communicate(commands)
+                    # _resp = resp
                     # print('\tview %d' % view_num)
                     frame_grp, objs_grp, tr_dict, done = self._write_frame(
                         frames_grp=frames_grp if view_num == 0 else frame_grp,
@@ -651,6 +665,7 @@ class Dataset(Controller, ABC):
 
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
+                            framerate=100,
                             executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
                             image_stem=pass_mask[1:] + '_',
                             png_dir=self.png_dir,
@@ -668,7 +683,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:
@@ -696,6 +711,7 @@ class Dataset(Controller, ABC):
         camera_pos_list = []
         for i in range(self.num_views):
             noise = (random.random() - 0.5) * azimuth_delta if add_noise else 0. # add noise to the azimuth rotation angles
+            noise = 0 if i==0 else noise
             azimuth = init_pos_sphe['azimuth'] + i * azimuth_delta + noise # rotation for a new camera view
             new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
             new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
@@ -761,10 +777,13 @@ class Dataset(Controller, ABC):
         :return: A random position for the avatar around a centerpoint.
         """
 
+
+        # breakpoint()
+
         a_r = random.uniform(radius_min, radius_max)
         # a_x = center["x"] + a_r
         # a_z = center["z"] + a_r
-        theta = np.radians(random.uniform(angle_min, angle_max))
+
 
         a_y = random.uniform(y_min, y_max)
 
@@ -772,10 +791,12 @@ class Dataset(Controller, ABC):
 
 
 
-
-        # if reflections:
-        theta2 = random.uniform(angle_min+180, angle_max+180)
-        theta = random.choice([theta, theta2])
+        #
+        # # # if reflections:
+        # # theta2 = 180
+        theta = np.radians(random.uniform(angle_min, angle_max))
+        # theta2 = theta + np.pi
+        # theta = random.choice([theta, theta2])
 
         a_x = np.cos(theta)*r_xy + center["x"]
 

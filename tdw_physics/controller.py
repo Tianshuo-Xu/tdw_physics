@@ -239,9 +239,13 @@ class Controller:
         :return: A **list** of commands to add the object and apply physics values that the controller can then send via [`self.communicate(commands)`](#communicate).
         """
 
-        dynamic_friction = 0.5
+        # dynamic_friction = 0.2
+        # static_friction = 0.3
+
+        dynamic_friction = 0.25
         static_friction = 0.5
-        bounciness = 0.07
+
+        bounciness = 0.14
 
         if library == "":
             library = "models_core.json"

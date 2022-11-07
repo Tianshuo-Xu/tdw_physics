@@ -171,10 +171,13 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                          exclude_color: List[float] = None,
                          exclude_range: float = 0.25,
                          add_data: bool = True,
-                         random_obj_id: bool = False
+                         random_obj_id: bool = False,
+                         xz_same_scale=False
     ) -> dict:
         obj_record = random.choice(object_types)
         s = self.get_random_scale_transform(scale)
+        if xz_same_scale:
+            s['x'] = s['z']
 
         obj_data = {
             "id": self.get_unique_id() if random_obj_id else self._get_next_object_id(),
@@ -202,7 +205,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                            bounciness: float,
                            o_id: Optional[int] = None,
                            add_data: Optional[bool] = True,
-                           default_physics_values = True
+                           default_physics_values = True,
+                           density = 5,
                            ) -> List[dict]:
 
         if o_id is None:
@@ -236,7 +240,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                            dynamic_friction=dynamic_friction,
                                            static_friction=static_friction,
                                            bounciness=bounciness,
-                                           default_physics_values=default_physics_values)
+                                           default_physics_values=default_physics_values, density=density)
 
     #TODO: in the controllers, replace add_physics_object with get_add_physics_object
     @staticmethod
@@ -252,7 +256,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                mass: float = 1, dynamic_friction: float = 0.3,
                                static_friction: float = 0.3,
                                bounciness: float = 0.7,
-                               scale_mass: bool = True) -> List[dict]:
+                               scale_mass: bool = True,
+                               density: float = 5) -> List[dict]:
         """
         Add an object to the scene with physics values (mass, friction coefficients, etc.).
 
@@ -303,7 +308,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                             dynamic_friction=dynamic_friction,
                                                             static_friction=static_friction,
                                                             bounciness=bounciness,
-                                                            scale_mass=scale_mass)
+                                                            scale_mass=scale_mass,
+                                                            density=density)
         # Log the object ID.
         Dataset.OBJECT_IDS = np.append(Dataset.OBJECT_IDS, object_id)
         # Get the static data from the commands (these values might be automatically set).
@@ -354,6 +360,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                       obj_list: Optional[list] = [],
                       apply_texture: Optional[bool] = True,
                       default_physics_values: Optional[bool] = True,
+                      density:  Optional[float] = 5,
                       ) -> List[dict]:
 
         cmds = []
@@ -389,7 +396,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                                                  dynamic_friction=dynamic_friction,
                                                  static_friction=static_friction,
                                                  bounciness=bounciness,
-                                                 scale_mass=True)
+                                                 scale_mass=True,
+                                                 density=density)
         # add the physics stuff
         cmds.extend(commands)
 
