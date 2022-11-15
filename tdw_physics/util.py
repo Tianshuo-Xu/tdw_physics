@@ -163,6 +163,19 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--ffmpeg_executable", type=none_or_str, default=None, help="ffmpeg exec")
     parser.add_argument("--seed_global", type=int, default=1024, help="Global Seed")
     parser.add_argument("--path_obj", type=none_or_str, default=None, help="path to flex obj files")
+    parser.add_argument("--path_hdri", type=none_or_str, default=None, help="path to hdri skyboxes")
+    parser.add_argument("--sun_angle",
+                        type=str,
+                        default="[60,60]",
+                        help="comma separated list of sun_angle")
+    parser.add_argument("--sun_intensity",
+                        type=str,
+                        default="[1.4,1.4]",
+                        help="comma separated list of sun_intensity")
+    parser.add_argument("--skybox_rotation",
+                        type=str,
+                        default="[30,30]",
+                        help="comma separated list of skybox_rotation")
     # parser.add_argument("--return_early", action='store_true', help="check compatibility of phsics models")
 
     args = parser.parse_args('')

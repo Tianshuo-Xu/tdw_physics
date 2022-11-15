@@ -243,9 +243,11 @@ class Controller:
         # static_friction = 0.3
 
         dynamic_friction = 0.25
-        static_friction = 0.5
+        static_friction = 0.4
 
-        bounciness = 0.14
+        # bounciness = 0.24
+
+        bounciness = 0.4
 
         if library == "":
             library = "models_core.json"

@@ -795,8 +795,8 @@ class Dataset(Controller, ABC):
         # # # if reflections:
         # # theta2 = 180
         theta = np.radians(random.uniform(angle_min, angle_max))
-        # theta2 = theta + np.pi
-        # theta = random.choice([theta, theta2])
+        theta2 = theta + np.pi
+        theta = random.choice([theta, theta2])
 
         a_x = np.cos(theta)*r_xy + center["x"]
 
