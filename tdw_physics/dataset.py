@@ -83,6 +83,7 @@ class Dataset(Controller, ABC):
                  custom_build=None,
                  ffmpeg_executable='ffmpeg',
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
+                 view_id_number=0,
                  **kwargs):
 
         # launch_build = False
@@ -92,6 +93,16 @@ class Dataset(Controller, ABC):
         self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
+        self.view_id_number = view_id_number
+
+        # ## get random port unless one is specified
+        # if port is None:
+        rng = np.random.default_rng(seed + (view_id_number*1251)%33 )
+        port = rng.integers(1000,9999)
+        print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+
+            # random.seed(self.seed)
+            # print("SET RANDOM SEED: %d" % self.seed)
 
         if return_early:
             return
@@ -108,8 +119,8 @@ class Dataset(Controller, ABC):
 
         from tdw.add_ons.logger import Logger
 
-        logger = Logger(path="log.txt")
-        self.add_ons.append(logger)
+        # logger = Logger(path="log.txt")
+        # self.add_ons.append(logger)
 
         # set random state
         self.randomize = randomize
@@ -417,10 +428,10 @@ class Dataset(Controller, ABC):
         # print("num views", self.num_views)
 
         # Continue the trial. Send commands, and parse output data.
-        if self.num_views > 1:
-            azimuth_grp = f.create_group("azimuth")
-            # TODO: set as flag
-            multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, add_noise=True)
+        # if self.num_views > 1:
+        azimuth_grp = f.create_group("azimuth")
+        # TODO: set as flag
+        multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
 
         while (not done) and (frame < 250):
             frame += 1
@@ -451,24 +462,24 @@ class Dataset(Controller, ABC):
 
             # print()
 
-            if self.num_views > 1:
-                resp = self.communicate(cmds)
-                for view_num in range(self.num_views):
-                    # if view_num == 0 or frame == view_num:
-                    camera_position = multi_camera_positions[view_num]
-                    commands = self.move_camera_commands(camera_position, [])
-                    _resp = self.communicate(commands)
-                    # _resp = resp
-                    # print('\tview %d' % view_num)
-                    frame_grp, objs_grp, tr_dict, done = self._write_frame(
-                        frames_grp=frames_grp if view_num == 0 else frame_grp,
-                        resp=_resp, frame_num=frame, view_num=view_num)
+            # if self.num_views > 1:
+            resp = self.communicate(cmds)
+            # for view_num in range(self.num_views):
+                # if view_num == 0 or frame == view_num:
+            # camera_position = multi_camera_positions[0]
+            commands = self.move_camera_commands(multi_camera_positions, [])
+            _resp = self.communicate(commands)
+            # _resp = resp
+            # print('\tview %d' % view_num)
+            frame_grp, objs_grp, tr_dict, done = self._write_frame(
+                frames_grp=frames_grp,
+                resp=_resp, frame_num=frame, view_num=self.view_id_number)
 
-            else:
-                resp = self.communicate(cmds)
-                r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
-                frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp,
-                                                                       frame_num=frame, view_num=0)
+            # else:
+            #     resp = self.communicate(cmds)
+            #     r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+            #     frame_grp, objs_grp, tr_dict, done = self._write_frame(frames_grp=frames_grp, resp=resp,
+            #                                                            frame_num=frame, view_num=0)
 
             # TODO: write the pngs here for img, id, depth, etc. -- can make a function.
 
@@ -487,10 +498,11 @@ class Dataset(Controller, ABC):
                 for pass_mask in self.save_passes:
 
                     all_imgs = []
-                    for cam_no in range(self.num_views):
-                        filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
-                        img = plt.imread(filename)
-                        all_imgs.append(img)
+                    # for cam_no in range(self.num_views):
+                    cam_no = self.view_id_number
+                    filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
+                    img = plt.imread(filename)
+                    all_imgs.append(img)
                     all_imgs = np.stack(all_imgs)
                     all_imgs = concat_img_horz(all_imgs)
                     all_imgs = pad_below(all_imgs)
@@ -665,7 +677,7 @@ class Dataset(Controller, ABC):
 
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
-                            framerate=100,
+                            framerate=30,
                             executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
                             image_stem=pass_mask[1:] + '_',
                             png_dir=self.png_dir,
@@ -683,7 +695,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:
@@ -698,7 +710,7 @@ class Dataset(Controller, ABC):
             pbar.update(1)
         pbar.close()
 
-    def generate_multi_camera_positions(self, azimuth_grp, add_noise=True):
+    def generate_multi_camera_positions(self, azimuth_grp, i):
         '''
         Generate multiple camera positions based on azimuth rotation
         '''
@@ -709,23 +721,23 @@ class Dataset(Controller, ABC):
         new_pos_sphe = copy.deepcopy(init_pos_sphe)
 
         camera_pos_list = []
-        for i in range(self.num_views):
-            noise = (random.random() - 0.5) * azimuth_delta if add_noise else 0. # add noise to the azimuth rotation angles
-            noise = 0 if i==0 else noise
-            azimuth = init_pos_sphe['azimuth'] + i * azimuth_delta + noise # rotation for a new camera view
-            new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
-            new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
-            camera_pos_list.append(new_pos_cart)
+        # for i in range(self.num_views):
+        noise = (random.uniform(-0.2, 0.2)) * azimuth_delta # if add_noise else 0. # add noise to the azimuth rotation angles
+        noise = 0 if i==0 else noise
+        azimuth = init_pos_sphe['azimuth'] + i * azimuth_delta + noise # rotation for a new camera view
+        new_pos_sphe['azimuth'] = azimuth # update the spherical coordinates
+        new_pos_cart = util.sphe2cart(new_pos_sphe)  # convert to cartesian coordinates
+        camera_pos_list.append(new_pos_cart)
 
-            # save azimuth rotation matrix (for uORF training)
-            az_ori = azimuth + np.pi  # since cam faces world origin, its orientation azimuth differs by pi
-            az_rot_mat_2d = np.array([[np.cos(az_ori), - np.sin(az_ori)],
-                                      [np.sin(az_ori), np.cos(az_ori)]])
-            az_rot_mat = np.eye(3)
-            az_rot_mat[:2, :2] = az_rot_mat_2d
-            azimuth_grp.create_dataset(f"cam{i}", data=az_rot_mat)
+        # save azimuth rotation matrix (for uORF training)
+        az_ori = azimuth + np.pi  # since cam faces world origin, its orientation azimuth differs by pi
+        az_rot_mat_2d = np.array([[np.cos(az_ori), - np.sin(az_ori)],
+                                  [np.sin(az_ori), np.cos(az_ori)]])
+        az_rot_mat = np.eye(3)
+        az_rot_mat[:2, :2] = az_rot_mat_2d
+        azimuth_grp.create_dataset(f"cam_{i}", data=az_rot_mat)
 
-        return camera_pos_list
+        return camera_pos_list[0]
 
     def move_camera_commands(self, camera_pos, commands):
         self._set_avatar_attributes(camera_pos)

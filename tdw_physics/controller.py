@@ -83,15 +83,31 @@ class Controller:
         if check_version:
             self._check_pypi_version()
 
+        context = zmq.Context()
+
+        # noinspection PyUnresolvedReferences
+        self.socket = context.socket(zmq.REP)
+        # sock.bind(('', 0))
+
+        # self.socket.bind('tcp://*:' + str(port))
+        self.socket.bind('tcp://*:' + str(0))
+
+        port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
+
+        port = int(str(port).split(':')[-1][:-1])
+
+
+        print("port changed:", port)
+
+        # breakpoint()
+        # port = self.socket.getsockname()[1]
+
         # Launch the build.
         if launch_build:
             Controller.launch_build(port=port, custom_build=custom_build)
-        context = zmq.Context()
-        # noinspection PyUnresolvedReferences
-        self.socket = context.socket(zmq.REP)
-        self.socket.bind('tcp://*:' + str(port))
 
         self.socket.recv()
+
 
         # Set error handling to default values (the build will try to quit on errors and exceptions).
         # Request the version to log it and remember here if the Editor is being used.
@@ -624,6 +640,7 @@ class Controller:
             success = True
         # Launch the build.
         if success:
+            print("launching build")
             # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
             if custom_build is not None:
                 Popen([custom_build, "-port " + str(port)])

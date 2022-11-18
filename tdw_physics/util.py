@@ -176,6 +176,11 @@ def get_parser(dataset_dir: str, get_help: bool=False):
                         type=str,
                         default="[30,30]",
                         help="comma separated list of skybox_rotation")
+    parser.add_argument("--sun_elevation",
+                        type=str,
+                        default="[60,120]",
+                        help="comma separated list of sun elevation")
+    parser.add_argument("--view_id_number", type=int, default=0, help="Which view to render")
     # parser.add_argument("--return_early", action='store_true', help="check compatibility of phsics models")
 
     args = parser.parse_args('')

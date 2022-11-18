@@ -140,20 +140,20 @@ class TransformsDataset(Dataset, ABC):
             Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(Dataset.OBJECT_IDS)
 
-        if view_num is None or view_num == 0:
-            # Create a group for the frame
-            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        # if view_num is None or view_num == 0:
+        # Create a group for the frame
+        frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
 
-            # Create a group for images.
-            images = frame.create_group("images")
+        # Create a group for images.
+        images = frame.create_group("images")
 
-            camera_matrices = frame.create_group("camera_matrices")
-            objs = frame.create_group("objects")
-        else:
-            frame = frames_grp
-            images = frame["images"]
-            camera_matrices = frame["camera_matrices"]
-            objs = frame["objects"]
+        camera_matrices = frame.create_group("camera_matrices")
+        objs = frame.create_group("objects")
+        # else:
+        #     frame = frames_grp
+        #     images = frame["images"]
+        #     camera_matrices = frame["camera_matrices"]
+        #     objs = frame["objects"]
 
         cam_suffix = '' if view_num is None else f'_cam{view_num}'
 
