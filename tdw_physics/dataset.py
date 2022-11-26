@@ -677,7 +677,7 @@ class Dataset(Controller, ABC):
 
                         cmd, stdout, stderr = pngs_to_mp4(
                             filename=mp4_filename,
-                            framerate=30,
+                            framerate=100,
                             executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
                             image_stem=pass_mask[1:] + '_',
                             png_dir=self.png_dir,
