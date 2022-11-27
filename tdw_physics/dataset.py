@@ -122,6 +122,10 @@ class Dataset(Controller, ABC):
         # logger = Logger(path="log.txt")
         # self.add_ons.append(logger)
 
+        from tdw.add_ons.obi import Obi
+        self.obi = Obi()
+        self.add_ons.extend([self.obi])
+
         # set random state
         self.randomize = randomize
         self.seed = seed
@@ -221,6 +225,8 @@ class Dataset(Controller, ABC):
                      "strength": 1.0},
                     {"$type": "set_sleep_threshold",
                      "sleep_threshold": 0.01}]
+
+        # commands = []
 
         commands.extend(self.get_scene_initialization_commands())
         # Add the avatar.
@@ -392,6 +398,12 @@ class Dataset(Controller, ABC):
 
         commands.extend(self._get_send_data_commands())
 
+        azimuth_grp = f.create_group("azimuth")
+
+        # multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
+        #
+        # commands.extend(self.move_camera_commands(multi_camera_positions, []))
+        # _resp = self.communicate(commands)
 
 
         # Send the commands and start the trial.
@@ -417,8 +429,6 @@ class Dataset(Controller, ABC):
         frames_grp = f.create_group("frames")
 
 
-
-
         # print("Hello***")
         frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
         self._write_frame_labels(frame_grp, resp, -1, False)
@@ -429,9 +439,11 @@ class Dataset(Controller, ABC):
 
         # Continue the trial. Send commands, and parse output data.
         # if self.num_views > 1:
-        azimuth_grp = f.create_group("azimuth")
+
         # TODO: set as flag
-        multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
+
+
+
 
         while (not done) and (frame < 250):
             frame += 1
@@ -464,16 +476,22 @@ class Dataset(Controller, ABC):
 
             # if self.num_views > 1:
             resp = self.communicate(cmds)
+
+            # breakpoint()
+
             # for view_num in range(self.num_views):
                 # if view_num == 0 or frame == view_num:
             # camera_position = multi_camera_positions[0]
-            commands = self.move_camera_commands(multi_camera_positions, [])
-            _resp = self.communicate(commands)
+
             # _resp = resp
             # print('\tview %d' % view_num)
             frame_grp, objs_grp, tr_dict, done = self._write_frame(
                 frames_grp=frames_grp,
-                resp=_resp, frame_num=frame, view_num=self.view_id_number)
+                resp=resp, frame_num=frame, view_num=self.view_id_number)
+
+            done = False
+
+            # breakpoint()
 
             # else:
             #     resp = self.communicate(cmds)
@@ -695,7 +713,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:
