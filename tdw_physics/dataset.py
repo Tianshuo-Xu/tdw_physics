@@ -121,10 +121,10 @@ class Dataset(Controller, ABC):
 
         # logger = Logger(path="log.txt")
         # self.add_ons.append(logger)
-
-        from tdw.add_ons.obi import Obi
-        self.obi = Obi()
-        self.add_ons.extend([self.obi])
+        #
+        # from tdw.add_ons.obi import Obi
+        # self.obi = Obi()
+        # self.add_ons.extend([self.obi])
 
         # set random state
         self.randomize = randomize
@@ -400,9 +400,9 @@ class Dataset(Controller, ABC):
 
         azimuth_grp = f.create_group("azimuth")
 
-        # multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
-        #
-        # commands.extend(self.move_camera_commands(multi_camera_positions, []))
+        multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
+
+        commands.extend(self.move_camera_commands(multi_camera_positions, []))
         # _resp = self.communicate(commands)
 
 
@@ -489,7 +489,7 @@ class Dataset(Controller, ABC):
                 frames_grp=frames_grp,
                 resp=resp, frame_num=frame, view_num=self.view_id_number)
 
-            done = False
+            # done = False
 
             # breakpoint()
 
@@ -670,7 +670,7 @@ class Dataset(Controller, ABC):
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
                     self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists():
+                    if not self.png_dir.exists() and self.save_movies:
                         self.png_dir.mkdir(parents=True)
 
                 # breakpoint()
@@ -713,7 +713,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:

@@ -209,12 +209,13 @@ class TransformsDataset(Dataset, ABC):
                         # breakpoint()
                         filename = pass_mask[1:] + "_" + TDWUtils.zero_padding(frame_num, 4) + "." + im.get_extension(i)
                         path = self.png_dir.joinpath(filename)
-                        if pass_mask in ["_depth" + cam_suffix, "_depth_simple" + cam_suffix]:
-                            #TODO: save as plt.imshow() fig
-                            plt.imsave(path, image_data)
-                        else:
-                            with open(path, "wb") as f:
-                                f.write(im.get_image(i))
+                        if self.save_movies:
+                            if pass_mask in ["_depth" + cam_suffix, "_depth_simple" + cam_suffix]:
+                                #TODO: save as plt.imshow() fig
+                                plt.imsave(path, image_data)
+                            else:
+                                with open(path, "wb") as f:
+                                    f.write(im.get_image(i))
                         # breakpoint()
             # Add the camera matrices.
             elif r_id == "boun":
