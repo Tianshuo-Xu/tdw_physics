@@ -141,6 +141,15 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
+        print("----------------------------------------------------------------------------------------------------------------------------")
+        print("original o_id: ", o_id)
+        print("noisy_params: ", self._noise_params)
+        print("original positions: ", position)
+        print("original rotations: ", rotation)
+        print("original masses: ", mass)
+        print("original dynamic_frictions: ", dynamic_friction)
+        print("original static_frictions: ", static_friction)
+        print("original bouncinesses: ", bounciness)
         n = self._noise_params
         rotrad = dict([[k, deg2rad(rotation[k])]
                        for k in rotation.keys()])
@@ -171,6 +180,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             bounciness = max(0, min(1,
                                     norm.rvs(bounciness,
                                              n.bounciness)))
+        print("perturbed positions: ", position)
+        print("perturbed rotations: ", rotation)
+        print("perturbed masses: ", mass)
+        print("perturbed dynamic_frictions: ", dynamic_friction)
+        print("perturbed static_frictions: ", static_friction)
+        print("perturbed bouncinesses: ", bounciness)
+        print("----------------------------------------------------------------------------------------------------------------------------")
         return RigidbodiesDataset.add_physics_object(
             self,
             record, position, rotation, mass,
@@ -226,12 +242,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 #         ]
                 # self._lasttime_collisions = new_collisions
                 """
-                # coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
+                # coll_noise_cmds = self.apply_collision_noise(coll_data)
                 # cmds.extend(coll_noise_cmds)
 
         return cmds
 
-    def apply_collision_noise(self, resp, data=None):
+    def apply_collision_noise(self, data=None):
         if data is None:
             return []
         o_id = data['patient_id']
@@ -349,7 +365,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     'contact_normals': contact_normals,
                     'state': state
                 })
-                if True:
+                if False:
                     print("agent: %d ---> patient %d" % (agent_id, patient_id))
                     print("relative velocity", relative_velocity)
                     print("impulse", impulse)
