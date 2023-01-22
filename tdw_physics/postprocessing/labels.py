@@ -7,7 +7,7 @@ from collections import OrderedDict
 from PIL import Image
 
 
-from tdw_physics.util import arr_to_xyz
+from util import arr_to_xyz
 
 def round_float(x, places=3):
     return round(float(x), places)

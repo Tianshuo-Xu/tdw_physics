@@ -7,8 +7,8 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Bounds
 from tdw.controller import Controller
 from tdw.librarian import ModelRecord
-from tdw_physics.dataset import Dataset
-from tdw_physics.util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
+from dataset import Dataset
+from util import xyz_to_arr, arr_to_xyz, MODEL_LIBRARIES
 
 from PIL import Image
 

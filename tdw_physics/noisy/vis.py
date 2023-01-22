@@ -5,8 +5,11 @@ from mpl_toolkits.mplot3d import axes3d
 import numpy.matlib
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
+from typing import List, Tuple, Dict, Optional
+from noisy_utils import *
 
 
+XYZ = ['x', 'y', 'z']
 
 def rand_uniform_hypersphere(N,p):
 
@@ -313,60 +316,72 @@ class Arrow3D(FancyArrowPatch):
         self.set_positions((xs[0],ys[0]),(xs[1],ys[1]))
 
         return np.min(zs)
-        
 
-fs = 16
-# All sets have the same number of data points
-Nsim = 500
+def unit_test():
+    mu2 = [0,0,1]
+    mu2 = mu2/np.linalg.norm(mu2)
+    kappa2 = 20
+    data = rand_von_mises_fisher(mu2,kappa=kappa2)
+    print(data)
+    print(np.linalg.norm(data[0]))
+    print(rotmag2vec(dict([['x',data[0][0]], ['y',data[0][1]], ['z',data[0][2]]]), 2))
 
-# Set 1
-mu1 = [1,1,0]
-mu1 = mu1/np.linalg.norm(mu1)
-kappa1 = 50
-data1 = rand_von_mises_fisher(mu1,kappa=kappa1,N=Nsim)
+    fs = 16
+    # All sets have the same number of data points
+    Nsim = 500
 
-# Set 2
-mu2 = [0,0,1]
-mu2 = mu2/np.linalg.norm(mu2)
-kappa2 = 20
-data2 = rand_von_mises_fisher(mu2,kappa=kappa2,N=Nsim)
+    # Set 1
+    mu1 = [1,1,0]
+    mu1 = mu1/np.linalg.norm(mu1)
+    kappa1 = 50
+    data1 = rand_von_mises_fisher(mu1,kappa=kappa1,N=Nsim)
 
-# Set 3
-mu3 = [0,0,-1]
-mu3 = mu3/np.linalg.norm(mu3)
-kappa3 = 20
-data3 = rand_von_mises_fisher(mu3,kappa=kappa3,N=Nsim)
+    # Set 2
+    mu2 = [0,0,1]
+    mu2 = mu2/np.linalg.norm(mu2)
+    kappa2 = 20
+    data2 = rand_von_mises_fisher(mu2,kappa=kappa2,N=Nsim)
 
-# Set 4
-mu4 = [-10,0,-1]
-mu4 = mu4/np.linalg.norm(mu4)
-kappa4 = 200
-data4 = rand_von_mises_fisher(mu4,kappa=kappa4,N=Nsim)
+    # Set 3
+    mu3 = [0,0,-1]
+    mu3 = mu3/np.linalg.norm(mu3)
+    kappa3 = 20
+    data3 = rand_von_mises_fisher(mu3,kappa=kappa3,N=Nsim)
 
-fig = plt.figure(figsize=(10,10))
-ax = plt.axes(projection='3d')
+    # Set 4
+    mu4 = [-10,0,-1]
+    mu4 = mu4/np.linalg.norm(mu4)
+    kappa4 = 200
+    data4 = rand_von_mises_fisher(mu4,kappa=kappa4,N=Nsim)
 
-# Set 1
-plot_3d_scatter(data1,ax)
-plot_arrow(mu1,ax,colour="red")
+    fig = plt.figure(figsize=(10,10))
+    ax = plt.axes(projection='3d')
 
-# Set 2
-plot_3d_scatter(data2,ax,colour='orange')
-plot_arrow(mu2,ax,colour="orange")
+    # Set 1
+    plot_3d_scatter(data1,ax)
+    plot_arrow(mu1,ax,colour="red")
 
-# Set 3
-plot_3d_scatter(data3,ax,colour='blue')
-plot_arrow(mu3,ax,colour="blue")
+    # Set 2
+    plot_3d_scatter(data2,ax,colour='orange')
+    plot_arrow(mu2,ax,colour="orange")
 
-# Set 4
-plot_3d_scatter(data4,ax,colour='green')
-plot_arrow(mu4,ax,colour="green")
+    # Set 3
+    plot_3d_scatter(data3,ax,colour='blue')
+    plot_arrow(mu3,ax,colour="blue")
 
-# Labels
-ax.set_xlabel('x',fontsize=fs)
-ax.set_ylabel('y',fontsize=fs)
-ax.set_zlabel('z',fontsize=fs)
+    # Set 4
+    plot_3d_scatter(data4,ax,colour='green')
+    plot_arrow(mu4,ax,colour="green")
 
-# Viewing angle
-ax.view_init(20,120)
-plt.show()
+    # Labels
+    ax.set_xlabel('x',fontsize=fs)
+    ax.set_ylabel('y',fontsize=fs)
+    ax.set_zlabel('z',fontsize=fs)
+
+    # Viewing angle
+    ax.view_init(20,120)
+    plt.show()
+
+
+if __name__ == "__main__":
+    unit_test()

@@ -16,11 +16,11 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 
-from tdw_physics.postprocessing.stimuli import pngs_to_mp4
-from tdw_physics.postprocessing.labels import (get_labels_from,
+from postprocessing.stimuli import pngs_to_mp4
+from postprocessing.labels import (get_labels_from,
                                                get_all_label_funcs,
                                                get_across_trial_stats_from)
-from tdw_physics.util_geom import save_obj
+from util_geom import save_obj
 import shutil
 
 PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]

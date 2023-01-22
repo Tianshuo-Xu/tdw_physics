@@ -6,7 +6,7 @@ import subprocess
 from typing import List, Dict, Tuple
 from pathlib import Path
 import argparse
-from tdw_physics.postprocessing.labels import get_pass_mask
+from postprocessing.labels import get_pass_mask
 from PIL import Image
 from tqdm import tqdm
 

@@ -1,4 +1,6 @@
-from tdw_physics.noisy.noisy_rigidbodies_dataset import RigidNoiseParams, NoisyRigidbodiesDataset
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from noisy_rigidbodies_dataset import RigidNoiseParams, NoisyRigidbodiesDataset
 from argparse import ArgumentParser
 import sys
 import h5py
@@ -10,21 +12,20 @@ from enum import Enum
 import random
 from typing import List, Dict, Tuple
 from collections import OrderedDict
-from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
 from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Collision, EnvironmentCollision
-from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
+from rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
-from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
+from util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
                               MATERIAL_TYPES, MATERIAL_NAMES, ROOMS,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
 
-from tdw_physics.postprocessing.labels import get_all_label_funcs
+from postprocessing.labels import get_all_label_funcs
 
 PRIMITIVE_NAMES = [
     r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
@@ -1105,8 +1106,9 @@ class Dominoes(NoisyRigidbodiesDataset):
         if frame_num <= 0:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
-            target_position_new = self.get_object_position(
-                self.target_id, resp) or self.target_position
+            target_position_new = self.get_object_position(self.target_id, resp)
+            if target_position_new is None:
+                target_position_new = self.target_position
             try:
                 self.target_delta_position += (target_position_new
                                                - xyz_to_arr(self.target_position))

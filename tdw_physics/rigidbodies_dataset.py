@@ -9,8 +9,8 @@ import json
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from tdw.librarian import ModelRecord
 from tdw.tdw_utils import TDWUtils
-from tdw_physics.transforms_dataset import TransformsDataset
-from tdw_physics.util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
+from transforms_dataset import TransformsDataset
+from util import MODEL_LIBRARIES, str_to_xyz, xyz_to_arr, arr_to_xyz
 
 
 def handle_random_transform_args(args):
@@ -579,6 +579,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             dtype=np.float32, shape=(0, 3))
         collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
         collision_states = np.empty(dtype=str, shape=(0, 1))
+        collision_impulses = np.empty(dtype=np.float32, shape=(0, 3))
         # Environment Collision data.
         env_collision_ids = np.empty(dtype=np.int32, shape=(0, 1))
         env_collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
@@ -612,6 +613,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             elif r_id == "coll":
                 co = Collision(r)
                 collision_states = np.append(collision_states, co.get_state())
+                collision_impulses = np.append(collision_impulses, co.get_impulse())
                 collision_ids = np.append(
                     collision_ids, [co.get_collider_id(), co.get_collidee_id()])
                 collision_relative_velocities = np.append(
@@ -633,6 +635,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         collisions = frame.create_group("collisions")
         collisions.create_dataset(
             "object_ids", data=collision_ids.reshape((-1, 2)), compression="gzip")
+        collisions.create_dataset(
+            "impulses", data=collision_impulses.reshape((-1, 3)), compression="gzip")
         collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
                                   compression="gzip")
         collisions.create_dataset(

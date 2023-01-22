@@ -6,6 +6,9 @@ tdw_physics.egg-info/*
 notebooks/*.py~
 *.py#
 *.pyc
+*.mp4
+*.png
+*.hdf5
 .DS_store
 tdw_physics/target_controller/D:*
 .vscode/launch.json
