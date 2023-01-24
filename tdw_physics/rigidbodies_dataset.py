@@ -579,6 +579,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             dtype=np.float32, shape=(0, 3))
         collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
         collision_states = np.empty(dtype=str, shape=(0, 1))
+        collision_num_contacts = np.empty(dtype=np.int32, shape=(0, 1))
         collision_impulses = np.empty(dtype=np.float32, shape=(0, 3))
         # Environment Collision data.
         env_collision_ids = np.empty(dtype=np.int32, shape=(0, 1))
@@ -614,6 +615,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 co = Collision(r)
                 collision_states = np.append(collision_states, co.get_state())
                 collision_impulses = np.append(collision_impulses, co.get_impulse())
+                collision_num_contacts = np.append(collision_num_contacts, co.get_num_contacts())
                 collision_ids = np.append(
                     collision_ids, [co.get_collider_id(), co.get_collidee_id()])
                 collision_relative_velocities = np.append(
@@ -639,6 +641,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             "impulses", data=collision_impulses.reshape((-1, 3)), compression="gzip")
         collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
                                   compression="gzip")
+        collisions.create_dataset(
+            "num_contacts", data=collision_num_contacts, compression="gzip")
         collisions.create_dataset(
             "contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
         collisions.create_dataset(

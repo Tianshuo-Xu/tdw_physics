@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.matlib
 from typing import List, Tuple, Dict, Optional
 from scipy.linalg import null_space
 XYZ = ['x', 'y', 'z']

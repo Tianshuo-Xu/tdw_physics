@@ -141,15 +141,15 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        print("----------------------------------------------------------------------------------------------------------------------------")
-        print("original o_id: ", o_id)
-        print("noisy_params: ", self._noise_params)
-        print("original positions: ", position)
-        print("original rotations: ", rotation)
-        print("original masses: ", mass)
-        print("original dynamic_frictions: ", dynamic_friction)
-        print("original static_frictions: ", static_friction)
-        print("original bouncinesses: ", bounciness)
+        # print("----------------------------------------------------------------------------------------------------------------------------")
+        # print("original o_id: ", o_id)
+        # print("noisy_params: ", self._noise_params)
+        # print("original positions: ", position)
+        # print("original rotations: ", rotation)
+        # print("original masses: ", mass)
+        # print("original dynamic_frictions: ", dynamic_friction)
+        # print("original static_frictions: ", static_friction)
+        # print("original bouncinesses: ", bounciness)
         n = self._noise_params
         rotrad = dict([[k, deg2rad(rotation[k])]
                        for k in rotation.keys()])
@@ -165,7 +165,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         rotation = dict([[k, rad2deg(rotrad[k])]
                          for k in rotrad.keys()])
         if n.mass is not None:
-            mass *= lognorm.rvs(n.mass, 1)
+            mass = lognorm.rvs(n.mass, mass)
         # Clamp frictions to be > 0
         if n.dynamic_friction is not None:
             dynamic_friction = max(0,
@@ -180,13 +180,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             bounciness = max(0, min(1,
                                     norm.rvs(bounciness,
                                              n.bounciness)))
-        print("perturbed positions: ", position)
-        print("perturbed rotations: ", rotation)
-        print("perturbed masses: ", mass)
-        print("perturbed dynamic_frictions: ", dynamic_friction)
-        print("perturbed static_frictions: ", static_friction)
-        print("perturbed bouncinesses: ", bounciness)
-        print("----------------------------------------------------------------------------------------------------------------------------")
+        # print("perturbed positions: ", position)
+        # print("perturbed rotations: ", rotation)
+        # print("perturbed masses: ", mass)
+        # print("perturbed dynamic_frictions: ", dynamic_friction)
+        # print("perturbed static_frictions: ", static_friction)
+        # print("perturbed bouncinesses: ", bounciness)
+        # print("----------------------------------------------------------------------------------------------------------------------------")
         return RigidbodiesDataset.add_physics_object(
             self,
             record, position, rotation, mass,
@@ -207,7 +207,15 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         if self.collision_noise_generator is not None:
             coll_data = self._get_collision_data(resp)
             if len(coll_data) > 0:
-                """ some filtering and smoothing can be done below, e.g remove target zone collision
+                # """ some filtering and smoothing can be done below, e.g remove target zone collision
+                for cd in coll_data:
+                    nm_ap = str(cd['agent_id']) + '_' + str(cd['patient_id'])
+                    if '1' not in nm_ap:
+                        print("----------------------------------------------------------------------------------------------------------------------------")
+                        print('collision objects: ', nm_ap)
+                        coll_noise_cmds = self.apply_collision_noise(cd)
+                        # cmds.extend(coll_noise_cmds)
+
                 # new_collisions = []
                 # for cd in coll_data:
                 #     # Ensure consistency in naming / comparisons
@@ -241,7 +249,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 #             c != nm_ap
                 #         ]
                 # self._lasttime_collisions = new_collisions
-                """
+                # """
                 # coll_noise_cmds = self.apply_collision_noise(coll_data)
                 # cmds.extend(coll_noise_cmds)
 
@@ -250,20 +258,34 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     def apply_collision_noise(self, data=None):
         if data is None:
             return []
+        print("num_contacts: ", data['num_contacts'])
         o_id = data['patient_id']
         contact_points = data['contact_points']
-        num_contacts = data['num_contacts']
-        contact_normals = data['contact_normals']
-        force = self.collision_noise_generator(data)
+        impulse = data['impulse']
+        print("contact_points: ", contact_points)
+        print("original impulse: ", impulse)
+        print("norm original impulse: ", np.linalg.norm(impulse))
+        if np.linalg.norm(impulse) == 0:
+            force = dict([[k, 0] for k in XYZ])
+            force_avg = dict([[k, 0] for k in XYZ])
+        else:
+            force = self.collision_noise_generator(impulse)
+            force_avg = dict([[k, force[k]/data['num_contacts']] for k in XYZ])
+        print("perturbed impulse: ", force)
+        print("norm perturbed impulse: ", np.linalg.norm(list(force.values())))
+        print("perturbed impulse after average: ", force_avg)
         # see here: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/api/command_api.md#apply_force_at_position
+        # why there are multiple contact normals: https://gamedev.stackexchange.com/questions/40048/why-doesnt-unitys-oncollisionenter-give-me-surface-normals-and-whats-the-mos
         cmds = [
             {
                 "$type": "apply_force_at_position",
-                "force": force,
-                "position": position,
+                "force": force_avg,
+                "position": contact_point,
                 "id": o_id
-            }
+            } for contact_point in contact_points
         ]
+        print('cmd: ', cmds)
+        print("----------------------------------------------------------------------------------------------------------------------------")
         return cmds
 
     # """ INCOMPLETE - Adds force but not relative """
@@ -290,25 +312,23 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         else:
             """ NOTE MAKE THIS ALL RELATIVE | ADD INPUT """
             if ncm is None:
-                def cng(data):
-                    impulse = data['impulse']
-                    impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)
+                def cng(impulse):
+                    impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)[0]
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]),
                                       np.linalg.norm(impulse))
             elif ncd is None:
-                def cng(data):
-                    impulse = data['impulse']
+                def cng(impulse):
                     impulse_dir = impulse/np.linalg.norm(impulse)
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
-                                      np.linalg.norm(impulse)*lognorm.rvs(ncm, 1))
+                                      lognorm.rvs(ncm, np.linalg.norm(impulse)))
             else:
-                def cng(data):
-                    impulse = data['impulse']
-                    impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)
+                def cng(impulse):
+                    impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)[0]
+                    print("argument: ", np.linalg.norm(impulse))
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]),
-                                      np.linalg.norm(impulse)*lognorm.rvs(ncm, 1))
+                                      lognorm.rvs(ncm, np.linalg.norm(impulse)))
             self.collision_noise_generator = cng
 
     def settle(self):
