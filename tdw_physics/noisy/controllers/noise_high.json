@@ -1,1 +1,1 @@
-{"position": {"x": null, "z": null, "y": null}, "rotation": {"y": null, "x": null, "z": null}, "velocity_dir": null, "velocity_mag": null, "mass": null, "static_friction": null, "dynamic_friction": null, "bounciness": null, "collision_dir": 200, "collision_mag": 0.1, "coll_threshold": 0.5}
+{"position": {"x": null, "z": null, "y": null}, "rotation": {"y": null, "x": null, "z": null}, "velocity_dir": null, "velocity_mag": null, "mass": null, "static_friction": null, "dynamic_friction": null, "bounciness": null, "collision_dir": 20, "collision_mag": 0.1, "coll_threshold": 0.5}

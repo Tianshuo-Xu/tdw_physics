@@ -1480,7 +1480,8 @@ class Dominoes(NoisyRigidbodiesDataset):
                 k: v+random.uniform(-self.force_offset_jitter,
                                     self.force_offset_jitter)
                 for k, v in self.push_position.items()}
-
+            if self.PRINT:
+                print("PUSH FORCE POSITION", self.push_position)
             self.push_cmd = self._get_push_cmd(o_id, self.push_position)
 
         # decide when to apply the force
