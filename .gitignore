@@ -8,6 +8,7 @@ notebooks/*.py~
 *.pyc
 *.mp4
 *.png
+*.gif
 *.hdf5
 .DS_store
 tdw_physics/target_controller/D:*

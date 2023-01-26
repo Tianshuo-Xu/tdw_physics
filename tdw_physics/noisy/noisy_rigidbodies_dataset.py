@@ -45,6 +45,8 @@ class RigidNoiseParams:
     collision_dir: Dict[str, float]: vonMises precision for noise injected into the force normals for each collision along the x,y,z axes (separate noise for each dimension)
 
     collision_mag: float: log-normal noise around the true magnitude of the force normals for a collision
+
+    coll_threshold: float: collisions below this threshold are ignored when adding noise
     """
 
     position: Dict[str, float] = None
@@ -57,6 +59,7 @@ class RigidNoiseParams:
     bounciness: float = None
     collision_dir: float = None
     collision_mag: float = None
+    coll_threshold: float = None
 
     def save(self, flpth):
         selfobj = {
@@ -69,7 +72,8 @@ class RigidNoiseParams:
             'dynamic_friction': self.dynamic_friction,
             'bounciness': self.bounciness,
             'collision_dir': self.collision_dir,
-            'collision_mag': self.collision_mag
+            'collision_mag': self.collision_mag,
+            'coll_threshold': self.coll_threshold
         }
         with open(flpth, 'w') as ofl:
             json.dump(selfobj, ofl)
@@ -143,7 +147,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         # print("----------------------------------------------------------------------------------------------------------------------------")
         # print("original o_id: ", o_id)
-        # print("noisy_params: ", self._noise_params)
+        # # print("noisy_params: ", self._noise_params)
         # print("original positions: ", position)
         # print("original rotations: ", rotation)
         # print("original masses: ", mass)
@@ -165,7 +169,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         rotation = dict([[k, rad2deg(rotrad[k])]
                          for k in rotrad.keys()])
         if n.mass is not None:
-            mass = lognorm.rvs(n.mass, mass)
+            mass *= lognorm.rvs(n.mass, loc=0)
         # Clamp frictions to be > 0
         if n.dynamic_friction is not None:
             dynamic_friction = max(0,
@@ -209,45 +213,49 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             if len(coll_data) > 0:
                 # """ some filtering and smoothing can be done below, e.g remove target zone collision
                 for cd in coll_data:
-                    nm_ap = str(cd['agent_id']) + '_' + str(cd['patient_id'])
-                    if '1' not in nm_ap:
-                        print("----------------------------------------------------------------------------------------------------------------------------")
-                        print('collision objects: ', nm_ap)
-                        coll_noise_cmds = self.apply_collision_noise(cd)
-                        # cmds.extend(coll_noise_cmds)
+                    # if '1' not in nm_ap:
+                    print("----------------------------------------------------------------------------------------------------------------------------")
+                    coll_noise_cmds = self.apply_collision_noise(cd)
+                    cmds.extend(coll_noise_cmds)
 
                 # new_collisions = []
                 # for cd in coll_data:
-                #     # Ensure consistency in naming / comparisons
-                #     aid = min(cd['agent_id'], cd['patient_id'])
-                #     pid = max(cd['agent_id'], cd['patient_id'])
-                #     nm_ap = str(aid) + '_' + str(pid)
+                #     nm_ap = str(cd['agent_id']) + '_' + str(cd['patient_id'])
+                #     if '3' in nm_ap:
+                #         # Ensure consistency in naming / comparisons
+                #         aid = cd['agent_id']
+                #         pid = cd['patient_id']
+                #         # nm_ap = str(aid) + '_' + str(pid)
 
-                #     for r in resp[:-1]:
-                #         r_id = OutputData.get_data_type_id(r)
-                #         if r_id == "rigi":
-                #             ri = Rigidbodies(r)
-                #             for i in range(ri.get_num()):
-                #                 if ri.get_id(i) == aid:
-                #                     va = ri.get_velocity(i)
-                #                 elif ri.get_id(i) == pid:
-                #                     vp = ri.get_velocity(i)
+                #         for r in resp[:-1]:
+                #             r_id = OutputData.get_data_type_id(r)
+                #             if r_id == "rigi":
+                #                 ri = Rigidbodies(r)
+                #                 for i in range(ri.get_num()):
+                #                     if ri.get_id(i) == aid:
+                #                         va = ri.get_velocity(i)
+                #                     elif ri.get_id(i) == pid:
+                #                         vp = ri.get_velocity(i)
+                #         vel_diff = np.subtract(va, vp)
+                #         if np.any(cd['impulse']):
+                #             print('agent: ', aid)
+                #             print('patient: ', pid)
+                #             print('corr impulse delvel: ', np.dot(cd['impulse'], vel_diff)/(np.linalg.norm(cd['impulse'])*np.linalg.norm(vel_diff)))
+                    # if cd['state'] == 'enter':
+                    #     print('start rvel: ' + nm_ap + ' : '
+                    #           + str(va) + '; ' + str(vp))
+                    #     self._ongoing_collisions.append(nm_ap)
+                    #     new_collisions.append(nm_ap)
+                    # else:
+                    #     if nm_ap in self._lasttime_collisions:
+                    #         print('next rvel: ' + nm_ap + ' : '
+                    #               + str(va) + '; ' + str(vp))
 
-                #     if cd['state'] == 'enter':
-                #         print('start rvel: ' + nm_ap + ' : '
-                #               + str(va) + '; ' + str(vp))
-                #         self._ongoing_collisions.append(nm_ap)
-                #         new_collisions.append(nm_ap)
-                #     else:
-                #         if nm_ap in self._lasttime_collisions:
-                #             print('next rvel: ' + nm_ap + ' : '
-                #                   + str(va) + '; ' + str(vp))
-
-                #     if cd['state'] == 'exit':
-                #         self._ongoing_collisions = [
-                #             c for c in self._ongoing_collisions if
-                #             c != nm_ap
-                #         ]
+                    # if cd['state'] == 'exit':
+                    #     self._ongoing_collisions = [
+                    #         c for c in self._ongoing_collisions if
+                    #         c != nm_ap
+                    #     ]
                 # self._lasttime_collisions = new_collisions
                 # """
                 # coll_noise_cmds = self.apply_collision_noise(coll_data)
@@ -256,47 +264,68 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         return cmds
 
     def apply_collision_noise(self, data=None):
-        if data is None:
+        nm_ap = str(data['agent_id']) + '_' + str(data['patient_id'])
+        print('collision objects: ', nm_ap)
+        if data is None or np.linalg.norm(data['impulse']) < self._noise_params.coll_threshold:
+            print("NOT PERTURBED")
             return []
+        print("YES PERTURBED")
         print("num_contacts: ", data['num_contacts'])
-        o_id = data['patient_id']
-        contact_points = data['contact_points']
-        impulse = data['impulse']
-        print("contact_points: ", contact_points)
+        p_id = data['patient_id']
+        a_id = data['agent_id']
+        print('contact points: ', data['contact_points'])
+        contact_points = [dict([[k, pt[idx]] for idx, k in enumerate(XYZ)]) for pt in data['contact_points']]
+        print('contact points formatted: ', contact_points)
+        impulse = dict([[k, data['impulse'][idx]] for idx, k in enumerate(XYZ)])
         print("original impulse: ", impulse)
-        print("norm original impulse: ", np.linalg.norm(impulse))
-        if np.linalg.norm(impulse) == 0:
-            force = dict([[k, 0] for k in XYZ])
-            force_avg = dict([[k, 0] for k in XYZ])
-        else:
-            force = self.collision_noise_generator(impulse)
-            force_avg = dict([[k, force[k]/data['num_contacts']] for k in XYZ])
+        print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
+        force = self.collision_noise_generator(data['impulse'])
+        delta_force = self._calculate_collision_differential(impulse, force)
         print("perturbed impulse: ", force)
         print("norm perturbed impulse: ", np.linalg.norm(list(force.values())))
-        print("perturbed impulse after average: ", force_avg)
+        print("perturbed impulse delta: ", delta_force)
+        force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
+        force_avg_a = dict([[k, -delta_force[k]/data['num_contacts']] for k in XYZ])
+        # if data['num_contacts'] != 0:
+        #     force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
+        #     force_avg_a = dict([[k, -delta_force[k]/data['num_contacts']] for k in XYZ])
+        # else:
+        #     print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        #     force_avg_p = delta_force
+        #     force_avg_a = dict([[k, -delta_force[k]] for k in XYZ])
+        print("perturbed force_avg_p: ", force_avg_p)
+        print("perturbed force_avg_a: ", force_avg_a)        
         # see here: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/api/command_api.md#apply_force_at_position
         # why there are multiple contact normals: https://gamedev.stackexchange.com/questions/40048/why-doesnt-unitys-oncollisionenter-give-me-surface-normals-and-whats-the-mos
-        cmds = [
+        cmds_p = [
             {
                 "$type": "apply_force_at_position",
-                "force": force_avg,
+                "force": force_avg_p,
                 "position": contact_point,
-                "id": o_id
+                "id": p_id
             } for contact_point in contact_points
         ]
+        cmds_a = [
+            {
+                "$type": "apply_force_at_position",
+                "force": force_avg_a,
+                "position": contact_point,
+                "id": a_id
+            } for contact_point in contact_points
+        ]
+        cmds = cmds_p+cmds_a
         print('cmd: ', cmds)
         print("----------------------------------------------------------------------------------------------------------------------------")
         return cmds
 
     # """ INCOMPLETE - Adds force but not relative """
 
-    # """
-    # Helper function that takes in a collision momentum transfer vector, then calculates the momentum to apply
-    # in the next timestep to actualize the collision noise
-    # """
-    # def _calculate_collision_differential(self, momentum: Dict[str, float]) -> Dict[str, float]:
-    #     warnings.warn('NOT IMPLEMENTED YET - ADDS CONSTANT 1,1,1 MOMENTUM')
-    #     return {'x':1, 'y': 1, 'z': 1}
+    """
+    Helper function that takes in a collision momentum transfer vector, then calculates the momentum to apply
+    in the next timestep to actualize the collision noise
+    """
+    def _calculate_collision_differential(self, original_momentum: Dict[str, float], perturbed_momentum: Dict[str, float]) -> Dict[str, float]:
+        return dict([[k, perturbed_momentum[k]-original_momentum[k]] for k in XYZ])
 
     def set_collision_noise_generator(self,
                                       noise_obj: RigidNoiseParams):
@@ -321,14 +350,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 def cng(impulse):
                     impulse_dir = impulse/np.linalg.norm(impulse)
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
-                                      lognorm.rvs(ncm, np.linalg.norm(impulse)))
+                                      np.linalg.norm(impulse))*lognorm.rvs(ncm, loc=0)
             else:
                 def cng(impulse):
                     impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)[0]
-                    print("argument: ", np.linalg.norm(impulse))
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]),
-                                      lognorm.rvs(ncm, np.linalg.norm(impulse)))
+                                      np.linalg.norm(impulse)*lognorm.rvs(ncm, loc=0))
             self.collision_noise_generator = cng
 
     def settle(self):
