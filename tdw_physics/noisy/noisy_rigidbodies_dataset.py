@@ -214,7 +214,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 # """ some filtering and smoothing can be done below, e.g remove target zone collision
                 for cd in coll_data:
                     # if '1' not in nm_ap:
-                    print("----------------------------------------------------------------------------------------------------------------------------")
+                    # print("----------------------------------------------------------------------------------------------------------------------------")
                     coll_noise_cmds = self.apply_collision_noise(cd)
                     cmds.extend(coll_noise_cmds)
 
@@ -265,25 +265,25 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     def apply_collision_noise(self, data=None):
         nm_ap = str(data['agent_id']) + '_' + str(data['patient_id'])
-        print('collision objects: ', nm_ap)
+        # print('collision objects: ', nm_ap)
         if data is None or np.linalg.norm(data['impulse']) < self._noise_params.coll_threshold:
-            print("NOT PERTURBED")
+            # print("NOT PERTURBED")
             return []
-        print("YES PERTURBED")
-        print("num_contacts: ", data['num_contacts'])
+        # print("YES PERTURBED")
+        # print("num_contacts: ", data['num_contacts'])
         p_id = data['patient_id']
         a_id = data['agent_id']
-        print('contact points: ', data['contact_points'])
+        # print('contact points: ', data['contact_points'])
         contact_points = [dict([[k, pt[idx]] for idx, k in enumerate(XYZ)]) for pt in data['contact_points']]
-        print('contact points formatted: ', contact_points)
+        # print('contact points formatted: ', contact_points)
         impulse = dict([[k, data['impulse'][idx]] for idx, k in enumerate(XYZ)])
-        print("original impulse: ", impulse)
-        print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
+        # print("original impulse: ", impulse)
+        # print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
         force = self.collision_noise_generator(data['impulse'])
         delta_force = self._calculate_collision_differential(impulse, force)
-        print("perturbed impulse: ", force)
-        print("norm perturbed impulse: ", np.linalg.norm(list(force.values())))
-        print("perturbed impulse delta: ", delta_force)
+        # print("perturbed impulse: ", force)
+        # print("norm perturbed impulse: ", np.linalg.norm(list(force.values())))
+        # print("perturbed impulse delta: ", delta_force)
         force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
         force_avg_a = dict([[k, -delta_force[k]/data['num_contacts']] for k in XYZ])
         # if data['num_contacts'] != 0:
@@ -293,8 +293,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         #     force_avg_p = delta_force
         #     force_avg_a = dict([[k, -delta_force[k]] for k in XYZ])
-        print("perturbed force_avg_p: ", force_avg_p)
-        print("perturbed force_avg_a: ", force_avg_a)        
+        # print("perturbed force_avg_p: ", force_avg_p)
+        # print("perturbed force_avg_a: ", force_avg_a)        
         # see here: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/api/command_api.md#apply_force_at_position
         # why there are multiple contact normals: https://gamedev.stackexchange.com/questions/40048/why-doesnt-unitys-oncollisionenter-give-me-surface-normals-and-whats-the-mos
         cmds_p = [
@@ -314,8 +314,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             } for contact_point in contact_points
         ]
         cmds = cmds_p+cmds_a
-        print('cmd: ', cmds)
-        print("----------------------------------------------------------------------------------------------------------------------------")
+        # print('cmd: ', cmds)
+        # print("----------------------------------------------------------------------------------------------------------------------------")
         return cmds
 
     # """ INCOMPLETE - Adds force but not relative """
