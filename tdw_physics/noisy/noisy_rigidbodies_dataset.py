@@ -365,7 +365,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         'settles' the world to avoid interpenetration
         check out this: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/lessons/semantic_states/overlap.md
         """
-        raise NotImplementedError()
+        # raise NotImplementedError()
 
     """ Ensures collision data is sent pre (change for post) """
 

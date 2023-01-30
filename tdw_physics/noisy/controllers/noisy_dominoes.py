@@ -926,6 +926,7 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
+        # commands.extend(self.settle())
 
         # Teleport the avatar to a reasonable position based on the drop height.
 
