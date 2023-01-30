@@ -365,7 +365,27 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         'settles' the world to avoid interpenetration
         check out this: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/lessons/semantic_states/overlap.md
         """
-        # raise NotImplementedError()
+        cmds = []
+        commands.extend([{"$type": "set_kinematic_state",
+                            "id": obj1_id,
+                            "use_gravity": False},
+                    {"$type": "set_kinematic_state",
+                            "id": obj2_id,
+                            "use_gravity": False},
+                    {"$type": "set_time_step",
+                            "time_step": 0.0001},
+                    {"$type": "step_physics",
+                            "frames": 500}])
+
+        commands.extend([{"$type": "set_time_step",
+                                "time_step": 0.03},
+                        {"$type": "set_kinematic_state",
+                                "id": obj1_id,
+                                "use_gravity": True},
+                        {"$type": "set_kinematic_state",
+                                "id": obj2_id,
+                                "use_gravity": True}])
+        return cmds
 
     """ Ensures collision data is sent pre (change for post) """
 

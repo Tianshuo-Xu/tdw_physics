@@ -63,9 +63,7 @@ if use_settle:
                             "time_step": 0.0001},
                     {"$type": "step_physics",
                             "frames": 500}])
-    c.communicate(commands)
 
-    commands = []
     commands.extend([{"$type": "set_time_step",
                             "time_step": 0.03},
                     {"$type": "set_kinematic_state",
