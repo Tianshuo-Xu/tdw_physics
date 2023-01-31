@@ -125,11 +125,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._noise_params = noise
 
         # how to generate collision noise
-        self._ongoing_collisions = []
-        self._lasttime_collisions = []
+        # self._ongoing_collisions = []
+        # self._lasttime_collisions = []
         self.set_collision_noise_generator(noise)
         # if self.collision_noise_generator is not None:
         #     print("example noise", self.collision_noise_generator())
+        self._registered_objects = []
 
     def add_physics_object(self,
                            record: ModelRecord,
@@ -191,6 +192,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("perturbed static_frictions: ", static_friction)
         # print("perturbed bouncinesses: ", bounciness)
         # print("----------------------------------------------------------------------------------------------------------------------------")
+        self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_physics_object(
             self,
             record, position, rotation, mass,
@@ -365,26 +367,34 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         'settles' the world to avoid interpenetration
         check out this: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/lessons/semantic_states/overlap.md
         """
+        print("applying settle function!")
         cmds = []
-        commands.extend([{"$type": "set_kinematic_state",
-                            "id": obj1_id,
-                            "use_gravity": False},
-                    {"$type": "set_kinematic_state",
-                            "id": obj2_id,
-                            "use_gravity": False},
-                    {"$type": "set_time_step",
+        # disable gravity for all added objects
+        for o_id in self._registered_objects:
+            print("disabling gravity for object: ", o_id)
+            cmds.extend([{"$type": "set_kinematic_state",
+                            "id": o_id,
+                            "use_gravity": False}])
+        
+        # slowly resolve possible collisions
+        cmds.extend([{"$type": "set_time_step",
                             "time_step": 0.0001},
                     {"$type": "step_physics",
                             "frames": 500}])
 
-        commands.extend([{"$type": "set_time_step",
-                                "time_step": 0.03},
-                        {"$type": "set_kinematic_state",
-                                "id": obj1_id,
-                                "use_gravity": True},
-                        {"$type": "set_kinematic_state",
-                                "id": obj2_id,
-                                "use_gravity": True}])
+        # enable gravity again
+        for o_id in self._registered_objects:
+            print("enabling object: ", o_id)
+            cmds.extend([{"$type": "set_kinematic_state",
+                            "id": o_id,
+                            "use_gravity": True}])
+
+        # set physics speed to normal
+        cmds.extend([{"$type": "set_time_step",
+                                "time_step": 0.03}])
+        self._registered_objects = []
+        print("finished applying settle function!")
+
         return cmds
 
     """ Ensures collision data is sent pre (change for post) """

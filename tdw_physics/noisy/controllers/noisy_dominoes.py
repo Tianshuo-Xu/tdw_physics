@@ -926,7 +926,6 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())
-        # commands.extend(self.settle())
 
         # Teleport the avatar to a reasonable position based on the drop height.
 
@@ -956,6 +955,9 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # Place occluder objects in the background
         commands.extend(self._place_occluders())
+
+        # make things stable
+        commands.extend(self.settle())
 
         # test mode colors
         if self.use_test_mode_colors:
