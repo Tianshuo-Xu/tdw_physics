@@ -1,0 +1,15 @@
+--dir
+tmp
+--num
+200
+--height
+512
+--width
+512
+--framerate
+60
+--noise
+noise_high.json
+--save_passes
+_img
+--save_movies
