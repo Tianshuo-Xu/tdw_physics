@@ -1,6 +1,7 @@
 from hyperopt import hp
 from hyperopt import fmin, tpe
 import hyperopt
+
 from extract_labels import *
 import os
 import h5py
@@ -30,6 +31,10 @@ print(best)
 print(hyperopt.space_eval(space, best))
 # -> ('case 2', 0.01420615366247227}
 
+
+
+# num_subj = 
+# num_trial_per_bin = 
 
 proj_dir = os.path.abspath('.')
 controllers_dir =  os.path.join(proj_dir,'controllers')

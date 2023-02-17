@@ -78,8 +78,8 @@ class RigidNoiseParams:
         with open(flpth, 'w') as ofl:
             json.dump(selfobj, ofl)
 
-    def to_string(self):
-        return'-'.join([x for x in .values()])
+    # def to_string(self):
+    #     return'-'.join([x for x in .values()])
 
     @staticmethod
     def load(flpth):
