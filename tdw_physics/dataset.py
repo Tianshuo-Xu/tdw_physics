@@ -345,11 +345,13 @@ class Dataset(Controller, ABC):
                     if not self.png_dir.exists():
                         self.png_dir.mkdir(parents=True)
 
-                # Do the trial.
-                self.trial(filepath=filepath,
-                           temp_path=temp_path,
-                           trial_num=i,
-                           unload_assets_every=unload_assets_every)
+                for sim_sub_id in range(self.sim_sub_num):
+                    # Do the trial.
+                    self.trial(filepath=filepath,
+                            temp_path=temp_path,
+                            trial_num=i,
+                            sim_sub_id=sim_sub_id,
+                            unload_assets_every=unload_assets_every)
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
@@ -389,6 +391,7 @@ class Dataset(Controller, ABC):
               filepath: Path,
               temp_path: Path,
               trial_num: int,
+              sim_sub_id: int,
               unload_assets_every: int=10) -> None:
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
@@ -401,6 +404,7 @@ class Dataset(Controller, ABC):
         # Clear the object IDs and other static data
         self.clear_static_data()
         self._trial_num = trial_num
+        self._sim_sub_id = sim_sub_id
 
         # Create the .hdf5 file.
         f = h5py.File(str(temp_path.resolve()), "a")

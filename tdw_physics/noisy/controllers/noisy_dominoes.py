@@ -311,6 +311,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=str,
                         default=None,
                         help="path link to noise JSON file")
+    parser.add_argument("--read_trial_seed",
+                        type=str,
+                        default=None,
+                        help="path to intergers specifying trial seed")
 
     def postprocess(args):
 
@@ -848,6 +852,9 @@ class Dominoes(NoisyRigidbodiesDataset):
         def trial_seed(f):
             return int(np.array(f['static']['trial_seed']))
 
+        def sub_seed(f):
+            return int(np.array(f['static']['sub_seed']))
+
         def num_distractors(f):
             try:
                 return int(len(f['static']['distractors']))
@@ -865,7 +872,7 @@ class Dominoes(NoisyRigidbodiesDataset):
                 return int(np.array(f['static']['push_time']))
             except KeyError:
                 return int(0)
-        funcs += [room, trial_seed, push_time, num_distractors, num_occluders]
+        funcs += [room, trial_seed, sub_seed, push_time, num_distractors, num_occluders]
 
         return funcs
 
@@ -898,9 +905,16 @@ class Dominoes(NoisyRigidbodiesDataset):
         commands = []
 
         # randomization across trials
-        if not(self.randomize):
+        if self.read_trial_seed:
+            self.trial_seed = self.read_trial_seed[self._trial_num]
+            self.trial_level_random = random.Random(self.trial_seed)
+            self.sub_seed = self.read_trial_seed[self._sim_sub_id]
+            self.sub_level_random = random.Random(self.sub_seed)
+            # random.seed(self.trial_seed)
+        elif not(self.randomize):
             self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            random.seed(self.trial_seed)
+            self.trial_level_random = random.Random(self.trial_seed)
+            # random.seed(self.trial_seed)
         else:
             self.trial_seed = -1  # not used
 
@@ -1002,6 +1016,10 @@ class Dominoes(NoisyRigidbodiesDataset):
             pass
         try:
             static_group.create_dataset("trial_seed", data=self.trial_seed)
+        except (AttributeError, TypeError):
+            pass
+        try:
+            static_group.create_dataset("sub_seed", data=self.sub_seed)
         except (AttributeError, TypeError):
             pass
         try:
@@ -1180,7 +1198,7 @@ class Dominoes(NoisyRigidbodiesDataset):
     def get_rotation(self, rot_range):
         if rot_range is None:
             return {"x": 0,
-                    "y": random.uniform(0, 360),
+                    "y": self.trial_level_random.uniform(0, 360),
                     "z": 0.}
         else:
             return get_random_xyz_transform(rot_range)
@@ -1190,19 +1208,19 @@ class Dominoes(NoisyRigidbodiesDataset):
             return self.get_rotation(rot_range)
         else:
             return {"x": 0.,
-                    "y": random.uniform(*get_range(rot_range)),
+                    "y": self.trial_level_random.uniform(*get_range(rot_range)),
                     "z": 0.}
 
     def get_push_force(self, scale_range, angle_range, yforce=[0, 0], angle_offset=0):
         #sample y force component
-        yforce = random.uniform(*yforce)
+        yforce = self.trial_level_random.uniform(*yforce)
         # rotate a unit vector initially pointing in positive-x direction
-        theta = np.radians(random.uniform(
+        theta = np.radians(self.trial_level_random.uniform(
             *get_range(angle_range)) + angle_offset)
         push = np.array([np.cos(theta), yforce, np.sin(theta)])
 
         # scale it
-        push *= random.uniform(*get_range(scale_range))
+        push *= self.trial_level_random.uniform(*get_range(scale_range))
 
         # convert to xyz
         return arr_to_xyz(push)
@@ -1299,11 +1317,11 @@ class Dominoes(NoisyRigidbodiesDataset):
                 record, size_range['z'], randomize)['z']
             return scale
 
-        if randomize:
-            smin = random.uniform(*get_range(size_range))
-            smax = random.uniform(smin, get_range(size_range)[1])
-        else:
-            smin, smax = get_range(size_range)
+        # if randomize:
+        #     smin = self.trial_level_random.uniform(*get_range(size_range))
+        #     smax = self.trial_level_random.uniform(smin, get_range(size_range)[1])
+        # else:
+        smin, smax = get_range(size_range)
 
         if dmax < smin:
             scale = smin / dmax
@@ -1413,7 +1431,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         commands = []
 
         ### better sampling of random physics values
-        self.probe_mass = random.uniform(
+        self.probe_mass = self.trial_level_random.uniform(
             self.probe_mass_range[0], self.probe_mass_range[1])
         self.probe_initial_position = {"x": -0.5*self.collision_axis_length,
                                        "y": self.probe_initial_height,
@@ -1480,7 +1498,7 @@ class Dominoes(NoisyRigidbodiesDataset):
                     self.probe_scale, rot['y'])[k]
                 for k, v in self.push_position.items()}
             self.push_position = {
-                k: v+random.uniform(-self.force_offset_jitter,
+                k: v+self.trial_level_random.uniform(-self.force_offset_jitter,
                                     self.force_offset_jitter)
                 for k, v in self.push_position.items()}
             if self.PRINT:
@@ -1488,7 +1506,7 @@ class Dominoes(NoisyRigidbodiesDataset):
             self.push_cmd = self._get_push_cmd(o_id, self.push_position)
 
         # decide when to apply the force
-        self.force_wait = int(random.uniform(
+        self.force_wait = int(self.trial_level_random.uniform(
             *get_range(self.force_wait_range)))
         if self.PRINT:
             print("force wait", self.force_wait)
@@ -1503,7 +1521,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         cmds = []
 
         # ramp params
-        self.ramp = random.choice(self.DEFAULT_RAMPS)
+        self.ramp = self.trial_level_random.choice(self.DEFAULT_RAMPS)
         rgb = self.ramp_color or self.random_color(exclude=self.target_color)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
         # don't intersect w zone
@@ -1556,7 +1574,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         if color is None:
             color = self.random_color(exclude=self.target_color)
 
-        self.ramp_base_height = random.uniform(
+        self.ramp_base_height = self.trial_level_random.uniform(
             *get_range(self.ramp_base_height_range))
         if self.ramp_base_height < 0.01:
             self.ramp_base_scale = copy.deepcopy(self.ramp_scale)
@@ -1581,6 +1599,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         cmds.extend(
             NoisyRigidbodiesDataset.add_physics_object(
                 self,
+                sub_level_random=self.sub_level_random,
                 record=self.ramp_base,
                 position=copy.deepcopy(self.ramp_pos),
                 rotation=TDWUtils.VECTOR3_ZERO,
@@ -1762,7 +1781,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         bounds = self.scale_vector(bounds, scale)
 
         ## choose the initial position of the object, before adjustment
-        occ_distance = random.uniform(
+        occ_distance = self.trial_level_random.uniform(
             *get_range(self.occlusion_distance_fraction))
         pos = self.scale_vector(
             unit_position_vector, occ_distance * self.camera_radius)
@@ -1851,7 +1870,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         bounds = self.scale_vector(bounds, scale)
 
         ## choose the initial position of the object
-        distract_distance = random.uniform(
+        distract_distance = self.trial_level_random.uniform(
             *get_range(self.distractor_distance_fraction))
         pos = self.scale_vector(
             unit_position_vector, distract_distance * self.camera_radius)
@@ -2167,13 +2186,13 @@ class MultiDominoes(Dominoes):
         commands = []
 
         if self.remove_middle:
-            rm_idx = random.choice(range(self.num_middle_objects))
+            rm_idx = self.trial_level_random.choice(range(self.num_middle_objects))
         else:
             rm_idx = -1
 
         for m in range(self.num_middle_objects):
             offset += self.spacing * \
-                random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
+                self.trial_level_random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
             if offset >= max_offset:
                 print("couldn't place middle object %s" % str(m+1))
@@ -2190,7 +2209,7 @@ class MultiDominoes(Dominoes):
                                                  )
             o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
             zpos = scale["z"] * \
-                random.uniform(-self.lateral_jitter, self.lateral_jitter)
+                self.trial_level_random.uniform(-self.lateral_jitter, self.lateral_jitter)
             pos = arr_to_xyz([offset, 0., zpos])
             rot = self.get_y_rotation(self.middle_rotation_range)
             if self.horizontal:
@@ -2202,11 +2221,13 @@ class MultiDominoes(Dominoes):
                 k: max([scale[k], self.middle_scale[k]]) for k in scale.keys()}
 
             commands.extend(
-                self.add_physics_object(
+                NoisyRigidbodiesDataset.add_physics_object(
+                    self,
+                    sub_level_random=self.sub_level_random,
                     record=record,
                     position=pos,
                     rotation=rot,
-                    mass=random.uniform(*get_range(self.middle_mass_range)),
+                    mass=self.trial_level_random.uniform(*get_range(self.middle_mass_range)),
                     dynamic_friction=0.5,
                     static_friction=0.5,
                     bounciness=0.,
@@ -2242,8 +2263,10 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0"
 
     noise = RigidNoiseParams.load(args.noise)
+    read_trial_seed = json.load(args.read_trial_seed)
 
     DomC = MultiDominoes(
+        read_trial_seed=read_trial_seed,
         noise=noise,
         port=args.port,
         room=args.room,

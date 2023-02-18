@@ -2,17 +2,14 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from abc import ABC
 import numpy as np
-import random
 from tdw.librarian import ModelRecord
 from rigidbodies_dataset import RigidbodiesDataset
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
-import copy
 from scipy.stats import vonmises, norm, lognorm
 from noisy_utils import *
 import json
-import warnings
 
 XYZ = ['x', 'y', 'z']
 
@@ -123,6 +120,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     def __init__(self,
                  noise: RigidNoiseParams = NO_NOISE,
+                 read_trial_seed = None,
                  **kwargs):
         RigidbodiesDataset.__init__(self, **kwargs)
         self._noise_params = noise
@@ -135,7 +133,11 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     print("example noise", self.collision_noise_generator())
         self._registered_objects = []
 
+        self.read_trial_seed = read_trial_seed  if read_trial_seed else None
+
+
     def add_physics_object(self,
+                           sub_level_seed,
                            record: ModelRecord,
                            position: Dict[str, float],
                            rotation: Dict[str, float],
@@ -165,29 +167,29 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             if n.position is not None and k in n.position.keys()\
                     and n.position[k] is not None:
                 position[k] = norm.rvs(position[k],
-                                       n.position[k])
+                                       n.position[k], seed=sub_level_seed)
             # this is adding vonmises noise to the Euler angles
             if n.rotation is not None and k in n.rotation.keys()\
                     and n.rotation[k] is not None:
-                rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k])
+                rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], seed=sub_level_seed)
         rotation = dict([[k, rad2deg(rotrad[k])]
                          for k in rotrad.keys()])
         if n.mass is not None:
-            mass *= lognorm.rvs(n.mass, loc=0)
+            mass *= lognorm.rvs(n.mass, loc=0, seed=sub_level_seed)
         # Clamp frictions to be > 0
         if n.dynamic_friction is not None:
             dynamic_friction = max(0,
                                    norm.rvs(dynamic_friction,
-                                            n.dynamic_friction))
+                                            n.dynamic_friction, seed=sub_level_seed))
         if n.static_friction is not None:
             static_friction = max(0,
                                   norm.rvs(static_friction,
-                                           n.static_friction))
+                                           n.static_friction, seed=sub_level_seed))
         # Clamp bounciness between 0 and 1
         if n.bounciness is not None:
             bounciness = max(0, min(1,
                                     norm.rvs(bounciness,
-                                             n.bounciness)))
+                                             n.bounciness, seed=sub_level_seed)))
         # print("perturbed positions: ", position)
         # print("perturbed rotations: ", rotation)
         # print("perturbed masses: ", mass)
@@ -355,13 +357,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 def cng(impulse):
                     impulse_dir = impulse/np.linalg.norm(impulse)
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
-                                      np.linalg.norm(impulse))*lognorm.rvs(ncm, loc=0)
+                                      np.linalg.norm(impulse))*lognorm.rvs(ncm, loc=0, seed=sub_level_seed)
             else:
                 def cng(impulse):
                     impulse_rand_dir = rand_von_mises_fisher(impulse/np.linalg.norm(impulse),kappa=ncd)[0]
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]),
-                                      np.linalg.norm(impulse)*lognorm.rvs(ncm, loc=0))
+                                      np.linalg.norm(impulse)*lognorm.rvs(ncm, loc=0, seed=sub_level_seed))
             self.collision_noise_generator = cng
 
     def settle(self):
