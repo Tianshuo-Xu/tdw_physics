@@ -315,6 +315,10 @@ def get_args(dataset_dir: str, parse=True):
                         type=str,
                         default=None,
                         help="path to intergers specifying trial seed")
+    parser.add_argument("--read_global_seed",
+                        type=str,
+                        default=None,
+                        help="path to intergers specifying global seed")
 
     def postprocess(args):
 
@@ -470,7 +474,7 @@ def get_args(dataset_dir: str, parse=True):
         if args.training_data_mode:
 
             # multiply the number of trials by a factor
-            args.num = int(float(args.num) * args.num_multiplier)
+            # args.num = int(float(args.num) * args.num_multiplier)
 
             # change the random seed in a deterministic way
             args.random = 0
@@ -495,7 +499,7 @@ def get_args(dataset_dir: str, parse=True):
         elif args.readout_data_mode:
 
             # multiply the number of trials by a factor
-            args.num = int(float(args.num) * args.num_multiplier)
+            # args.num = int(float(args.num) * args.num_multiplier)
 
             # change the random seed in a deterministic way
             args.random = 0
@@ -552,6 +556,7 @@ class Dominoes(NoisyRigidbodiesDataset):
     """
 
     MAX_TRIALS = 1000
+    MAX_PAR = 1000
     DEFAULT_RAMPS = [
         r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [
@@ -626,9 +631,9 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         ## get random port unless one is specified
         if port is None:
-            port = np.random.randint(1000, 4000)
-            print("random port", port,
-                  "chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+            port = np.random.randint(1000,4000)
+            print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+
 
         ## initializes static data and RNG
         super().__init__(port=port,
@@ -672,10 +677,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         self.use_ramp = use_ramp
         self.ramp_color = ramp_color
         self.ramp_material = ramp_material or self.zone_material
-        if ramp_scale is not None:
-            self.ramp_scale = get_random_xyz_transform(ramp_scale)
-        else:
-            self.ramp_scale = None
+        self.ramp_scale = ramp_scale
         self.ramp_base_height_range = ramp_base_height_range
         self.ramp_physics_info = {}
         if ramp_has_friction:
@@ -708,7 +710,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         self.collision_axis_length = collision_axis_length
         self.force_scale_range = force_scale_range
         self.force_angle_range = force_angle_range
-        self.force_offset = get_random_xyz_transform(force_offset)
+        self.force_offset = force_offset
         self.force_offset_jitter = force_offset_jitter
         self.force_wait_range = force_wait or [0, 0]
 
@@ -902,25 +904,34 @@ class Dominoes(NoisyRigidbodiesDataset):
         self.room_center = TDWUtils.VECTOR3_ZERO
 
     def get_trial_initialization_commands(self) -> List[dict]:
+        print("this trial idx: ", self._trial_num)
+        print("this simulation idx: ", self._sim_sub_id)
         commands = []
 
-        # randomization across trials
+        # randomization
+        # global level
+        if self.read_global_seed:
+            self.global_seed = self.read_global_seed[self._trial_num]
+            self.global_level_random = random.Random(self.global_seed)
+        # trial level
         if self.read_trial_seed:
             self.trial_seed = self.read_trial_seed[self._trial_num]
+            print("read trial_seed: ", self.trial_seed)
             self.trial_level_random = random.Random(self.trial_seed)
-            self.sub_seed = self.read_trial_seed[self._sim_sub_id]
-            self.sub_level_random = random.Random(self.sub_seed)
-            # random.seed(self.trial_seed)
-        elif not(self.randomize):
-            self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-            self.trial_level_random = random.Random(self.trial_seed)
-            # random.seed(self.trial_seed)
+        # subject level
+        self.sub_seed = (self.MAX_PAR * self.trial_seed) + self._sim_sub_id
+        print("subject seed: ", self.sub_seed)
+
+        if self.ramp_scale is not None:
+            self.ramp_scale = get_random_xyz_transform(self.ramp_scale, self.global_level_random)
         else:
-            self.trial_seed = -1  # not used
+            self.ramp_scale = None
+        
+        self.force_offset = get_random_xyz_transform(self.force_offset, self.global_level_random)
 
         ## choose the room center
         if self.room_center_range is not None:
-            self.room_center = get_random_xyz_transform(self.room_center_range)
+            self.room_center = get_random_xyz_transform(self.room_center_range, self.trial_level_random)
         else:
             self._set_room_center()
 
@@ -943,7 +954,7 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # Teleport the avatar to a reasonable position based on the drop height.
 
-        a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+        a_pos = self.get_random_avatar_position(self.trial_level_random, radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
@@ -992,7 +1003,7 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         cmds.extend(
             NoisyRigidbodiesDataset.get_per_frame_commands(
-                self, resp, frame
+                self, resp, frame, self.sub_seed
             )
         )
 
@@ -1201,7 +1212,7 @@ class Dominoes(NoisyRigidbodiesDataset):
                     "y": self.trial_level_random.uniform(0, 360),
                     "z": 0.}
         else:
-            return get_random_xyz_transform(rot_range)
+            return get_random_xyz_transform(rot_range, self.trial_level_random)
 
     def get_y_rotation(self, rot_range):
         if rot_range is None:
@@ -1249,7 +1260,9 @@ class Dominoes(NoisyRigidbodiesDataset):
     def _place_target_zone(self) -> List[dict]:
 
         # create a target zone (usually flat, with same texture as room)
-        record, data = self.random_primitive(self._zone_types,
+        record, data = NoisyRigidbodiesDataset.random_primitive(self,
+                                             self.trial_level_random,
+                                             self._zone_types,
                                              scale=self.zone_scale_range,
                                              color=self.zone_color,
                                              add_data=False
@@ -1271,7 +1284,10 @@ class Dominoes(NoisyRigidbodiesDataset):
         commands = []
 
         commands.extend(
-            self.add_primitive(
+            NoisyRigidbodiesDataset.add_primitive(
+                self,
+                trial_level_random=self.trial_level_random,
+                sub_level_seed=self.sub_seed,
                 record=record,
                 position=self.add_room_center(
                     (self.zone_location or self._get_zone_location(scale))),
@@ -1340,7 +1356,9 @@ class Dominoes(NoisyRigidbodiesDataset):
         """
 
         # create a target object
-        record, data = self.random_primitive(self._target_types,
+        record, data = NoisyRigidbodiesDataset.random_primitive(self,
+                                             self.trial_level_random,
+                                             self._target_types,
                                              scale=self.target_scale_range,
                                              color=self.target_color,
                                              add_data=False
@@ -1375,7 +1393,10 @@ class Dominoes(NoisyRigidbodiesDataset):
         # Commands for adding hte object
         commands = []
         commands.extend(
-            self.add_primitive(
+            NoisyRigidbodiesDataset.add_primitive(
+                self,
+                trial_level_random=self.trial_level_random,
+                sub_level_seed=self.sub_seed,
                 record=record,
                 position=self.target_position,
                 rotation=self.target_rotation,
@@ -1408,7 +1429,9 @@ class Dominoes(NoisyRigidbodiesDataset):
         Place a probe object at the other end of the collision axis, then apply a force to push it.
         """
         exclude = not (self.monochrome and self.match_probe_and_target_color)
-        record, data = self.random_primitive(self._probe_types,
+        record, data = NoisyRigidbodiesDataset.random_primitive(self,
+                                             self.trial_level_random,
+                                             self._probe_types,
                                              scale=self.probe_scale_range,
                                              color=self.probe_color,
                                              exclude_color=(
@@ -1455,7 +1478,10 @@ class Dominoes(NoisyRigidbodiesDataset):
                                   'static_friction': 0.01, 'bounciness': 0}
 
         commands.extend(
-            self.add_primitive(
+            NoisyRigidbodiesDataset.add_primitive(
+                self,
+                trial_level_random=self.trial_level_random,
+                sub_level_seed=self.sub_seed,
                 record=record,
                 position=self.probe_initial_position,
                 rotation=rot,
@@ -1522,7 +1548,7 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # ramp params
         self.ramp = self.trial_level_random.choice(self.DEFAULT_RAMPS)
-        rgb = self.ramp_color or self.random_color(exclude=self.target_color)
+        rgb = self.ramp_color or NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=self.target_color)
         ramp_pos = copy.deepcopy(self.probe_initial_position)
         # don't intersect w zone
         ramp_pos['y'] = self.zone_scale['y'] if not self.remove_zone else 0.0
@@ -1547,7 +1573,8 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         # add the ramp
         cmds.extend(
-            self.add_ramp(
+            NoisyRigidbodiesDataset.add_ramp(self,
+                trial_level_random=self.trial_level_random,
                 record=self.ramp,
                 position=self.ramp_pos,
                 rotation=self.ramp_rot,
@@ -1572,7 +1599,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         cmds = []
 
         if color is None:
-            color = self.random_color(exclude=self.target_color)
+            color = NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=self.target_color)
 
         self.ramp_base_height = self.trial_level_random.uniform(
             *get_range(self.ramp_base_height_range))
@@ -1599,7 +1626,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         cmds.extend(
             NoisyRigidbodiesDataset.add_physics_object(
                 self,
-                sub_level_random=self.sub_level_random,
+                sub_level_seed=self.sub_seed,
                 record=self.ramp_base,
                 position=copy.deepcopy(self.ramp_pos),
                 rotation=TDWUtils.VECTOR3_ZERO,
@@ -1610,7 +1637,7 @@ class Dominoes(NoisyRigidbodiesDataset):
         # scale it, color it, fix it
         cmds.extend(
             self.get_object_material_commands(
-                self.ramp_base, self.ramp_base_id, self.get_material_name(self.ramp_material)))
+                self.ramp_base, self.ramp_base_id, NoisyRigidbodiesDataset.get_material_name(self, self.trial_level_random, self.ramp_material)))
         cmds.extend([
             {"$type": "scale_object",
              "scale_factor": self.ramp_base_scale,
@@ -1661,9 +1688,8 @@ class Dominoes(NoisyRigidbodiesDataset):
                 elif o_id == self.zone_id:
                     c['color'] = zcolor
                 elif any((np.abs(exclude[k] - c['color'][k]) < exclude_range for k in exclude.keys())):
-                    rgb = self.random_color_from_rng(exclude=[exclude[k] for k in ['r', 'g', 'b']],
-                                                     exclude_range=exclude_range,
-                                                     seed=self.trial_seed)
+                    rgb = NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=[exclude[k] for k in ['r', 'g', 'b']],
+                                                     exclude_range=exclude_range)
                     c['color'] = {'r': rgb[0],
                                   'g': rgb[1], 'b': rgb[2], 'a': 1.0}
 
@@ -1678,14 +1704,14 @@ class Dominoes(NoisyRigidbodiesDataset):
 
         self.distractors = OrderedDict()
         for i in range(self.num_distractors):
-            record, data = self.random_model(
+            record, data = NoisyRigidbodiesDataset.random_model(self, self.trial_level_random,
                 self.distractor_types, add_data=True)
             self.distractors[data['id']] = record
 
     def _set_occluder_objects(self) -> None:
         self.occluders = OrderedDict()
         for i in range(self.num_occluders):
-            record, data = self.random_model(
+            record, data = NoisyRigidbodiesDataset.random_model(self, self.trial_level_random,
                 self.occluder_types, add_data=True)
             self.occluders[data['id']] = record
 
@@ -1958,12 +1984,12 @@ class Dominoes(NoisyRigidbodiesDataset):
 
             # give it a color and texture if it's a primitive
             # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=(
+            rgb = NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=(
                 self.target_color if not self._random_target_color else None), exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.distractor_material)))
+                        record, o_id, NoisyRigidbodiesDataset.get_material_name(self, self.trial_level_random, self.distractor_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -2038,12 +2064,12 @@ class Dominoes(NoisyRigidbodiesDataset):
 
             # give it a texture if it's a primitive
             # make sure it doesn't have the same color as the target object
-            rgb = self.random_color(exclude=(
+            rgb = NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=(
                 self.target_color if not self._random_target_color else None), exclude_range=0.5)
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.occluder_material)))
+                        record, o_id, NoisyRigidbodiesDataset.get_material_name(self, self.trial_level_random, self.occluder_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -2109,7 +2135,7 @@ class MultiDominoes(Dominoes):
         self.middle_color = middle_color
         self.randomize_colors_across_trials = False if (
             middle_color is not None) else True
-        self.middle_material = self.get_material_name(middle_material)
+        self.middle_material = middle_material
         self.horizontal = horizontal
         self.remove_middle = remove_middle
 
@@ -2173,7 +2199,7 @@ class MultiDominoes(Dominoes):
     def _build_intermediate_structure(self) -> List[dict]:
         # set the middle object color
         if self.monochrome:
-            self.middle_color = self.random_color(exclude=self.target_color)
+            self.middle_color = NoisyRigidbodiesDataset.random_color(self, self.trial_level_random, exclude=self.target_color)
 
         return self._place_middle_objects() if bool(self.num_middle_objects) else []
 
@@ -2202,7 +2228,9 @@ class MultiDominoes(Dominoes):
             if m == rm_idx:
                 continue
 
-            record, data = self.random_primitive(self._middle_types,
+            record, data = NoisyRigidbodiesDataset.random_primitive(self, 
+                                                 self.trial_level_random,
+                                                 self._middle_types,
                                                  scale=self.middle_scale_range,
                                                  color=self.middle_color,
                                                  exclude_color=self.target_color
@@ -2223,7 +2251,7 @@ class MultiDominoes(Dominoes):
             commands.extend(
                 NoisyRigidbodiesDataset.add_physics_object(
                     self,
-                    sub_level_random=self.sub_level_random,
+                    sub_level_seed=self.sub_seed,
                     record=record,
                     position=pos,
                     rotation=rot,
@@ -2234,9 +2262,10 @@ class MultiDominoes(Dominoes):
                     o_id=o_id))
 
             # Set the middle object material
+            self.middle_material = NoisyRigidbodiesDataset.get_material_name(self, self.trial_level_random, self.middle_material)
             commands.extend(
                 self.get_object_material_commands(
-                    record, o_id, self.get_material_name(self.middle_material)))
+                    record, o_id, NoisyRigidbodiesDataset.get_material_name(self, self.trial_level_random, self.middle_material)))
 
             # Scale the object and set its color.
             commands.extend([
@@ -2263,9 +2292,14 @@ if __name__ == "__main__":
             os.environ["DISPLAY"] = ":0"
 
     noise = RigidNoiseParams.load(args.noise)
-    read_trial_seed = json.load(args.read_trial_seed)
+    with open(args.read_global_seed, 'r') as ifl:
+        read_global_seed = json.load(ifl)
+    with open(args.read_trial_seed, 'r') as ifl:
+        read_trial_seed = json.load(ifl)
+    assert len(read_global_seed) == len(read_trial_seed)
 
     DomC = MultiDominoes(
+        read_global_seed=read_global_seed,
         read_trial_seed=read_trial_seed,
         noise=noise,
         port=args.port,
@@ -2336,7 +2370,8 @@ if __name__ == "__main__":
         )
 
     if bool(args.run):
-        DomC.run(num=args.num,
+        DomC.run(num=len(read_global_seed),
+                 sim_sub_num=args.sim_sub_num,
                  output_dir=args.dir,
                  temp_path=args.temp,
                  width=args.width,

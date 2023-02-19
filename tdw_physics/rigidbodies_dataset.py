@@ -108,19 +108,19 @@ def get_range(scl):
         return scl, scl
 
 
-def get_random_xyz_transform(generator):
+def get_random_xyz_transform(generator, trial_level_random):
     if callable(generator):
         s = generator()
     elif hasattr(generator, 'keys'):
         sx0, sx1 = get_range(generator["x"])
-        sx = random.uniform(sx0, sx1)
+        sx = trial_level_random.uniform(sx0, sx1)
         sy0, sy1 = get_range(generator["y"])
-        sy = random.uniform(sy0, sy1)
+        sy = trial_level_random.uniform(sy0, sy1)
         sz0, sz1 = get_range(generator["z"])
-        sz = random.uniform(sz0, sz1)
+        sz = trial_level_random.uniform(sz0, sz1)
         s = {"x": sx, "y": sy, "z": sz}
     elif hasattr(generator, '__len__'):
-        s0 = random.uniform(generator[0], generator[1])
+        s0 = trial_level_random.uniform(generator[0], generator[1])
         s = {"x": s0, "y": s0, "z": s0}
     else:
         generator + 0.0

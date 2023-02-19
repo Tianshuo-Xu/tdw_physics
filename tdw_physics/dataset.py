@@ -62,12 +62,12 @@ class Dataset(Controller, ABC):
                          check_version=check_version,
                          launch_build=launch_build)
 
-        # set random state
-        self.randomize = randomize
-        self.seed = seed
-        if not bool(self.randomize):
-            random.seed(self.seed)
-            print("SET RANDOM SEED: %d" % self.seed)
+        # # set random state
+        # self.randomize = randomize
+        # self.seed = seed
+        # if not bool(self.randomize):
+        #     random.seed(self.seed)
+        #     print("SET RANDOM SEED: %d" % self.seed)
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
@@ -177,6 +177,7 @@ class Dataset(Controller, ABC):
 
     def run(self,
             num: int,
+            sim_sub_num: int,
             output_dir: str,
             temp_path: str,
             width: int,
@@ -255,7 +256,7 @@ class Dataset(Controller, ABC):
         self.communicate(initialization_commands)
 
         # Run trials
-        self.trial_loop(num, output_dir, temp_path)
+        self.trial_loop(num, sim_sub_num, output_dir, temp_path)
 
         # Terminate TDW
         # Windows doesn't know signal timeout
@@ -296,15 +297,11 @@ class Dataset(Controller, ABC):
 
     def trial_loop(self,
                    num: int,
+                   sim_sub_num: int,
                    output_dir: str,
                    temp_path: str,
                    save_frame: int=None,
-                   unload_assets_every: int = 10,
-                   update_kwargs: List[dict] = {},
-                   do_log: bool = False) -> None:
-
-        if not isinstance(update_kwargs, list):
-            update_kwargs = [update_kwargs] * num
+                   unload_assets_every: int = 10) -> None:
 
         output_dir = Path(output_dir)
         if not output_dir.exists():
@@ -316,7 +313,7 @@ class Dataset(Controller, ABC):
         if temp_path.exists():
             temp_path.unlink()
 
-        pbar = tqdm(total=num)
+        pbar = tqdm(total=num*sim_sub_num)
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = 0
         for f in output_dir.glob("*.hdf5"):
@@ -324,34 +321,31 @@ class Dataset(Controller, ABC):
                 exists_up_to = int(f.stem)
 
         if exists_up_to > 0:
-            print('Trials up to %d already exist, skipping those' % exists_up_to)
+            print('Trials and simulations up to %d already exist, skipping those' % exists_up_to)
 
         pbar.update(exists_up_to)
-        for i in range(exists_up_to, num):
-            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+        for i in range(exists_up_to, num*sim_sub_num):
+            trial_id = i//sim_sub_num
+            sim_sub_id = i%sim_sub_num
+            print("trial_num: ", trial_id)
+            print("simulation_num: ", sim_sub_id)
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(trial_id, 4) + '_' + TDWUtils.zero_padding(sim_sub_id, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
 
-            ## update the controller state
-            self.update_controller_state(**update_kwargs[i])
-
             if not filepath.exists():
-                if do_log:
-                    start = time.time()
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
                 # Save out images
                 self.png_dir = None
                 if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(trial_id, 4)+ '_' + TDWUtils.zero_padding(sim_sub_id, 4))
                     if not self.png_dir.exists():
                         self.png_dir.mkdir(parents=True)
 
-                for sim_sub_id in range(self.sim_sub_num):
-                    # Do the trial.
-                    self.trial(filepath=filepath,
-                            temp_path=temp_path,
-                            trial_num=i,
-                            sim_sub_id=sim_sub_id,
-                            unload_assets_every=unload_assets_every)
+                # Do the trial.
+                self.trial(filepath=filepath,
+                        temp_path=temp_path,
+                        trial_num=trial_id,
+                        sim_sub_id=sim_sub_id,
+                        unload_assets_every=unload_assets_every)
 
                 # Save an MP4 of the stimulus
                 if self.save_movies:
@@ -369,7 +363,7 @@ class Dataset(Controller, ABC):
                     if save_frame is not None:
                         frames = os.listdir(str(self.png_dir))
                         sv = sorted(frames)[save_frame]
-                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                        png = output_dir.joinpath(TDWUtils.zero_padding(trial_id, 4) + '_' + TDWUtils.zero_padding(sim_sub_id, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
                     rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
@@ -380,10 +374,6 @@ class Dataset(Controller, ABC):
                         obj_filename = str(filepath).split('.hdf5')[0] + f"_obj{o_id}.obj"
                         vertices, faces = self.object_meshes[o_id]
                         save_obj(vertices, faces, obj_filename)
-
-                if do_log:
-                    end = time.time()
-                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (i, self.trial_seed, int(end-start)))
             pbar.update(1)
         pbar.close()
 

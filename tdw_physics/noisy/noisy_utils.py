@@ -1,7 +1,8 @@
 import numpy as np
-import numpy.matlib
 from typing import List, Tuple, Dict, Optional
 from scipy.linalg import null_space
+from scipy.stats import norm, uniform, beta
+
 XYZ = ['x', 'y', 'z']
 
 
@@ -50,7 +51,7 @@ def rad2deg(rad: float) -> float:
 def deg2rad(deg: float) -> float:
     return deg / 180 * np.pi
 
-def rand_uniform_hypersphere(N,p):
+def rand_uniform_hypersphere(seed, N,p):
 
     """
         rand_uniform_hypersphere(N,p)
@@ -85,14 +86,14 @@ def rand_uniform_hypersphere(N,p):
     if (N<=0) or (type(N) is not int):
         raise Exception("N must be a non-zero positive integer.")
 
-    v = np.random.normal(0,1,(N,p))
-
+    # v = np.random.normal(0,1,(N,p))
+    v = norm.rvs(0, 1, (N,p), random_state=seed)
     v = np.divide(v,np.linalg.norm(v,axis=1,keepdims=True))
 
     return v
 
 
-def rand_t_marginal(kappa,p,N=1):
+def rand_t_marginal(seed, kappa,p,N=1):
     """
         rand_t_marginal(kappa,p,N=1)
         ============================
@@ -140,10 +141,12 @@ def rand_t_marginal(kappa,p,N=1):
         while True:
 
             # Sample Beta distribution
-            Z = np.random.beta( (p - 1.0)/2.0, (p - 1.0)/2.0 )
+            # Z = np.random.beta( (p - 1.0)/2.0, (p - 1.0)/2.0 )
+            Z = beta.rvs((p - 1.0)/2.0, (p - 1.0)/2.0, random_state=seed)
 
             # Sample Uniform distribution
-            U = np.random.uniform(low=0.0,high=1.0)
+            # U = np.random.uniform(low=0.0,high=1.0)
+            U = uniform(0.0, 1.0, random_state=seed)
 
             # W is essentially t
             W = (1.0 - (1.0 + b) * Z) / (1.0 - (1.0 - b) * Z)
@@ -158,7 +161,7 @@ def rand_t_marginal(kappa,p,N=1):
     return samples
 
 
-def rand_von_mises_fisher(mu,kappa,N=1):
+def rand_von_mises_fisher(seed, mu,kappa,N=1):
     """
         rand_von_mises_fisher(mu,kappa,N=1)
         ===================================
@@ -202,10 +205,10 @@ def rand_von_mises_fisher(mu,kappa,N=1):
     samples = np.zeros((N,p))
 
     #  Component in the direction of mu (Nx1)
-    t = rand_t_marginal(kappa,p,N)
+    t = rand_t_marginal(seed, kappa,p,N)
 
     # Component orthogonal to mu (Nx(p-1))
-    xi = rand_uniform_hypersphere(N,p-1)
+    xi = rand_uniform_hypersphere(seed, N,p-1)
 
     # von-Mises-Fisher samples Nxp
 
