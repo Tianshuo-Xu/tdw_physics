@@ -523,7 +523,7 @@ class Dataset(Controller, ABC):
                     all_imgs.append(img)
                     all_imgs = np.stack(all_imgs)
                     all_imgs = concat_img_horz(all_imgs)
-                    all_imgs = pad_below(all_imgs)
+                    # all_imgs = pad_below(all_imgs)
                     imgs.append(all_imgs[:, :, :3])
 
                 # breakpoint()
@@ -572,44 +572,44 @@ class Dataset(Controller, ABC):
 
         # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
         # if self.save_labels:
-        #     meta = OrderedDict()
-        #     meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-        #     self.trial_metadata.append(meta)
-        #
-        #     # Save the trial-level metadata
-        #     json_str = json.dumps(self.trial_metadata, indent=4)
-        #     self.meta_file.write_text(json_str, encoding='utf-8')
-        #     print("TRIAL %d LABELS" % self._trial_num)
-        #     print(json.dumps(self.trial_metadata[-1], indent=4))
+        meta = OrderedDict()
+        meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+        self.trial_metadata.append(meta)
+
+        # Save the trial-level metadata
+        json_str = json.dumps(self.trial_metadata, indent=4)
+        self.meta_file.write_text(json_str, encoding='utf-8')
+        print("TRIAL %d LABELS" % self._trial_num)
+        print(json.dumps(self.trial_metadata[-1], indent=4))
 
         # # Save out the target/zone segmentation mask
         # if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
-        #     try:
-        #         _id = f['frames']['0000']['images']['_id']
-        #     except:
-        #         # print("inside cam0")
-        #         _id = f['frames']['0000']['images']['_id_cam0']
-        #     # get PIL image
-        #     _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        #     # get colors
-        #     zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
-        #     zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        #     target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
-        #     target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        #     # get individual maps
-        #     zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        #     target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        #     # colorize
-        #     zone_map = zone_map * ZONE_COLOR
-        #     target_map = target_map * TARGET_COLOR
-        #     joint_map = zone_map + target_map
-        #     # add alpha
-        #     alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        #     joint_map = np.dstack((joint_map, alpha))
-        #     # as image
-        #     map_img = Image.fromarray(np.uint8(joint_map))
-        #     # save image
-        #     map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
+        try:
+            _id = f['frames']['0000']['images']['_id']
+        except:
+            # print("inside cam0")
+            _id = f['frames']['0000']['images']['_id_cam0']
+        # get PIL image
+        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        # get colors
+        zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
+        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
+        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        # get individual maps
+        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        # colorize
+        zone_map = zone_map * ZONE_COLOR
+        target_map = target_map * TARGET_COLOR
+        joint_map = zone_map + target_map
+        # add alpha
+        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        joint_map = np.dstack((joint_map, alpha))
+        # as image
+        map_img = Image.fromarray(np.uint8(joint_map))
+        # save image
+        map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
 
         # Close the file.
         f.close()
