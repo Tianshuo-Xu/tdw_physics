@@ -78,6 +78,7 @@ class Dataset(Controller, ABC):
                  launch_build: bool=True,
                  randomize: int=0,
                  seed: int=0,
+                 sim_seed: int=0,
                  save_args=True,
                  return_early=False,
                  custom_build=None,
@@ -129,6 +130,7 @@ class Dataset(Controller, ABC):
         # set random state
         self.randomize = randomize
         self.seed = seed
+        self.sim_seed = sim_seed
         if not bool(self.randomize):
             random.seed(self.seed)
             print("SET RANDOM SEED: %d" % self.seed)

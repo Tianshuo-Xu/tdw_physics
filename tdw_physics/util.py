@@ -183,6 +183,10 @@ def get_parser(dataset_dir: str, get_help: bool=False):
                         help="comma separated list of sun elevation")
     parser.add_argument("--view_id_number", type=int, default=0, help="Which view to render")
     # parser.add_argument("--return_early", action='store_true', help="check compatibility of phsics models")
+    parser.add_argument("--noise",
+                        type=str,
+                        default=None,
+                        help="path link to noise JSON file")
 
     args = parser.parse_args('')
 
