@@ -432,7 +432,7 @@ class Dataset(Controller, ABC):
 
 
         # print("Hello***")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=0)
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=self.view_id_number)
         self._write_frame_labels(frame_grp, resp, -1, False)
 
         # TODO: write the pngs here for img, id, depth, etc.
@@ -513,7 +513,7 @@ class Dataset(Controller, ABC):
 
         #save_imgs for viz
         if self.save_movies:
-            for fr in range(1, frame + 1):
+            for fr in range(0, frame+1):
                 imgs = []
                 for pass_mask in self.save_passes:
 
@@ -534,7 +534,7 @@ class Dataset(Controller, ABC):
 
                 # breakpoint()
 
-                filename = os.path.join(self.png_dir, 'img_' + str(fr-1).zfill(4) + '.png')
+                filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
 
                 im_arr = Image.fromarray(imgs)
                 shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
