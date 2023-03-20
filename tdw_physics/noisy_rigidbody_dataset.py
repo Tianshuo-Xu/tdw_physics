@@ -24,8 +24,6 @@ class RigidNoiseParams:
 
     All noise parameters can take a `None` value to remove noise for that particular parameter; `None` is the default for all noise values
     
-    scale: Dict[str, float]: log-normal noise around the scale of objects
-
     position: Dict[str, float]: Gaussian noise around position of all dynamic objects (separate noise for each dimension)
 
     rotation: Dict[str, float]: vonMises precision for rotation noise along the x,y,z axes (separate noise for each dimension)
@@ -48,7 +46,6 @@ class RigidNoiseParams:
 
     coll_threshold: float: collisions below this threshold are ignored when adding noise
     """
-    scale: Dict[str, float] = None
     position: Dict[str, float] = None
     rotation: Dict[str, float] = None
     velocity_dir: Dict[str, float] = None
@@ -63,7 +60,6 @@ class RigidNoiseParams:
 
     def save(self, flpth):
         selfobj = {
-            'scale': self.scale,
             'position': self.position,
             'rotation': self.rotation,
             'velocity_dir': self.velocity_dir,
@@ -140,7 +136,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                           position: Dict[str, float],
                           rotation: Dict[str, float],
                           mass: float,
-                          scale: Dict[str, float],
                           dynamic_friction: float,
                           static_friction: float,
                           bounciness: float,
@@ -161,38 +156,33 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                        for k in rotation.keys()])
         for k in XYZ:
             if n.position is not None and k in n.position.keys()\
-                    and n.position[k] is not None:
+                    and n.position[k] is not None and position is not None:
                 position[k] = norm.rvs(position[k],
                                        n.position[k], random_state=sim_seed)
                 self.sim_seed += 1
-            if n.scale is not None and k in n.scale.keys()\
-                    and n.scale[k] is not None:
-                a, b = (0 - scale[k])/n.scale[k], 3
-                scale[k] = truncnorm.rvs(a, b, loc=scale[k], random_state=sim_seed)
-                self.sim_seed += 1
             # this is adding vonmises noise to the Euler angles
             if n.rotation is not None and k in n.rotation.keys()\
-                    and n.rotation[k] is not None:
+                    and n.rotation[k] is not None and rotation is not None:
                 rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], random_state=sim_seed)
                 self.sim_seed += 1
         rotation = dict([[k, rad2deg(rotrad[k])]
                          for k in rotrad.keys()])
-        if n.mass is not None:
+        if (n.mass is not None) and (mass is not None):
             a, b = (0 - mass)/n.mass, 3
             mass = truncnorm.rvs(a, b, loc=mass, random_state=sim_seed)
             self.sim_seed += 1
         
         # Clamp frictions to be > 0
-        if n.dynamic_friction is not None:
+        if (n.dynamic_friction is not None) and (dynamic_friction is not None):
             a, b = (0 - dynamic_friction)/n.dynamic_friction, 3
             dynamic_friction = truncnorm.rvs(a, b, loc=dynamic_friction, random_state=sim_seed)
             self.sim_seed += 1
-        if n.static_friction is not None:
+        if (n.static_friction is not None) and (static_friction is not None):
             a, b = (0 - static_friction)/n.static_friction, 3
             static_friction = truncnorm.rvs(a, b, loc=static_friction, random_state=sim_seed)
             self.sim_seed += 1
         # Clamp bounciness between 0 and 1
-        if n.bounciness is not None:
+        if (n.bounciness is not None) and (bounciness is not None):
             a, b = (0 - bounciness)/n.bounciness, (1 - bounciness)/n.bounciness
             bounciness = truncnorm.rvs(a, b, loc=bounciness, random_state=sim_seed)
             self.sim_seed += 1
@@ -203,8 +193,24 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         print("perturbed static_frictions: ", static_friction)
         print("perturbed bouncinesses: ", bounciness)
         print("----------------------------------------------------------------------------------------------------------------------------")
-        return position, rotation, mass, scale, dynamic_friction, static_friction, bounciness
+        return position, rotation, mass, dynamic_friction, static_friction, bounciness
 
+    def add_transforms_object(self,
+                              record: ModelRecord,
+                              position: Dict[str, float],
+                              rotation: Dict[str, float],
+                              o_id: Optional[int] = None,
+                              add_data: Optional[bool] = True,
+                              library: str = "",
+                              sim_seed: int = None) -> dict:
+        """
+        Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
+        """
+        position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
+        self._registered_objects.append(o_id)
+        return RigidbodiesDataset.add_transforms_object(self,
+            record, position, rotation, o_id, add_data, library)    
+    
     def add_primitive(self,
                       record: ModelRecord,
                       position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
@@ -230,7 +236,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        position, rotation, mass, scale, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, scale, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
         self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_primitive(self,
             record, position, rotation, scale, o_id, material, color, exclude_color, mass,
@@ -256,7 +262,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        position, rotation, mass, scale, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, scale, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
         self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_physics_object(self,
             record, position, rotation, mass,
@@ -440,7 +446,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         # print("applying settle function!")
         cmds = []
-        if (self._noise_params.position is not None) or (self._noise_params.rotation is not None) or (self._noise_params.scale is not None):
+        if (self._noise_params.position is not None) or (self._noise_params.rotation is not None):
             # disable gravity for all added objects
             for o_id in self._registered_objects:
                 # print("disabling gravity for object: ", o_id)
