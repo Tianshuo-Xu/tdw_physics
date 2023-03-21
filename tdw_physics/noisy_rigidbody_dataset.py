@@ -8,7 +8,7 @@ from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentColli
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
 from tdw.tdw_utils import TDWUtils
-from scipy.stats import vonmises, norm, truncnorm
+from scipy.stats import vonmises, norm
 from .noisy_utils import *
 import json
 
@@ -168,23 +168,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         rotation = dict([[k, rad2deg(rotrad[k])]
                          for k in rotrad.keys()])
         if (n.mass is not None) and (mass is not None):
-            a, b = (0 - mass)/n.mass, 3
-            mass = truncnorm.rvs(a, b, loc=mass, random_state=sim_seed)
+            mass = max(0, norm.rvs(loc=mass, scale=n.mass, random_state=sim_seed))
             self.sim_seed += 1
         
         # Clamp frictions to be > 0
         if (n.dynamic_friction is not None) and (dynamic_friction is not None):
-            a, b = (0 - dynamic_friction)/n.dynamic_friction, 3
-            dynamic_friction = truncnorm.rvs(a, b, loc=dynamic_friction, random_state=sim_seed)
+            dynamic_friction = max(0, norm.rvs(loc=dynamic_friction, scale=n.dynamic_friction, random_state=sim_seed))
             self.sim_seed += 1
         if (n.static_friction is not None) and (static_friction is not None):
-            a, b = (0 - static_friction)/n.static_friction, 3
-            static_friction = truncnorm.rvs(a, b, loc=static_friction, random_state=sim_seed)
+            static_friction = max(0, norm.rvs(loc=static_friction, scale=n.static_friction, random_state=sim_seed))
             self.sim_seed += 1
         # Clamp bounciness between 0 and 1
         if (n.bounciness is not None) and (bounciness is not None):
-            a, b = (0 - bounciness)/n.bounciness, (1 - bounciness)/n.bounciness
-            bounciness = truncnorm.rvs(a, b, loc=bounciness, random_state=sim_seed)
+            bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=sim_seed))
             self.sim_seed += 1
         print("perturbed positions: ", position)
         print("perturbed rotations: ", rotation)
@@ -423,16 +419,14 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    a, b = (0 - impulse_mag)/ncm, 3
-                    impulse_mag = truncnorm.rvs(a, b, loc=impulse_mag, random_state=sim_seed)
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
                                       impulse_mag)
             else:
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    a, b = (0 - impulse_mag)/ncm, 3
-                    impulse_mag = truncnorm.rvs(a, b, loc=impulse_mag, random_state=sim_seed)
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
                     impulse_rand_dir = rand_von_mises_fisher(sim_seed, impulse_dir, kappa=ncd)[0]
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]), impulse_mag)
@@ -529,8 +523,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     print("contact normals", contact_normals)
                     print("state", state)
             # collision between object and environment, not considered yet
-            if  r_id == 'enco':
-                collision = EnvironmentCollision(resp[i])
-                # Not implemented yet
-                pass
+            # elif  r_id == 'enco':
+            #     co = EnvironmentCollision(resp[i])
+            #     # Not implemented yet
+                # pass
         return coll_data
