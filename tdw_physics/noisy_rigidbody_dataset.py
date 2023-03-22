@@ -189,6 +189,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         print("perturbed static_frictions: ", static_friction)
         print("perturbed bouncinesses: ", bounciness)
         print("----------------------------------------------------------------------------------------------------------------------------")
+        self._registered_objects.append(o_id)
         return position, rotation, mass, dynamic_friction, static_friction, bounciness
 
     def add_transforms_object(self,
@@ -203,7 +204,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
         position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
-        self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_transforms_object(self,
             record, position, rotation, o_id, add_data, library)    
     
@@ -233,7 +233,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
         position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
-        self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_primitive(self,
             record, position, rotation, scale, o_id, material, color, exclude_color, mass,
             dynamic_friction, static_friction,
@@ -259,7 +258,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
         position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
-        self._registered_objects.append(o_id)
         return RigidbodiesDataset.add_physics_object(self,
             record, position, rotation, mass,
             scale, dynamic_friction, static_friction,
