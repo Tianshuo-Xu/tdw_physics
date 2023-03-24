@@ -134,7 +134,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--dir", type=str, default=f"D:/{dataset_dir}", help="Root output directory.")
     parser.add_argument("--num", type=int, default=3, help="The number of trials in the dataset.")
     parser.add_argument("--sim_id", type=int, default=1, help="The index of the simulation.")
-    parser.add_argument("--noise", type=str, default="./noise_null.json", help="Path to the noise parameters file.")
+    parser.add_argument("--noise", type=str, default="null", help="Path to the noise parameters file.")
     parser.add_argument("--num_multiplier", type=float, default=1.0, help="Multiply the number of trials by this factor")
     parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
     parser.add_argument("--width", type=int, default=256, help="Screen width in pixels.")

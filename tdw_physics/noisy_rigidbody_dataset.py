@@ -4,6 +4,7 @@ from abc import ABC
 import numpy as np
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
+from .dataset import Dataset
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
@@ -11,6 +12,11 @@ from tdw.tdw_utils import TDWUtils
 from scipy.stats import vonmises, norm
 from .noisy_utils import *
 import json
+from pathlib import Path
+import h5py
+import shutil
+from tdw_physics.postprocessing.labels import get_labels_from
+from collections import OrderedDict
 
 XYZ = ['x', 'y', 'z']
 
@@ -131,6 +137,73 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # if self.collision_noise_generator is not None:
         #     print("example noise", self.collision_noise_generator())
         self._registered_objects = []
+
+    def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
+        """
+        rewrite the trial function
+        """
+        if self._noise_params == NO_NOISE:
+            return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
+        else:
+            # Clear the object IDs and other static data
+            self.clear_static_data()
+            self._trial_num = trial_num
+
+            # Create the .hdf5 file.
+            f = h5py.File(str(temp_path.resolve()), "a")
+
+            commands = []
+            # # Remove asset bundles (to prevent a memory leak).
+            if trial_num%unload_assets_every == 0:
+                commands.append({"$type": "unload_asset_bundles"})
+
+            # Add commands to start the trial.
+            commands.extend(self.get_trial_initialization_commands())
+            # Add commands to request output data.
+
+            commands.extend(self._get_send_data_commands())
+            resp = self.communicate(commands)
+
+            frame = 0
+            # Add the first frame.
+            done = False
+            while (not done) and (frame < 250):
+                frame += 1
+                cmds = self.get_per_frame_commands(resp, frame)
+                resp = self.communicate(cmds)
+            has_target = (not self.remove_target) or self.replace_target
+            has_zone = not self.remove_zone
+            # Whether target has hit the zone
+            if has_target and has_zone:
+                c_points, c_normals = self.get_object_target_collision(
+                    self.target_id, self.zone_id, resp)
+                target_zone_contact = bool(len(c_points))
+                labels_group = f.create_group("labels")
+                labels_group.create_dataset("target_contacting_zone", data=target_zone_contact)
+
+            # Cleanup.
+            commands = []
+            for o_id in Dataset.OBJECT_IDS:
+                commands.append({"$type": self._get_destroy_object_command_name(o_id),
+                                "id": int(o_id)})
+            self.communicate(commands)
+
+            # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+            # if self.save_labels:
+            meta = OrderedDict()
+            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            self.trial_metadata.append(meta)
+
+            # Save the trial-level metadata
+            json_str = json.dumps(self.trial_metadata, indent=4)
+            self.meta_file.write_text(json_str, encoding='utf-8')
+            print("TRIAL %d LABELS" % self._trial_num)
+            print(json.dumps(self.trial_metadata[-1], indent=4))
+
+            # Close the file.
+            f.close()
+            shutil.move(temp_path, filepath)
+            return [2, 2]
 
     def _random_placement(self,
                           position: Dict[str, float],
