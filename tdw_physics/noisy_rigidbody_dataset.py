@@ -534,7 +534,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
             # set physics speed to normal
             cmds.extend([{"$type": "set_time_step",
-                                    "time_step": 0.03}])
+                                    "time_step": 0.01}])
             self._registered_objects = []
             # print("finished applying settle function!")
 
