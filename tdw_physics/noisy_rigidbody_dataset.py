@@ -169,6 +169,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             done = False
             while (not done) and (frame < 250):
                 frame += 1
+                print(frame)
                 cmds = self.get_per_frame_commands(resp, frame)
                 resp = self.communicate(cmds)
             has_target = (not self.remove_target) or self.replace_target
@@ -188,17 +189,17 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                 "id": int(o_id)})
             self.communicate(commands)
 
-            # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-            # if self.save_labels:
-            meta = OrderedDict()
-            meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-            self.trial_metadata.append(meta)
+            # # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+            # # if self.save_labels:
+            # meta = OrderedDict()
+            # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            # self.trial_metadata.append(meta)
 
-            # Save the trial-level metadata
-            json_str = json.dumps(self.trial_metadata, indent=4)
-            self.meta_file.write_text(json_str, encoding='utf-8')
-            print("TRIAL %d LABELS" % self._trial_num)
-            print(json.dumps(self.trial_metadata[-1], indent=4))
+            # # Save the trial-level metadata
+            # json_str = json.dumps(self.trial_metadata, indent=4)
+            # self.meta_file.write_text(json_str, encoding='utf-8')
+            # print("TRIAL %d LABELS" % self._trial_num)
+            # print(json.dumps(self.trial_metadata[-1], indent=4))
 
             # Close the file.
             f.close()
