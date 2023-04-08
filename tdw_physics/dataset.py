@@ -55,6 +55,7 @@ def concat_img_horz(x_gt):
 
     for i in range(1, x_gt.shape[0]):
         img = x_gt[i]
+
         full_tensor = np.concatenate([pad_right(full_tensor), img], 1)
 
     return full_tensor
