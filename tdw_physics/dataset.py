@@ -19,7 +19,7 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
-
+from physvec.utils.data_utils import accept_stimuli
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -85,12 +85,16 @@ class Dataset(Controller, ABC):
                  ffmpeg_executable='ffmpeg',
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
                  view_id_number=0,
+                 max_frames=250,
                  **kwargs):
 
         # launch_build = False
 
+        # breakpoint()
+
         # save the command-line args
         self.save_args = save_args
+        self.max_frames = max_frames
         self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
@@ -445,9 +449,10 @@ class Dataset(Controller, ABC):
         # TODO: set as flag
 
 
+        # breakpoint()
+        ts = []
 
-
-        while (not done) and (frame < 250):
+        while (not done) and (frame < self.max_frames):
             frame += 1
             # print('frame %d' % frame)
             # cmds, dict_masses = self.get_per_frame_commands(resp, frame)
@@ -477,19 +482,26 @@ class Dataset(Controller, ABC):
             # print()
 
             # if self.num_views > 1:
+
+            #time the below line using time.time()
+
+            t = time.time()
             resp = self.communicate(cmds)
+            tt = time.time() - t
+            ts.append(tt)
 
-            # breakpoint()
-
-            # for view_num in range(self.num_views):
-                # if view_num == 0 or frame == view_num:
-            # camera_position = multi_camera_positions[0]
-
-            # _resp = resp
-            # print('\tview %d' % view_num)
-            frame_grp, objs_grp, tr_dict, done = self._write_frame(
-                frames_grp=frames_grp,
-                resp=resp, frame_num=frame, view_num=self.view_id_number)
+            #
+            # # breakpoint()
+            #
+            # # for view_num in range(self.num_views):
+            #     # if view_num == 0 or frame == view_num:
+            # # camera_position = multi_camera_positions[0]
+            #
+            # # _resp = resp
+            # # print('\tview %d' % view_num)
+            # frame_grp, objs_grp, tr_dict, done = self._write_frame(
+            #     frames_grp=frames_grp,
+            #     resp=resp, frame_num=frame, view_num=self.view_id_number)
 
             # done = False
 
@@ -506,10 +518,11 @@ class Dataset(Controller, ABC):
             # breakpoint()
 
             # Write whether this frame completed the trial and any other trial-level data
-            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+            # labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
             #
             # if frame > 5:
             #     break
+        print("avg time to communicate", np.sum(ts))
 
         #save_imgs for viz
         if self.save_movies:
@@ -572,47 +585,47 @@ class Dataset(Controller, ABC):
                              "id": int(o_id)})
         self.communicate(commands)
 
-        # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-        # if self.save_labels:
-        meta = OrderedDict()
-        meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-        self.trial_metadata.append(meta)
-
-        # Save the trial-level metadata
-        json_str = json.dumps(self.trial_metadata, indent=4)
-        self.meta_file.write_text(json_str, encoding='utf-8')
-        print("TRIAL %d LABELS" % self._trial_num)
-        print(json.dumps(self.trial_metadata[-1], indent=4))
-
-        # # Save out the target/zone segmentation mask
-        # if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
-        try:
-            _id = f['frames']['0000']['images']['_id']
-        except:
-            # print("inside cam0")
-            _id = f['frames']['0000']['images']['_id_cam0']
-        # get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        # get colors
-        zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        # get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        # colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        # as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        # save image
-        map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
-
+        # # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        # # if self.save_labels:
+        # meta = OrderedDict()
+        # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+        # self.trial_metadata.append(meta)
+        #
+        # # Save the trial-level metadata
+        # json_str = json.dumps(self.trial_metadata, indent=4)
+        # self.meta_file.write_text(json_str, encoding='utf-8')
+        # print("TRIAL %d LABELS" % self._trial_num)
+        # print(json.dumps(self.trial_metadata[-1], indent=4))
+        #
+        # # # Save out the target/zone segmentation mask
+        # # if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
+        # try:
+        #     _id = f['frames']['0000']['images']['_id']
+        # except:
+        #     # print("inside cam0")
+        #     _id = f['frames']['0000']['images']['_id_cam0']
+        # # get PIL image
+        # _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        # # get colors
+        # zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
+        # zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        # target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
+        # target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        # # get individual maps
+        # zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        # target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        # # colorize
+        # zone_map = zone_map * ZONE_COLOR
+        # target_map = target_map * TARGET_COLOR
+        # joint_map = zone_map + target_map
+        # # add alpha
+        # alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        # joint_map = np.dstack((joint_map, alpha))
+        # # as image
+        # map_img = Image.fromarray(np.uint8(joint_map))
+        # # save image
+        # map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
+        #
         # Close the file.
         f.close()
         # # Move the file.
@@ -620,11 +633,11 @@ class Dataset(Controller, ABC):
         #     temp_path.replace(filepath)
         # except OSError:
         shutil.move(temp_path, filepath)
-
-        if self.save_movies:
-            return im_arr.size
-        else:
-            return [2, 2]
+        #
+        # if self.save_movies:
+        #     return im_arr.size
+        # else:
+        #     return [2, 2]
 
     def trial_loop(self,
                    num: int,
@@ -664,58 +677,58 @@ class Dataset(Controller, ABC):
             ## update the controller state
             # self.update_controller_state(**update_kwargs[i])
 
-            if True: #not filepath.exists():
-                if do_log:
-                    start = time.time()
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
-                # Save out images
-                self.png_dir = None
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists() and self.save_movies:
-                        self.png_dir.mkdir(parents=True)
+            # if True: #not filepath.exists():
+            if do_log:
+                start = time.time()
+                logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+            # Save out images
+            self.png_dir = None
+            if any([pa in PASSES for pa in self.save_passes]):
+                self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                if not self.png_dir.exists() and self.save_movies:
+                    self.png_dir.mkdir(parents=True)
 
-                # breakpoint()
+            # breakpoint()
 
-                # Do the trial.
-                shp = self.trial(filepath,
-                           temp_path,
-                           i,
-                           unload_assets_every)
+            # Do the trial.
+            shp = self.trial(filepath,
+                       temp_path,
+                       i,
+                       unload_assets_every)
 
-                #save only for cam0 "for now"
-                cam_suffix = '_cam0'
+            #save only for cam0 "for now"
+            cam_suffix = '_cam0'
 
-                # Save an MP4 of the stimulus
-                if self.save_movies:
+            # Save an MP4 of the stimulus
+            if self.save_movies:
 
-                    for pass_mask in ['_img']:
-                        pass_mask = pass_mask #+ cam_suffix
-                        mp4_filename = str(filepath).split('.hdf5')[0].split('/')
-                        name = mp4_filename[-1]
-                        mp4_filename = '/'.join(mp4_filename[:-1]) + '_' + name + pass_mask
+                # for pass_mask in ['_img']:
+                pass_mask = '_img' #+ cam_suffix
+                mp4_filename = str(filepath).split('.hdf5')[0].split('/')
+                name = mp4_filename[-1]
+                mp4_filename = '/'.join(mp4_filename[:-1]) + '_' + name + pass_mask
 
-                        cmd, stdout, stderr = pngs_to_mp4(
-                            filename=mp4_filename,
-                            framerate=100,
-                            executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
-                            image_stem=pass_mask[1:] + '_',
-                            png_dir=self.png_dir,
-                            size=[shp[0], shp[1]],#[self._height, self._width],#
-                            overwrite=True,
-                            remove_pngs=False,
-                            use_parent_dir=False)
+                cmd, stdout, stderr = pngs_to_mp4(
+                    filename=mp4_filename,
+                    framerate=100,
+                    executable= self.ffmpeg_executable, #'/ccn2/u/rmvenkat/ffmpeg',
+                    image_stem=pass_mask[1:] + '_',
+                    png_dir=self.png_dir,
+                    size=[shp[0], shp[1]],#[self._height, self._width],#
+                    overwrite=True,
+                    remove_pngs=False,
+                    use_parent_dir=False)
 
-                        # print("saved:", mp4_filename)
-                        # breakpoint()
+                    # print("saved:", mp4_filename)
+                    # breakpoint()
 
-                    if save_frame is not None:
-                        frames = os.listdir(str(self.png_dir))
-                        sv = sorted(frames)[save_frame]
-                        png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
-                        _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
+                if save_frame is not None:
+                    frames = os.listdir(str(self.png_dir))
+                    sv = sorted(frames)[save_frame]
+                    png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
+                    _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+            rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:
@@ -723,10 +736,31 @@ class Dataset(Controller, ABC):
                 #         vertices, faces = self.object_meshes[o_id]
                 #         save_obj(vertices, faces, obj_filename)
 
-                if do_log:
-                    end = time.time()
-                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
-                    i, self.trial_seed, int(end - start)))
+            if do_log:
+                end = time.time()
+                logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
+                i, self.trial_seed, int(end - start)))
+
+            # if not accept_stimuli(str(filepath)):
+            #     print("stimiuli rejected due to interpenetration/target area too less")
+            #     #create a folder for rejected stimuli
+            #     rejected_stimuli_dir = output_dir.parent.joinpath('rejected_stimuli')
+            #     if not rejected_stimuli_dir.exists():
+            #         rejected_stimuli_dir.mkdir(parents=True)
+            #     #move the rejected stimuli to the rejected_stimuli folder
+            #     # breakpoint()
+            #     xx_split = str(filepath).split('/')
+            #     fp = xx_split[-2] + '_' + xx_split[-1]
+            #     rejected_stimuli_path = rejected_stimuli_dir.joinpath(fp)
+            #     if not rejected_stimuli_path.exists():
+            #         shutil.move(filepath, rejected_stimuli_path)
+            #         #move the corresponding png and mp4 files
+            #         if self.save_movies:
+            #             shutil.move(mp4_filename + '.mp4', rejected_stimuli_dir)
+            #         # breakpoint()
+            #         shutil.move(str(filepath).split('.')[0] + '_map.png', str(rejected_stimuli_path).split('.')[0] + '_map.png')
+            #         # breakpoint()
+
             pbar.update(1)
         pbar.close()
 
