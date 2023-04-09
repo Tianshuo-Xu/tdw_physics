@@ -1,10 +1,15 @@
-import os, sys
+import sys, os, subprocess, logging, time
+import matplotlib.pyplot as plt
+from PIL import Image
+from tqdm import tqdm
+from tdw_physics.postprocessing.stimuli import pngs_to_mp4
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from abc import ABC
 import numpy as np
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
-from .dataset import Dataset
+from .dataset import Dataset, concat_img_horz, PASSES
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
@@ -138,13 +143,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     print("example noise", self.collision_noise_generator())
         self._registered_objects = []
 
+
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
-        """
-        rewrite the trial function
-        """
         if self._noise_params == NO_NOISE:
             return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
         else:
+            # return None
+            """
+            Run a trial. Write static and per-frame data to disk until the trial is done.
+
+            :param filepath: The path to this trial's hdf5 file.
+            :param temp_path: The path to the temporary file.
+            :param trial_num: The number of the current trial.
+            """
             # Clear the object IDs and other static data
             self.clear_static_data()
             self._trial_num = trial_num
@@ -159,24 +170,23 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
             # Add commands to start the trial.
             commands.extend(self.get_trial_initialization_commands())
-            # Add commands to request output data.
-
             commands.extend(self._get_send_data_commands())
             resp = self.communicate(commands)
 
             frame = 0
             # Add the first frame.
             done = False
-            while (not done) and (frame < 250):
+            t = time.time()
+            while (not done) and (frame < self.max_frames):
                 frame += 1
-                print(frame)
+                # print('frame %d' % frame)
                 cmds = self.get_per_frame_commands(resp, frame)
                 resp = self.communicate(cmds)
             has_target = (not self.remove_target) or self.replace_target
             has_zone = not self.remove_zone
             # Whether target has hit the zone
             if has_target and has_zone:
-                c_points, c_normals = self.get_object_target_collision(
+                c_points, _ = self.get_object_target_collision(
                     self.target_id, self.zone_id, resp)
                 target_zone_contact = bool(len(c_points))
                 labels_group = f.create_group("labels")
@@ -189,22 +199,68 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                 "id": int(o_id)})
             self.communicate(commands)
 
-            # # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-            # # if self.save_labels:
-            # meta = OrderedDict()
-            # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-            # self.trial_metadata.append(meta)
-
-            # # Save the trial-level metadata
-            # json_str = json.dumps(self.trial_metadata, indent=4)
-            # self.meta_file.write_text(json_str, encoding='utf-8')
-            # print("TRIAL %d LABELS" % self._trial_num)
-            # print(json.dumps(self.trial_metadata[-1], indent=4))
-
             # Close the file.
             f.close()
+            # # Move the file.
             shutil.move(temp_path, filepath)
-            return [2, 2]
+            print("avg time to communicate", time.time() - t)
+
+    def trial_loop(self,
+                   num: int,
+                   output_dir: str,
+                   temp_path: str,
+                   save_frame: int = None,
+                   unload_assets_every: int = 10,
+                   update_kwargs: List[dict] = {},
+                   do_log: bool = False) -> None:
+        if self._noise_params == NO_NOISE:
+            return Dataset.trial_loop(self, num, output_dir, temp_path, save_frame, unload_assets_every, update_kwargs, do_log)
+        else:
+            if not isinstance(update_kwargs, list):
+                update_kwargs = [update_kwargs] * num
+
+            pbar = tqdm(total=num)
+            # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+            exists_up_to = -1
+            for f in output_dir.glob("*.hdf5"):
+                if int(f.stem) > exists_up_to:
+                    exists_up_to = int(f.stem)
+
+            exists_up_to += 1
+
+            if exists_up_to > 0:
+                print('Trials up to %d already exist, skipping those' % exists_up_to)
+
+            pbar.update(exists_up_to)
+            t = time.time()
+            for i in range(exists_up_to, num):
+                filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+                self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+                # if True: #not filepath.exists():
+                if do_log:
+                    start = time.time()
+                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+                # Save out images
+                self.png_dir = None
+                if any([pa in PASSES for pa in self.save_passes]):
+                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                    if not self.png_dir.exists() and self.save_movies:
+                        self.png_dir.mkdir(parents=True)
+
+                # Do the trial.
+                self.trial(filepath,
+                        temp_path,
+                        i,
+                        unload_assets_every)
+
+                _ = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                if do_log:
+                    end = time.time()
+                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
+                    i, self.trial_seed, int(end - start)))
+                pbar.update(1)
+            print("avg time to communicate", (time.time() - t)/num)
+            pbar.close()
 
     def _random_placement(self,
                           position: Dict[str, float],
@@ -215,16 +271,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                           bounciness: float,
                           o_id: int,
                           sim_seed: int):
-        print(self.sim_seed)
-        print("----------------------------------------------------------------------------------------------------------------------------")
-        print("original o_id: ", o_id)
-        # print("noisy_params: ", self._noise_params)
-        print("original positions: ", position)
-        print("original rotations: ", rotation)
-        print("original masses: ", mass)
-        print("original dynamic_frictions: ", dynamic_friction)
-        print("original static_frictions: ", static_friction)
-        print("original bouncinesses: ", bounciness)
+        # print(self.sim_seed)
+        # print("----------------------------------------------------------------------------------------------------------------------------")
+        # print("original o_id: ", o_id)
+        # # print("noisy_params: ", self._noise_params)
+        # print("original positions: ", position)
+        # print("original rotations: ", rotation)
+        # print("original masses: ", mass)
+        # print("original dynamic_frictions: ", dynamic_friction)
+        # print("original static_frictions: ", static_friction)
+        # print("original bouncinesses: ", bounciness)
         n = self._noise_params
         rotrad = dict([[k, deg2rad(rotation[k])]
                        for k in rotation.keys()])
@@ -256,13 +312,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         if (n.bounciness is not None) and (bounciness is not None):
             bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=sim_seed))
             self.sim_seed += 1
-        print("perturbed positions: ", position)
-        print("perturbed rotations: ", rotation)
-        print("perturbed masses: ", mass)
-        print("perturbed dynamic_frictions: ", dynamic_friction)
-        print("perturbed static_frictions: ", static_friction)
-        print("perturbed bouncinesses: ", bounciness)
-        print("----------------------------------------------------------------------------------------------------------------------------")
+        # print("perturbed positions: ", position)
+        # print("perturbed rotations: ", rotation)
+        # print("perturbed masses: ", mass)
+        # print("perturbed dynamic_frictions: ", dynamic_friction)
+        # print("perturbed static_frictions: ", static_friction)
+        # print("perturbed bouncinesses: ", bounciness)
+        # print("----------------------------------------------------------------------------------------------------------------------------")
         self._registered_objects.append(o_id)
         return position, rotation, mass, dynamic_friction, static_friction, bounciness
 

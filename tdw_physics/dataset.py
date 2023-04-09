@@ -19,7 +19,7 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
-
+# from physvec.utils.data_utils import accept_stimuli
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -85,12 +85,16 @@ class Dataset(Controller, ABC):
                  ffmpeg_executable='ffmpeg',
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
                  view_id_number=0,
+                 max_frames=250,
                  **kwargs):
 
         # launch_build = False
 
+        # breakpoint()
+
         # save the command-line args
         self.save_args = save_args
+        self.max_frames = max_frames
         self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
@@ -372,7 +376,6 @@ class Dataset(Controller, ABC):
         # return None
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
-
         :param filepath: The path to this trial's hdf5 file.
         :param temp_path: The path to the temporary file.
         :param trial_num: The number of the current trial.
@@ -446,7 +449,7 @@ class Dataset(Controller, ABC):
 
 
 
-
+        t = time.time()
         while (not done) and (frame < 250):
             frame += 1
             # print('frame %d' % frame)
@@ -510,6 +513,7 @@ class Dataset(Controller, ABC):
             #
             # if frame > 5:
             #     break
+        print("avg time to communicate", time.time() - t)
 
         #save_imgs for viz
         if self.save_movies:
