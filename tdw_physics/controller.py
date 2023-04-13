@@ -97,7 +97,7 @@ class Controller:
         port = int(str(port).split(':')[-1][:-1])
 
 
-        print("port changed:", port)
+        # print("port changed:", port)
 
         # breakpoint()
         # port = self.socket.getsockname()[1]
@@ -640,7 +640,7 @@ class Controller:
             success = True
         # Launch the build.
         if success:
-            print("launching build")
+            # print("launching build")
             # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
             if custom_build is not None:
                 Popen([custom_build, "-port " + str(port)])
