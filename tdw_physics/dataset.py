@@ -87,6 +87,7 @@ class Dataset(Controller, ABC):
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
                  view_id_number=0,
                  max_frames=250,
+                 check_interpenet=True,
                  **kwargs):
 
         # launch_build = False
@@ -94,6 +95,7 @@ class Dataset(Controller, ABC):
         # save the command-line args
         self.save_args = save_args
         self.max_frames = max_frames
+        self.check_interpenet = check_interpenet
         self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
@@ -731,7 +733,7 @@ class Dataset(Controller, ABC):
                     logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
                     i, self.trial_seed, int(end - start)))
 
-            if not accept_stimuli(str(filepath)):
+            if not accept_stimuli(str(filepath), check_interp=self.check_interpenet):
                 print("stimiuli rejected due to interpenetration/target area too less")
                 #create a folder for rejected stimuli
                 rejected_stimuli_dir = output_dir.parent.joinpath('rejected_stimuli')
