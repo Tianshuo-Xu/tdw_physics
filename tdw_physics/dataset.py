@@ -19,7 +19,7 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
-
+from physvec.utils.data_utils import accept_stimuli
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -86,12 +86,14 @@ class Dataset(Controller, ABC):
                  ffmpeg_executable='ffmpeg',
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
                  view_id_number=0,
+                 max_frames=250,
                  **kwargs):
 
         # launch_build = False
 
         # save the command-line args
         self.save_args = save_args
+        self.max_frames = max_frames
         self.ffmpeg_executable = ffmpeg_executable if ffmpeg_executable is not None else 'ffmpeg'
         self._trial_num = None
         self.command_log = None
@@ -448,7 +450,7 @@ class Dataset(Controller, ABC):
 
 
 
-        while (not done) and (frame < 250):
+        while (not done) and (frame < self.max_frames):
             frame += 1
             # print('frame %d' % frame)
             # cmds, dict_masses = self.get_per_frame_commands(resp, frame)
@@ -507,7 +509,7 @@ class Dataset(Controller, ABC):
             # breakpoint()
 
             # Write whether this frame completed the trial and any other trial-level data
-            labels_grp, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+            labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
             #
             # if frame > 5:
             #     break
@@ -728,6 +730,26 @@ class Dataset(Controller, ABC):
                     end = time.time()
                     logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
                     i, self.trial_seed, int(end - start)))
+
+            if not accept_stimuli(str(filepath)):
+                print("stimiuli rejected due to interpenetration/target area too less")
+                #create a folder for rejected stimuli
+                rejected_stimuli_dir = output_dir.parent.joinpath('rejected_stimuli')
+                if not rejected_stimuli_dir.exists():
+                    rejected_stimuli_dir.mkdir(parents=True)
+                #move the rejected stimuli to the rejected_stimuli folder
+                # breakpoint()
+                xx_split = str(filepath).split('/')
+                fp = xx_split[-2] + '_' + xx_split[-1]
+                rejected_stimuli_path = rejected_stimuli_dir.joinpath(fp)
+                if not rejected_stimuli_path.exists():
+                    shutil.move(filepath, rejected_stimuli_path)
+                    #move the corresponding png and mp4 files
+                    if self.save_movies:
+                        shutil.move(mp4_filename + '.mp4', rejected_stimuli_dir)
+                    # breakpoint()
+                    shutil.move(str(filepath).split('.')[0] + '_map.png', str(rejected_stimuli_path).split('.')[0] + '_map.png')
+                    # breakpoint()
             pbar.update(1)
         pbar.close()
 
