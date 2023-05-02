@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.matlib
 from typing import List, Tuple, Dict, Optional
 from scipy.linalg import null_space
 from scipy.stats import norm, uniform, beta
@@ -146,7 +147,7 @@ def rand_t_marginal(seed, kappa,p,N=1):
                 samples[i] = W
                 break
             seed += 1
-            
+
     return samples
 
 
