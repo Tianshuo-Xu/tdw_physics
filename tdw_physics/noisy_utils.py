@@ -134,7 +134,7 @@ def rand_t_marginal(seed, kappa,p,N=1):
 
             # Sample Uniform distribution
             # U = np.random.uniform(low=0.0,high=1.0)
-            U = uniform(0.0, 1.0, random_state=seed)
+            U = uniform.rvs(0.0, 1.0, random_state=seed)
 
             # W is essentially t
             W = (1.0 - (1.0 + b) * Z) / (1.0 - (1.0 - b) * Z)
