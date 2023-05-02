@@ -145,7 +145,8 @@ def rand_t_marginal(seed, kappa,p,N=1):
                 # Accept sample
                 samples[i] = W
                 break
-
+            seed += 1
+            
     return samples
 
 
