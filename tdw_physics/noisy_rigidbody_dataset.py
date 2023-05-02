@@ -403,7 +403,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._ongoing_collisions = []
         self._lasttime_collisions = []
         """
-        print(frame)
+        # print(frame)
         cmds = []
         if self.collision_noise_generator is not None:
             coll_data = self._get_collision_data(resp)
