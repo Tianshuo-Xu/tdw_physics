@@ -145,6 +145,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
+        # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
         if self._noise_params == NO_NOISE:
             return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
         else:
@@ -173,24 +174,21 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             commands.extend(self._get_send_data_commands())
             resp = self.communicate(commands)
 
+
             frame = 0
             # Add the first frame.
             done = False
+            frames_grp = f.create_group("frames")
+            frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
+            self._write_frame_labels(frame_grp, resp, -1, False)
             t = time.time()
             while (not done) and (frame < self.max_frames):
                 frame += 1
                 # print('frame %d' % frame)
                 cmds = self.get_per_frame_commands(resp, frame)
                 resp = self.communicate(cmds)
-            has_target = (not self.remove_target) or self.replace_target
-            has_zone = not self.remove_zone
-            # Whether target has hit the zone
-            if has_target and has_zone:
-                c_points, _ = self.get_object_target_collision(
-                    self.target_id, self.zone_id, resp)
-                target_zone_contact = bool(len(c_points))
-                labels_group = f.create_group("labels")
-                labels_group.create_dataset("target_contacting_zone", data=target_zone_contact)
+                frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
+                _, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
 
             # Cleanup.
             commands = []
@@ -271,10 +269,10 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                           bounciness: float,
                           o_id: int,
                           sim_seed: int):
-        # print(self.sim_seed)
         # print("----------------------------------------------------------------------------------------------------------------------------")
+        # print("sim_seed: ", self.sim_seed)
         # print("original o_id: ", o_id)
-        # # print("noisy_params: ", self._noise_params)
+        # print("noisy_params: ", self._noise_params)
         # print("original positions: ", position)
         # print("original rotations: ", rotation)
         # print("original masses: ", mass)
