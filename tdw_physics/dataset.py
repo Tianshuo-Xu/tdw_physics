@@ -344,6 +344,7 @@ class Dataset(Controller, ABC):
 
         # Initialize the scene.
         print("initializing!")
+        print("initialization_commands: ", initialization_commands)
         self.communicate(initialization_commands)
 
         self.trial_loop(num, output_dir, temp_path)
