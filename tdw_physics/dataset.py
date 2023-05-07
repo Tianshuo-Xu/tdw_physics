@@ -343,6 +343,7 @@ class Dataset(Controller, ABC):
         initialization_commands = self.get_initialization_commands(width=width, height=height)
 
         # Initialize the scene.
+        print("initializing!")
         self.communicate(initialization_commands)
 
         self.trial_loop(num, output_dir, temp_path)
