@@ -102,7 +102,7 @@ class Dataset(Controller, ABC):
 
         # ## get random port unless one is specified
         # if port is None:
-        rng = np.random.default_rng(seed + (view_id_number*1251)%33 )
+        rng = np.random.default_rng(seed + sim_seed + (view_id_number*1251)%33 )
         port = rng.integers(1000,9999)
         print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
