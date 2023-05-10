@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.matlib
 from typing import List, Tuple, Dict, Optional
 from scipy.linalg import null_space
 from scipy.stats import norm, uniform, beta
@@ -134,7 +135,7 @@ def rand_t_marginal(seed, kappa,p,N=1):
 
             # Sample Uniform distribution
             # U = np.random.uniform(low=0.0,high=1.0)
-            U = uniform(0.0, 1.0, random_state=seed)
+            U = uniform.rvs(0.0, 1.0, random_state=seed)
 
             # W is essentially t
             W = (1.0 - (1.0 + b) * Z) / (1.0 - (1.0 - b) * Z)
@@ -145,6 +146,7 @@ def rand_t_marginal(seed, kappa,p,N=1):
                 # Accept sample
                 samples[i] = W
                 break
+            seed += 1
 
     return samples
 

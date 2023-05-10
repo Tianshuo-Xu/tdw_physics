@@ -93,6 +93,8 @@ class Dataset(Controller, ABC):
 
         # launch_build = False
 
+        # breakpoint()
+
         # save the command-line args
         self.save_args = save_args
         self.max_frames = max_frames
@@ -105,7 +107,7 @@ class Dataset(Controller, ABC):
 
         # ## get random port unless one is specified
         # if port is None:
-        rng = np.random.default_rng(seed + (view_id_number*1251)%33 )
+        rng = np.random.default_rng(seed + sim_seed + (view_id_number*1251)%33 )
         port = rng.integers(1000,9999)
         print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
@@ -346,6 +348,7 @@ class Dataset(Controller, ABC):
         initialization_commands = self.get_initialization_commands(width=width, height=height)
 
         # Initialize the scene.
+        # print("initialization_commands: ", initialization_commands)
         self.communicate(initialization_commands)
 
         self.trial_loop(num, output_dir, temp_path)
@@ -379,7 +382,6 @@ class Dataset(Controller, ABC):
         # return None
         """
         Run a trial. Write static and per-frame data to disk until the trial is done.
-
         :param filepath: The path to this trial's hdf5 file.
         :param temp_path: The path to the temporary file.
         :param trial_num: The number of the current trial.
@@ -452,8 +454,6 @@ class Dataset(Controller, ABC):
         # TODO: set as flag
 
 
-
-
         while (not done) and (frame < self.max_frames):
             frame += 1
             # print('frame %d' % frame)
@@ -517,6 +517,7 @@ class Dataset(Controller, ABC):
             #
             # if frame > 5:
             #     break
+        print("avg time to communicate", time.time() - t)
 
         #save_imgs for viz
         if self.save_movies:

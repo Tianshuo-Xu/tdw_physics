@@ -97,7 +97,7 @@ class Controller:
         port = int(str(port).split(':')[-1][:-1])
 
 
-        print("port changed:", port)
+        # print("port changed:", port)
 
         # breakpoint()
         # port = self.socket.getsockname()[1]
