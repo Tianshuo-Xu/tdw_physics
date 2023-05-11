@@ -189,7 +189,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 t1 = time.time()
                 cmds = self.get_per_frame_commands(resp, frame)
                 t2 = time.time()
-                print(t2 - t1, ," getting cmds", " commands at this frame", cmds)
+                print(t2 - t1, " getting cmds", " commands at this frame", cmds)
                 resp = self.communicate(cmds)
                 t3 = time.time()
                 print(t3-t2, " communicating")
