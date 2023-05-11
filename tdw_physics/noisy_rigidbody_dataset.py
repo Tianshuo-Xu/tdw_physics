@@ -184,7 +184,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             t = time.time()
             while (not done) and (frame < self.max_frames):
                 frame += 1
-                # print('frame %d' % frame)
+                print('frame %d' % frame)
                 cmds = self.get_per_frame_commands(resp, frame)
                 resp = self.communicate(cmds)
                 frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
@@ -609,10 +609,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                           "collision_types": ["obj", "env"]},
                          {"$type": "send_rigidbodies",
                           "frequency": "always"}])
-
-        if self.save_meshes:
-            commands.append({"$type": "send_meshes", "frequency": "once"})
-
         return commands
 
     def _get_collision_data(self, resp: List[bytes]):
