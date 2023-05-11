@@ -453,7 +453,7 @@ class Dataset(Controller, ABC):
 
         # TODO: set as flag
 
-
+        t = time.time()
         while (not done) and (frame < self.max_frames):
             frame += 1
             # print('frame %d' % frame)
