@@ -172,6 +172,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             # Add commands to start the trial.
             commands.extend(self.get_trial_initialization_commands())
             commands.extend(self._get_send_data_commands())
+            print("commands before starting", commands)
             resp = self.communicate(commands)
 
 
@@ -185,10 +186,18 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             while (not done) and (frame < self.max_frames):
                 frame += 1
                 print('frame %d' % frame)
+                t1 = time.time()
                 cmds = self.get_per_frame_commands(resp, frame)
+                t2 = time.time()
+                print(t2 - t1, ," getting cmds", " commands at this frame", cmds)
                 resp = self.communicate(cmds)
+                t3 = time.time()
+                print(t3-t2, " communicating")
                 frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
                 _, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+                t4 = time.time()
+                print(t4-t3, " writing frames")
+                print(t4-t1, " in total for this frame")
 
             # Cleanup.
             commands = []
