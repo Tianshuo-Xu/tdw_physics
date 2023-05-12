@@ -609,7 +609,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     def _get_send_data_commands(self) -> List[dict]:
         # Can't send this more than once...
-        commands = [c for c in commands if c['$type'] != 'send_collisions']
+        commands = []
         commands.extend([{"$type": "send_collisions",
                           "enter": True,
                           "exit": True,
