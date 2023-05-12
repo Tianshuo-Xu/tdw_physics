@@ -605,21 +605,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
         return cmds
 
-    """ Ensures collision data is sent pre (change for post) """
-
-    def _get_send_data_commands(self) -> List[dict]:
-        commands = []
-        commands.extend([{"$type": "send_collisions",
-                          "enter": True,
-                          "exit": True,
-                          "stay": True,
-                          "collision_types": ["obj", "env"]},
-                         {"$type": "send_static_rigidbodies",
-                          "frequency": "always"},
-                         {"$type": "send_rigidbodies",
-                          "frequency": "always"}])
-        return commands
-
     def _get_collision_data(self, resp: List[bytes]):
         coll_data = []
         r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
