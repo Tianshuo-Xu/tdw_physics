@@ -223,24 +223,17 @@ class Dataset(Controller, ABC):
                                     width: int,
                                     height: int) -> List:
         # Global commands for all physics datasets.
-        # commands = [{"$type": "set_screen_size",
-        #              "width": width,
-        #              "height": height},
-        #             {"$type": "set_render_quality",
-        #              "render_quality": 5},
-        #             {"$type": "set_physics_solver_iterations",
-        #              "iterations": 32},
-        #             {"$type": "set_vignette",
-        #              "enabled": False},
-        #             {"$type": "set_shadow_strength",
-        #              "strength": 1.0},
-        #             {"$type": "set_sleep_threshold",
-        #              "sleep_threshold": 0.01}]
-
-        commands = [{"$type": "set_physics_solver_iterations",
+        commands = [{"$type": "set_screen_size",
+                     "width": width,
+                     "height": height},
+                    {"$type": "set_render_quality",
+                     "render_quality": 5},
+                    {"$type": "set_physics_solver_iterations",
                      "iterations": 32},
                     {"$type": "set_vignette",
                      "enabled": False},
+                    {"$type": "set_shadow_strength",
+                     "strength": 1.0},
                     {"$type": "set_sleep_threshold",
                      "sleep_threshold": 0.01}]
 
@@ -250,20 +243,15 @@ class Dataset(Controller, ABC):
         # Add the avatar.
 
 
-        # commands.extend([{"$type": "create_avatar",
-        #                   "type": "A_Img_Caps_Kinematic",
-        #                   "id": "a"},
-        #                  # {"$type": "set_target_framerate",
-        #                  #  "framerate": 30},
-        #                  {"$type": "set_time_step",
-        #                   "time_step": 0.01},
-        #                  {"$type": "set_field_of_view",
-        #                   "field_of_view": self.get_field_of_view()},
-        #                  {"$type": "set_anti_aliasing",
-        #                   "mode": "subpixel"}
-        #                  ])
-        commands.extend([{"$type": "set_time_step",
+        commands.extend([{"$type": "create_avatar",
+                          "type": "A_Img_Caps_Kinematic",
+                          "id": "a"},
+                         # {"$type": "set_target_framerate",
+                         #  "framerate": 30},
+                         {"$type": "set_time_step",
                           "time_step": 0.01},
+                         {"$type": "set_field_of_view",
+                          "field_of_view": self.get_field_of_view()},
                          {"$type": "set_anti_aliasing",
                           "mode": "subpixel"}
                          ])
@@ -360,7 +348,7 @@ class Dataset(Controller, ABC):
         initialization_commands = self.get_initialization_commands(width=width, height=height)
 
         # Initialize the scene.
-        print("scene initialization commands: ", initialization_commands)
+        # print("initialization_commands: ", initialization_commands)
         self.communicate(initialization_commands)
 
         self.trial_loop(num, output_dir, temp_path)

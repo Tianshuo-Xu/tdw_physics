@@ -172,7 +172,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             # Add commands to start the trial.
             commands.extend(self.get_trial_initialization_commands())
             commands.extend(self._get_send_data_commands())
-            print("trial initialization commands", commands)
+            print("commands before starting", commands)
             resp = self.communicate(commands)
 
 
@@ -608,13 +608,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     """ Ensures collision data is sent pre (change for post) """
 
     def _get_send_data_commands(self) -> List[dict]:
+        commands = super()._get_send_data_commands()
         # Can't send this more than once...
         commands = [c for c in commands if c['$type'] != 'send_collisions']
         commands.extend([{"$type": "send_collisions",
                           "enter": True,
                           "exit": True,
                           "stay": True,
-                          "collision_types": ["obj", "env"]}])
+                          "collision_types": ["obj", "env"]},
+                         {"$type": "send_rigidbodies",
+                          "frequency": "always"}])
         return commands
 
     def _get_collision_data(self, resp: List[bytes]):
