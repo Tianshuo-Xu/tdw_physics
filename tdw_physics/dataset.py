@@ -19,7 +19,7 @@ from tdw.tdw_utils import TDWUtils
 from tdw.output_data import OutputData, SegmentationColors, Meshes, Images
 from tdw.librarian import ModelRecord, MaterialLibrarian
 from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
-from physvec.utils.data_utils import accept_stimuli
+from tdw_physics.data_utils import accept_stimuli
 
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 from tdw_physics.postprocessing.labels import (get_labels_from,
@@ -517,7 +517,7 @@ class Dataset(Controller, ABC):
             #
             # if frame > 5:
             #     break
-        print("avg time to communicate", time.time() - t)
+        # print("avg time to communicate", time.time() - t)
 
         #save_imgs for viz
         if self.save_movies:
