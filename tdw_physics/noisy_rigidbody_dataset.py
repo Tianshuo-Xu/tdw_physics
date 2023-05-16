@@ -10,7 +10,7 @@ import numpy as np
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
 from .dataset import Dataset, concat_img_horz, PASSES
-from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision
+from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
 from tdw.tdw_utils import TDWUtils
@@ -22,6 +22,7 @@ import h5py
 import shutil
 from tdw_physics.postprocessing.labels import get_labels_from
 from collections import OrderedDict
+import random
 
 XYZ = ['x', 'y', 'z']
 
@@ -131,9 +132,15 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
     def __init__(self,
                  noise: RigidNoiseParams = NO_NOISE,
+                 indexes: List[str] = [],
                  **kwargs):
         RigidbodiesDataset.__init__(self, **kwargs)
         self._noise_params = noise
+        # self.indexes = [int(index) for index in indexes]
+        try:
+            self.indexes = [int(index) for index in indexes]
+        except:
+            self.indexes = [int(index) for index in range(self.MAX_TRIALS)]
 
         # how to generate collision noise
         # self._ongoing_collisions = []
@@ -143,6 +150,40 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     print("example noise", self.collision_noise_generator())
         self._registered_objects = []
 
+
+    def get_tr(self, resp: List[bytes]) -> dict:
+        # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
+        num_objects = len(Dataset.OBJECT_IDS)
+        tr_dict = dict()
+
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "tran":
+                tr = Transforms(r)
+                for i in range(tr.get_num()):
+                    pos = tr.get_position(i)
+                    tr_dict.update({tr.get_id(i): {"pos": pos,
+                                                   "for": tr.get_forward(i),
+                                                   "rot": tr.get_rotation(i)}})
+        return tr_dict
+
+    def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int):
+        if self._noise_params == NO_NOISE:
+            return RigidbodiesDataset._write_frame(self, frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
+        else:
+            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+            tr = self.get_tr(resp=resp)
+            sleeping = True
+
+            for r in resp[:-1]:
+                r_id = OutputData.get_data_type_id(r)
+                if r_id == "rigi":
+                    ri = Rigidbodies(r)
+                    for i in range(ri.get_num()):
+                        # Check if any objects are sleeping that aren't in the abyss.
+                        if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
+                            sleeping = False
+            return frame, None, None, sleeping
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
@@ -172,14 +213,20 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             # Add commands to start the trial.
             commands.extend(self.get_trial_initialization_commands())
             commands.extend(self._get_send_data_commands())
-            resp = self.communicate(commands)
 
+            # azimuth_grp = f.create_group("azimuth")
+            # multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
+
+            # commands.extend(self.move_camera_commands(multi_camera_positions, []))
+            resp = self.communicate(commands)
+            # use this stupid command to replace generate_multi_camera_positions
+            random.uniform(6, 7.5)
 
             frame = 0
             # Add the first frame.
             done = False
             frames_grp = f.create_group("frames")
-            frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
+            frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
             self._write_frame_labels(frame_grp, resp, -1, False)
             t = time.time()
             while (not done) and (frame < self.max_frames):
@@ -192,8 +239,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 resp = self.communicate(cmds)
                 # t3 = time.time()
                 # print(t3-t2, " communicating")
-                frame_grp = frames_grp.create_group(TDWUtils.zero_padding(frame, 4))
-                _, _, _, done = self._write_frame_labels(frame_grp, resp, frame, done)
+                frame_grp, _, _, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
+                _, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
                 # t4 = time.time()
                 # print(t4-t3, " writing frames")
                 # print(t4-t1, " in total for this frame")
@@ -204,6 +251,18 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 commands.append({"$type": self._get_destroy_object_command_name(o_id),
                                 "id": int(o_id)})
             self.communicate(commands)
+            
+            #  # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+            # # if self.save_labels:
+            # meta = OrderedDict()
+            # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+            # self.trial_metadata.append(meta)
+
+            # # Save the trial-level metadata
+            # json_str = json.dumps(self.trial_metadata, indent=4)
+            # self.meta_file.write_text(json_str, encoding='utf-8')
+            # print("TRIAL %d LABELS" % self._trial_num)
+            # print(json.dumps(self.trial_metadata[-1], indent=4))
 
             # Close the file.
             f.close()
@@ -240,6 +299,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             pbar.update(exists_up_to)
             t = time.time()
             for i in range(exists_up_to, num):
+                if i not in self.indexes:
+                    continue
                 filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
                 self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
                 # if True: #not filepath.exists():
@@ -567,42 +628,42 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                             for idx, k in enumerate(XYZ)]), impulse_mag)
             self.collision_noise_generator = cng
 
-    def settle(self):
-        """
-        After adding a set of objects in a noisy way,
-        'settles' the world to avoid interpenetration
-        check out this: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/lessons/semantic_states/overlap.md
-        """
-        # print("applying settle function!")
-        cmds = []
-        if (self._noise_params.position is not None) or (self._noise_params.rotation is not None):
-            # disable gravity for all added objects
-            for o_id in self._registered_objects:
-                # print("disabling gravity for object: ", o_id)
-                cmds.extend([{"$type": "set_kinematic_state",
-                                "id": o_id,
-                                "use_gravity": False}])
+    # def settle(self):
+    #     """
+    #     After adding a set of objects in a noisy way,
+    #     'settles' the world to avoid interpenetration
+    #     check out this: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/lessons/semantic_states/overlap.md
+    #     """
+    #     # print("applying settle function!")
+    #     cmds = []
+    #     if (self._noise_params.position is not None) or (self._noise_params.rotation is not None):
+    #         # disable gravity for all added objects
+    #         for o_id in self._registered_objects:
+    #             # print("disabling gravity for object: ", o_id)
+    #             cmds.extend([{"$type": "set_kinematic_state",
+    #                             "id": o_id,
+    #                             "use_gravity": False}])
             
-            # slowly resolve possible collisions
-            cmds.extend([{"$type": "set_time_step",
-                                "time_step": 0.0001},
-                        {"$type": "step_physics",
-                                "frames": 500}])
+    #         # slowly resolve possible collisions
+    #         cmds.extend([{"$type": "set_time_step",
+    #                             "time_step": 0.0001},
+    #                     {"$type": "step_physics",
+    #                             "frames": 500}])
 
-            # enable gravity again
-            for o_id in self._registered_objects:
-                # print("enabling object: ", o_id)
-                cmds.extend([{"$type": "set_kinematic_state",
-                                "id": o_id,
-                                "use_gravity": True}])
+    #         # enable gravity again
+    #         for o_id in self._registered_objects:
+    #             # print("enabling object: ", o_id)
+    #             cmds.extend([{"$type": "set_kinematic_state",
+    #                             "id": o_id,
+    #                             "use_gravity": True}])
 
-            # set physics speed to normal
-            cmds.extend([{"$type": "set_time_step",
-                                    "time_step": 0.01}])
-            self._registered_objects = []
-            # print("finished applying settle function!")
+    #         # set physics speed to normal
+    #         cmds.extend([{"$type": "set_time_step",
+    #                                 "time_step": 0.01}])
+    #         self._registered_objects = []
+    #         # print("finished applying settle function!")
 
-        return cmds
+    #     return cmds
 
     def _get_collision_data(self, resp: List[bytes]):
         coll_data = []
