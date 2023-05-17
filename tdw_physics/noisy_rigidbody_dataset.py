@@ -168,107 +168,107 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         return tr_dict
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int):
-        if self._noise_params == NO_NOISE:
-            return RigidbodiesDataset._write_frame(self, frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
-        else:
-            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
-            tr = self.get_tr(resp=resp)
-            sleeping = True
+        # if self._noise_params == NO_NOISE:
+        #     return RigidbodiesDataset._write_frame(self, frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
+        # else:
+        frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        tr = self.get_tr(resp=resp)
+        sleeping = True
 
-            for r in resp[:-1]:
-                r_id = OutputData.get_data_type_id(r)
-                if r_id == "rigi":
-                    ri = Rigidbodies(r)
-                    for i in range(ri.get_num()):
-                        # Check if any objects are sleeping that aren't in the abyss.
-                        if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
-                            sleeping = False
-            return frame, None, None, sleeping
+        for r in resp[:-1]:
+            r_id = OutputData.get_data_type_id(r)
+            if r_id == "rigi":
+                ri = Rigidbodies(r)
+                for i in range(ri.get_num()):
+                    # Check if any objects are sleeping that aren't in the abyss.
+                    if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
+                        sleeping = False
+        return frame, None, None, sleeping
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
-        if self._noise_params == NO_NOISE:
-            return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
-        else:
-            # return None
-            """
-            Run a trial. Write static and per-frame data to disk until the trial is done.
+        # if self._noise_params == NO_NOISE:
+        #     return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
+        # else:
+        # return None
+        """
+        Run a trial. Write static and per-frame data to disk until the trial is done.
 
-            :param filepath: The path to this trial's hdf5 file.
-            :param temp_path: The path to the temporary file.
-            :param trial_num: The number of the current trial.
-            """
-            # Clear the object IDs and other static data
-            self.clear_static_data()
-            self._trial_num = trial_num
+        :param filepath: The path to this trial's hdf5 file.
+        :param temp_path: The path to the temporary file.
+        :param trial_num: The number of the current trial.
+        """
+        # Clear the object IDs and other static data
+        self.clear_static_data()
+        self._trial_num = trial_num
 
-            # Create the .hdf5 file.
-            f = h5py.File(str(temp_path.resolve()), "a")
+        # Create the .hdf5 file.
+        f = h5py.File(str(temp_path.resolve()), "a")
 
-            commands = []
-            # # Remove asset bundles (to prevent a memory leak).
-            if trial_num%unload_assets_every == 0:
-                commands.append({"$type": "unload_asset_bundles"})
+        commands = []
+        # # Remove asset bundles (to prevent a memory leak).
+        if trial_num%unload_assets_every == 0:
+            commands.append({"$type": "unload_asset_bundles"})
 
-            # Add commands to start the trial.
-            commands.extend(self.get_trial_initialization_commands())
-            commands.extend(self._get_send_data_commands())
+        # Add commands to start the trial.
+        commands.extend(self.get_trial_initialization_commands())
+        commands.extend(self._get_send_data_commands())
 
-            # azimuth_grp = f.create_group("azimuth")
-            # multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
+        # azimuth_grp = f.create_group("azimuth")
+        # multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
 
-            # commands.extend(self.move_camera_commands(multi_camera_positions, []))
-            resp = self.communicate(commands)
-            # use this stupid command to replace generate_multi_camera_positions
-            random.uniform(6, 7.5)
+        # commands.extend(self.move_camera_commands(multi_camera_positions, []))
+        resp = self.communicate(commands)
+        # use this stupid command to replace generate_multi_camera_positions
+        random.uniform(6, 7.5)
 
-            frame = 0
-            # Add the first frame.
-            done = False
-            frames_grp = f.create_group("frames")
-            frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
-            self._write_frame_labels(frame_grp, resp, -1, False)
-            t = time.time()
-            while (not done) and (frame < self.max_frames):
-                frame += 1
-                # print('frame %d' % frame)
-                # t1 = time.time()
-                cmds = self.get_per_frame_commands(resp, frame)
-                # t2 = time.time()
-                # print(t2 - t1, " getting cmds", " commands at this frame", cmds)
-                resp = self.communicate(cmds)
-                # t3 = time.time()
-                # print(t3-t2, " communicating")
-                frame_grp, _, _, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
-                _, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
-                # t4 = time.time()
-                # print(t4-t3, " writing frames")
-                # print(t4-t1, " in total for this frame")
+        frame = 0
+        # Add the first frame.
+        done = False
+        frames_grp = f.create_group("frames")
+        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
+        self._write_frame_labels(frame_grp, resp, -1, False)
+        t = time.time()
+        while (not done) and (frame < self.max_frames):
+            frame += 1
+            # print('frame %d' % frame)
+            # t1 = time.time()
+            cmds = self.get_per_frame_commands(resp, frame)
+            # t2 = time.time()
+            # print(t2 - t1, " getting cmds", " commands at this frame", cmds)
+            resp = self.communicate(cmds)
+            # t3 = time.time()
+            # print(t3-t2, " communicating")
+            frame_grp, _, _, done = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=None)
+            _, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+            # t4 = time.time()
+            # print(t4-t3, " writing frames")
+            # print(t4-t1, " in total for this frame")
 
-            # Cleanup.
-            commands = []
-            for o_id in Dataset.OBJECT_IDS:
-                commands.append({"$type": self._get_destroy_object_command_name(o_id),
-                                "id": int(o_id)})
-            self.communicate(commands)
-            
-            #  # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
-            # # if self.save_labels:
-            # meta = OrderedDict()
-            # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
-            # self.trial_metadata.append(meta)
+        # Cleanup.
+        commands = []
+        for o_id in Dataset.OBJECT_IDS:
+            commands.append({"$type": self._get_destroy_object_command_name(o_id),
+                            "id": int(o_id)})
+        self.communicate(commands)
+        
+        #  # Compute the trial-level metadata. Save it per trial in case of failure mid-trial loop
+        # # if self.save_labels:
+        # meta = OrderedDict()
+        # meta = get_labels_from(f, label_funcs=self.get_controller_label_funcs(type(self).__name__), res=meta)
+        # self.trial_metadata.append(meta)
 
-            # # Save the trial-level metadata
-            # json_str = json.dumps(self.trial_metadata, indent=4)
-            # self.meta_file.write_text(json_str, encoding='utf-8')
-            # print("TRIAL %d LABELS" % self._trial_num)
-            # print(json.dumps(self.trial_metadata[-1], indent=4))
+        # # Save the trial-level metadata
+        # json_str = json.dumps(self.trial_metadata, indent=4)
+        # self.meta_file.write_text(json_str, encoding='utf-8')
+        # print("TRIAL %d LABELS" % self._trial_num)
+        # print(json.dumps(self.trial_metadata[-1], indent=4))
 
-            # Close the file.
-            f.close()
-            # # Move the file.
-            shutil.move(temp_path, filepath)
-            print("avg time to communicate", time.time() - t)
+        # Close the file.
+        f.close()
+        # # Move the file.
+        shutil.move(temp_path, filepath)
+        print("avg time to communicate", time.time() - t)
 
     def trial_loop(self,
                    num: int,
@@ -278,56 +278,56 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                    unload_assets_every: int = 10,
                    update_kwargs: List[dict] = {},
                    do_log: bool = False) -> None:
-        if self._noise_params == NO_NOISE:
-            return Dataset.trial_loop(self, num, output_dir, temp_path, save_frame, unload_assets_every, update_kwargs, do_log)
-        else:
-            if not isinstance(update_kwargs, list):
-                update_kwargs = [update_kwargs] * num
+        # if self._noise_params == NO_NOISE:
+        #     return Dataset.trial_loop(self, num, output_dir, temp_path, save_frame, unload_assets_every, update_kwargs, do_log)
+        # else:
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * num
 
-            pbar = tqdm(total=num)
-            # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
-            exists_up_to = -1
-            for f in output_dir.glob("*.hdf5"):
-                if int(f.stem) > exists_up_to:
-                    exists_up_to = int(f.stem)
+        pbar = tqdm(total=num)
+        # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
+        exists_up_to = -1
+        for f in output_dir.glob("*.hdf5"):
+            if int(f.stem) > exists_up_to:
+                exists_up_to = int(f.stem)
 
-            exists_up_to += 1
+        exists_up_to += 1
 
-            if exists_up_to > 0:
-                print('Trials up to %d already exist, skipping those' % exists_up_to)
+        if exists_up_to > 0:
+            print('Trials up to %d already exist, skipping those' % exists_up_to)
 
-            pbar.update(exists_up_to)
-            t = time.time()
-            for i in range(exists_up_to, num):
-                if i not in self.indexes:
-                    continue
-                filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
-                self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
-                # if True: #not filepath.exists():
-                if do_log:
-                    start = time.time()
-                    logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
-                # Save out images
-                self.png_dir = None
-                if any([pa in PASSES for pa in self.save_passes]):
-                    self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
-                    if not self.png_dir.exists() and self.save_movies:
-                        self.png_dir.mkdir(parents=True)
+        pbar.update(exists_up_to)
+        t = time.time()
+        for i in range(exists_up_to, num):
+            if i not in self.indexes:
+                continue
+            filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
+            self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
+            # if True: #not filepath.exists():
+            if do_log:
+                start = time.time()
+                logging.info("Starting trial << %d >> with kwargs %s" % (i, update_kwargs[i]))
+            # Save out images
+            self.png_dir = None
+            if any([pa in PASSES for pa in self.save_passes]):
+                self.png_dir = output_dir.joinpath("pngs_" + TDWUtils.zero_padding(i, 4))
+                if not self.png_dir.exists() and self.save_movies:
+                    self.png_dir.mkdir(parents=True)
 
-                # Do the trial.
-                self.trial(filepath,
-                        temp_path,
-                        i,
-                        unload_assets_every)
+            # Do the trial.
+            self.trial(filepath,
+                    temp_path,
+                    i,
+                    unload_assets_every)
 
-                _ = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
-                if do_log:
-                    end = time.time()
-                    logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
-                    i, self.trial_seed, int(end - start)))
-                pbar.update(1)
-            print("avg time to communicate", (time.time() - t)/num)
-            pbar.close()
+            _ = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+            if do_log:
+                end = time.time()
+                logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
+                i, self.trial_seed, int(end - start)))
+            pbar.update(1)
+        print("avg time to communicate", (time.time() - t)/num)
+        pbar.close()
 
     def _random_placement(self,
                           position: Dict[str, float],
