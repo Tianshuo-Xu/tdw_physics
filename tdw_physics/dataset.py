@@ -155,7 +155,9 @@ class Dataset(Controller, ABC):
         '''
         if self.command_log is not None:
             with open(str(self.command_log), "at") as f:
+                # breakpoint()
                 f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+
         return super().communicate(commands)
 
     def clear_static_data(self) -> None:
