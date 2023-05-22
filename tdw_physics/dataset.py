@@ -155,6 +155,7 @@ class Dataset(Controller, ABC):
         '''
         if self.command_log is not None:
             with open(str(self.command_log), "at") as f:
+                # breakpoint()
                 f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
         return super().communicate(commands)
 
@@ -662,6 +663,8 @@ class Dataset(Controller, ABC):
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
+            # if i not in [3, 4, 6, 8, 9, 10, 11, 13, 15, 17, 18, 19, 21, 22, 23, 25, 26]:
+            #     continue
 
             # if i==0:
             #     continue
