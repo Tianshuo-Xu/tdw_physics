@@ -625,6 +625,7 @@ def get_rotation(pts):
 
 def decode_numpy(centroid, euler_angles, size, pts):
     '''
+
     :param centroid: 3,
     :param euler_angles: 3,
     :param size: 3,
@@ -668,6 +669,7 @@ def write_video(file_path, frames, fps):
 
 def plot_sequence_images(image_array, fps=100):
     ''' Display images sequence as an animation in jupyter notebook
+
     Args:
         image_array(numpy.ndarray): image_array.shape equal to (num_images, height, width, num_channels)
     '''
@@ -732,6 +734,7 @@ def decode_and_draw(encoding, seed_len, encoding_object, exp_path, label='None',
 
 def rotate_and_translate(positions, euler_angles, size, pts):
     '''
+
     :param euler_angles: [N, 3]
     :param positions: [N, 3]
     :param size: [N, 3]
