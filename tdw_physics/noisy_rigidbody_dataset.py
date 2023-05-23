@@ -264,7 +264,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             f.close()
             # # Move the file.
             shutil.move(temp_path, filepath)
-            print("avg time to communicate", time.time() - t)
+            # print("avg time to communicate", time.time() - t)
 
     def trial_loop(self,
                    num: int,

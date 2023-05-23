@@ -519,7 +519,7 @@ class Dataset(Controller, ABC):
             #
             # if frame > 5:
             #     break
-        print("avg time to communicate", time.time() - t)
+        # print("avg time to communicate", time.time() - t)
 
         #save_imgs for viz
         if self.save_movies:
