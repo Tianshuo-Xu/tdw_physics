@@ -280,7 +280,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             if not isinstance(update_kwargs, list):
                 update_kwargs = [update_kwargs] * num
 
-            pbar = tqdm(total=num)
+            # pbar = tqdm(total=num)
             # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
             exists_up_to = -1
             for f in output_dir.glob("*.hdf5"):
@@ -292,7 +292,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             if exists_up_to > 0:
                 print('Trials up to %d already exist, skipping those' % exists_up_to)
 
-            pbar.update(exists_up_to)
+            # pbar.update(exists_up_to)
             t = time.time()
             for i in range(exists_up_to, num):
                 if i not in self.indexes:
@@ -321,9 +321,9 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     end = time.time()
                     logging.info("Finished trial << %d >> with trial seed = %d (elapsed time: %d seconds)" % (
                     i, self.trial_seed, int(end - start)))
-                pbar.update(1)
-            print("avg time to communicate", (time.time() - t)/num)
-            pbar.close()
+                # pbar.update(1)
+            # print("avg time to communicate", (time.time() - t)/num)
+            # pbar.close()
 
     def _random_placement(self,
                           position: Dict[str, float],
