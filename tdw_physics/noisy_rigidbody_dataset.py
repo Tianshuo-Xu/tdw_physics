@@ -278,9 +278,9 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             return Dataset.trial_loop(self, num, output_dir, temp_path, save_frame, unload_assets_every, update_kwargs, do_log)
         else:
             if not isinstance(update_kwargs, list):
-                update_kwargs = [update_kwargs] * num
+                update_kwargs = [update_kwargs] * len(self.indexes)
 
-            pbar = tqdm(total=num)
+            pbar = tqdm(total=len(self.indexes))
             # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
             exists_up_to = -1
             for f in output_dir.glob("*.hdf5"):
@@ -294,7 +294,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
             pbar.update(exists_up_to)
             t = time.time()
-            for i in range(exists_up_to, num):
+            for i in range(exists_up_to, len(self.indexes)):
                 if i not in self.indexes:
                     continue
                 filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
