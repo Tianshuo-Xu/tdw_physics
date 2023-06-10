@@ -294,7 +294,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
 
             pbar.update(exists_up_to)
             t = time.time()
-            for i in range(exists_up_to, len(self.indexes)):
+            for i in range(exists_up_to, num):
                 if i not in self.indexes:
                     continue
                 filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
