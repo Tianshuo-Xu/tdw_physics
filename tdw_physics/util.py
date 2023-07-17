@@ -160,6 +160,10 @@ def get_parser(dataset_dir: str, get_help: bool=False):
                         type=none_or_str,
                         default=None,
                         help="path to local models if they exist")
+    parser.add_argument("--local_materials_path",
+                        type=none_or_str,
+                        default=None,
+                        help="path to local materials if they exist")
     parser.add_argument("--check_compat", action='store_true', help="check compatibility of phsics models")
     parser.add_argument("--hdri_skybox", type=none_or_str, default=None, help="Which skybox to use")
     parser.add_argument("--custom_build", type=none_or_str, default=None, help="use custom build")
