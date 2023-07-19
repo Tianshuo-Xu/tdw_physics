@@ -641,7 +641,7 @@ class Dataset(Controller, ABC):
                    output_dir: str,
                    temp_path: str,
                    save_frame: int = None,
-                   unload_assets_every: int = 10,
+                   unload_assets_every: int = 10000000000,
                    update_kwargs: List[dict] = {},
                    do_log: bool = False) -> None:
 
