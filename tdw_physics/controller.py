@@ -642,7 +642,7 @@ class Controller:
             success = True
         # Launch the build.
         if success:
-            print("launching build")
+            # print("launching build")
             # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
             if custom_build is not None:
                 Popen([custom_build, "-port " + str(port)])

@@ -109,7 +109,8 @@ class Dataset(Controller, ABC):
         # if port is None:
         rng = np.random.default_rng(seed + sim_seed + (view_id_number*1251)%33 )
         port = rng.integers(1000,9999)
-        print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+        # print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
+        print("random port",port)
 
             # random.seed(self.seed)
             # print("SET RANDOM SEED: %d" % self.seed)
@@ -142,7 +143,7 @@ class Dataset(Controller, ABC):
         self.sim_seed = sim_seed
         if not bool(self.randomize):
             random.seed(self.seed)
-            print("SET RANDOM SEED: %d" % self.seed)
+            # print("SET RANDOM SEED: %d" % self.seed)
 
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
@@ -297,7 +298,7 @@ class Dataset(Controller, ABC):
         if temp_path == "NONE": temp_path = output_dir + "/temp.hdf5"
 
         self._height, self._width, self._framerate = height, width, framerate
-        print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
+        # print("height: %d, width: %d, fps: %d" % (self._height, self._width, self._framerate))
 
         output_dir = Path(output_dir)
         if not output_dir.exists():
@@ -314,7 +315,7 @@ class Dataset(Controller, ABC):
 
         # which passes to write to the HDF5
         self.write_passes = write_passes
-        print("self.write_passes", self.write_passes)
+        # print("self.write_passes", self.write_passes)
         if isinstance(self.write_passes, str):
             self.write_passes = self.write_passes.split(',')
         self.write_passes = [p for p in self.write_passes if (p in PASSES)]
@@ -329,10 +330,10 @@ class Dataset(Controller, ABC):
         # whether to send and save meshes
         self.save_meshes = save_meshes
 
-        print("write passes", self.write_passes)
-        print("save passes", self.save_passes)
-        print("save movies", self.save_movies)
-        print("save meshes", self.save_meshes)
+        # print("write passes", self.write_passes)
+        # print("save passes", self.save_passes)
+        # print("save movies", self.save_movies)
+        # print("save meshes", self.save_meshes)
 
         if self.save_movies and len(self.save_passes) == 0:
             self.save_movies = False
@@ -366,7 +367,8 @@ class Dataset(Controller, ABC):
                     assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
                     end = self.communicate({"$type": "terminate"})
                 if to_ctx_mgr.state == to_ctx_mgr.EXECUTED:
-                    print("tdw closed successfully")
+                    pass
+                    # print("tdw closed successfully")
                 elif to_ctx_mgr.state == to_ctx_mgr.TIMED_OUT:
                     print("tdw failed to acknowledge being closed. tdw window might need to be manually closed")
 
@@ -455,7 +457,7 @@ class Dataset(Controller, ABC):
 
         # TODO: set as flag
 
-
+        # t = time.time()
         while (not done) and (frame < self.max_frames):
             frame += 1
             # print('frame %d' % frame)
