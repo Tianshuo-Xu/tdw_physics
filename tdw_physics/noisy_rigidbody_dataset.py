@@ -8,7 +8,7 @@ import numpy as np
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
 from .dataset import Dataset, PASSES
-from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms
+from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms, StaticRigidbodies
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from tdw.tdw_utils import TDWUtils
@@ -20,6 +20,8 @@ import h5py
 import shutil
 from tdw_physics.postprocessing.labels import get_labels_from
 import random
+from tdw.quaternion_utils import QuaternionUtils
+
 
 XYZ = ['x', 'y', 'z']
 
@@ -66,6 +68,7 @@ class RigidNoiseParams:
     collision_dir: float = None
     collision_mag: float = None
     coll_threshold: float = None
+    start_simulate: int = None
 
     def save(self, flpth):
         selfobj = {
@@ -79,7 +82,8 @@ class RigidNoiseParams:
             'bounciness': self.bounciness,
             'collision_dir': self.collision_dir,
             'collision_mag': self.collision_mag,
-            'coll_threshold': self.coll_threshold
+            'coll_threshold': self.coll_threshold,
+            'start_simulate': self.start_simulate
         }
         with open(flpth, 'w') as ofl:
             json.dump(selfobj, ofl)
@@ -232,6 +236,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 cmds = self.get_per_frame_commands(resp, frame)
                 # t2 = time.time()
                 # print(t2 - t1, " getting cmds", " commands at this frame", cmds)
+                # for cmd in cmds:
+                #     print(cmd)
+                #     print(cmd['position']['x'], type(cmd['position']['x']))
+                #     print(cmd['position']['y'], type(cmd['position']['y']))
+                #     print(cmd['position']['z'], type(cmd['position']['z']))
+                #     json.dumps(cmd)
                 resp = self.communicate(cmds)
                 # t3 = time.time()
                 # print(t3-t2, " communicating")
@@ -325,6 +335,76 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             # print("avg time to communicate", (time.time() - t)/num)
             pbar.close()
 
+    def _add_perturbation(self, resp, sim_seed):
+        ri_dict = dict()
+        r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
+        for i, r_id in enumerate(r_ids):
+            # print("i: ", i, r_id)
+            if r_id == 'rigi':
+                # print('rigi!')
+                rigi = Rigidbodies(resp[i])
+                for j in range(rigi.get_num()):
+                    object_id = rigi.get_id(j)
+                    # print("j: ", j, 'object_id: ', object_id)
+                    velocity = rigi.get_velocity(j)
+                    angular_velocity = rigi.get_angular_velocity(j)
+                    if object_id in ri_dict.keys():
+                        ri_dict[object_id].update({'velocity': velocity, 'angular_velocity': angular_velocity})
+                    else:
+                        ri_dict[object_id] = {'velocity': velocity, 'angular_velocity': angular_velocity}
+            if r_id == 'srig':
+                # print('srig!')
+                srigi = StaticRigidbodies(resp[i])
+                for j in range(srigi.get_num()):
+                    object_id = srigi.get_id(j)
+                    # print("j: ", j, 'object_id: ', object_id)
+                    mass = srigi.get_mass(j)
+                    dynamic_friction = srigi.get_dynamic_friction(j)
+                    static_friction = srigi.get_static_friction(j)
+                    bounciness = srigi.get_bounciness(j)
+                    if object_id in ri_dict.keys():
+                        ri_dict[object_id].update({'mass': mass, 'dynamic_friction': dynamic_friction, 'static_friction': static_friction, 'bounciness': bounciness})
+                    else:
+                        ri_dict[object_id] = {'mass': mass, 'dynamic_friction': dynamic_friction, 'static_friction': static_friction, 'bounciness': bounciness}
+            if r_id == 'tran':
+                # print('tran!')
+                tran = Transforms(resp[i])
+                for j in range(tran.get_num()):
+                    object_id = tran.get_id(j)
+                    # print("j: ", j, 'object_id: ', object_id)
+                    position = tran.get_position(j)
+                    position = dict([[k, position[idx]]
+                                            for idx, k in enumerate(XYZ)])
+                    rotation = tran.get_rotation(j)
+                    if object_id in ri_dict.keys():
+                        ri_dict[object_id].update({'position': position, 'rotation': QuaternionUtils.quaternion_to_euler_angles(rotation)})
+                    else:
+                        ri_dict[object_id] = {'position': position, 'rotation': QuaternionUtils.quaternion_to_euler_angles(rotation)}
+
+        cmds = []
+        for o_id, vals in ri_dict.items():
+            rotation = dict([[k, vals['rotation'][idx]]
+                                            for idx, k in enumerate(XYZ)])
+            # print(o_id, vals['position'], rotation, vals['mass'])
+            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(vals['position'], rotation, vals['mass'], vals['dynamic_friction'], vals['static_friction'], vals['bounciness'], o_id, sim_seed)
+            # print(o_id, position, rotation, mass)
+            cmds.extend([{"$type": "teleport_object",
+                                "id": o_id,
+                                "position": dict([[k, np.float64(position[k])]
+                                            for k in XYZ])}])
+            cmds.extend([{"$type": "rotate_object_to_euler_angles",
+                                "id": o_id,
+                                "euler_angles": dict([[k, np.float64(rotation[k])]
+                                            for k in XYZ])}])
+            cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
+            cmds.extend([{"$type": "set_physic_material",
+                                "dynamic_friction": np.float64(dynamic_friction), 
+                                "static_friction": np.float64(static_friction), 
+                                "bounciness": np.float64(bounciness), 
+                                "id": o_id}])
+        # print(cmds)
+        return cmds
+    
     def _random_placement(self,
                           position: Dict[str, float],
                           rotation: Dict[str, float],
@@ -396,7 +476,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
+        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+            position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
         return RigidbodiesDataset.add_transforms_object(self,
             record, position, rotation, o_id, add_data, library)    
     
@@ -425,7 +506,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
         return RigidbodiesDataset.add_primitive(self,
             record, position, rotation, scale, o_id, material, color, exclude_color, mass,
             dynamic_friction, static_friction,
@@ -450,7 +532,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
         return RigidbodiesDataset.add_physics_object(self,
             record, position, rotation, mass,
             scale, dynamic_friction, static_friction,
@@ -466,9 +549,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._ongoing_collisions = []
         self._lasttime_collisions = []
         """
-        # print(frame)
+        # print('frame: ', frame)
         cmds = []
-        if self.collision_noise_generator is not None:
+        if self.collision_noise_generator is not None and frame >= self._noise_params.start_simulate:
+            if frame == self._noise_params.start_simulate:
+                perturbation_cmds = self._add_perturbation(resp, sim_seed)
+                cmds.extend(perturbation_cmds)
             coll_data = self._get_collision_data(resp)
             if len(coll_data) > 0:
                 # """ some filtering and smoothing can be done below, e.g remove target zone collision
