@@ -281,7 +281,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                    output_dir: str,
                    temp_path: str,
                    save_frame: int = None,
-                   unload_assets_every: int = 10,
+                   unload_assets_every: int = 1000000000,
                    update_kwargs: List[dict] = {},
                    do_log: bool = False) -> None:
         if self._noise_params == NO_NOISE:
