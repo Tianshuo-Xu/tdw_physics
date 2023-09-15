@@ -1,12 +1,13 @@
 import sys, os, subprocess, logging, time
 from tqdm import tqdm
 from tdw_physics.postprocessing.stimuli import pngs_to_mp4
-
+import operator
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from abc import ABC
 import numpy as np
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
+from tdw_physics.controller import Controller
 from .dataset import Dataset, PASSES
 from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms, StaticRigidbodies
 from dataclasses import dataclass
@@ -185,6 +186,114 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                         if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
                             sleeping = False
             return frame, None, None, sleeping
+        
+    # def combine_dicts(self, a, b, op=operator.add):
+    #     assert a.keys() == b.keys()
+    #     return dict([(k, op(a[k], b[k])) for k in a.keys()])
+    
+    # def get_scene_initialization_commands(self) -> List[dict]:
+    #     print("we are in bussiness!")
+    #     if self.room == 'mm_kitchen_1b_4x5':
+    #         add_scene = [self.get_add_scene(scene_name='mm_kitchen_1b_4x5')]
+    #         add_scene.extend([{"$type": "set_floorplan_roof",
+    #             "show": False}])
+    #         self.scene_record = Controller.SCENE_LIBRARIANS["scenes.json"].get_record(self.room)
+    #         base_scene_record = Controller.SCENE_LIBRARIANS["scenes.json"].get_record(self.room.split('_4x5')[0])
+    #         self.base_room_center =  base_scene_record.rooms[0].main_region.center
+
+    #     if self.hdri_skybox is not None:
+    #         add_scene.extend([{"$type": "add_hdri_skybox",
+    #                            "name": self.hdri_skybox,  # ninomaru_teien_4k
+    #                            "url": "file:///" + self.path_hdri + self.hdri_skybox,
+    #                            "exposure": 1,
+    #                            "initial_skybox_rotation": self.skybox_rotation,
+    #                            "sun_elevation": self.sun_elevation,
+    #                            "sun_initial_angle": self.sun_angle,
+    #                            "sun_intensity": self.sun_intensity,
+    #                            "location": 'interior'}])
+
+    #         add_scene.extend([{"$type": "set_contrast",
+    #              "contrast": 30},
+    #             # {"$type": "set_saturation",
+    #             #  "saturation": -5},
+    #             {"$type": "set_screen_space_reflections",
+    #              "enabled": True}])
+
+    #     # else:
+    #     add_scene += [{"$type": "set_aperture",
+    #      "aperture": 8.0},
+    #     {"$type": "set_post_process", "value": False},
+    #     # {"$type": "set_focus_distance",
+    #     #  "focus_distance": 2.25},
+    #     {"$type": "set_post_exposure",
+    #      "post_exposure": 0.4},
+    #     {"$type": "set_ambient_occlusion_intensity",
+    #      "intensity": 0.175},
+    #     {"$type": "set_ambient_occlusion_thickness_modifier",
+    #      "thickness": 3.5}]
+    #     return add_scene
+
+    # def get_trial_initialization_commands(self) -> List[dict]:
+    #     commands = []
+
+    #     # randomization across trials
+    #     if not(self.randomize):
+
+    #         self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
+    #         random.seed(self.trial_seed)
+    #     else:
+    #         # breakpoint()
+    #         self.trial_seed = -1 # not used
+
+    #     for room in self.scene_record.rooms:
+    #         center = self.combine_dicts(room.main_region.center, self.base_room_center, operator.sub)
+    #         # Choose and place the target zone.
+    #         commands.extend(self._place_target_zone(center))
+    #         # Choose and place the target object.
+    #         commands.extend(self._place_target_object(center))
+    #         # Choose, place, and push a probe object.
+    #         commands.extend(self._place_and_push_probe_object(center))
+    #         # Build the intermediate structure that captures some aspect of "intuitive physics."
+    #         commands.extend(self._build_intermediate_structure(center))
+    #         # Place distractor objects in the background
+    #         commands.extend(self._place_background_distractors(center))
+    #         # Place occluder objects in the background
+    #         commands.extend(self._place_occluders(center))
+
+    #     # Set the probe color
+    #     if self.probe_color is None:
+    #         self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
+
+    #     # Teleport the avatar to a reasonable position based on the drop height.
+    #     a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
+    #                                             radius_max=self.camera_radius_range[1],
+    #                                             angle_min=self.camera_min_angle,
+    #                                             angle_max=self.camera_max_angle,
+    #                                             y_min=self.camera_min_height,
+    #                                             y_max=self.camera_max_height,
+    #                                             center=TDWUtils.VECTOR3_ZERO,
+    #                                             reflections=self.camera_left_right_reflections)
+
+    #     # Set the camera parameters
+    #     self._set_avatar_attributes(a_pos)
+
+    #     commands.extend([
+    #         {"$type": "teleport_avatar_to",
+    #          "position": {"x": 0, "y": 50, "z": 0}},
+    #         {"$type": "look_at_position",
+    #          "position": self.camera_aim},
+    #         {"$type": "set_focus_distance",
+    #          "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
+    #     ])
+
+    #     # make things stable
+    #     # commands.extend(self.settle())
+
+    #     # test mode colors
+    #     if self.use_test_mode_colors:
+    #         self._set_test_mode_colors(commands)
+
+    #     return commands
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)

@@ -415,7 +415,7 @@ class Dataset(Controller, ABC):
 
         multi_camera_positions = self.generate_multi_camera_positions(azimuth_grp, self.view_id_number)
 
-        commands.extend(self.move_camera_commands(multi_camera_positions, []))
+        # commands.extend(self.move_camera_commands(multi_camera_positions, []))
         # _resp = self.communicate(commands)
 
 
