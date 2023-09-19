@@ -5,6 +5,7 @@ from tdw_physics.postprocessing.stimuli import pngs_to_mp4
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from abc import ABC
 import numpy as np
+import copy
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
 from .dataset import Dataset, PASSES
@@ -150,11 +151,10 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # if self.collision_noise_generator is not None:
         #     print("example noise", self.collision_noise_generator())
         self._registered_objects = []
-
+        self.interval = 100
 
     def get_tr(self, resp: List[bytes]) -> dict:
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
-        num_objects = len(Dataset.OBJECT_IDS)
         tr_dict = dict()
 
         for r in resp[:-1]:
@@ -185,6 +185,32 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                         if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
                             sleeping = False
             return frame, None, None, sleeping
+
+    # def _write_frame_labels(self,
+    #                         frame_grp: h5py.Group,
+    #                         resp: List[bytes],
+    #                         frame_num: int,
+    #                         sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
+
+    #     labels, resp, frame_num, done = Dataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
+
+    #     # Whether this trial has a target or zone to track
+    #     has_target = (not self.remove_target) or self.replace_target
+    #     has_zone = not self.remove_zone
+
+    #     if not (has_target or has_zone):
+    #         return labels, resp, frame_num, done
+
+    #     # Whether target has hit the zone
+    #     if has_target and has_zone:
+    #         target_zone_contact = []
+    #         for i in range(len(self.scene_record.rooms)):
+    #             c_points, _ = self.get_object_target_collision(
+    #                 self.target_id+i*self.interval, self.zone_id+i*self.interval, resp)
+    #             target_zone_contact.append(bool(len(c_points)))
+    #         labels.create_dataset("target_contacting_zone", data=target_zone_contact)
+
+    #     return labels, resp, frame_num, done
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
@@ -476,10 +502,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
-            position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
-        return RigidbodiesDataset.add_transforms_object(self,
-            record, position, rotation, o_id, add_data, library)    
+        # if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+        #     position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
+        # return [RigidbodiesDataset.add_transforms_object(self,
+        #     record, position, rotation, o_id, add_data, library)]
+
+        cmds = []
+        for i, room in enumerate(self.scene_record.rooms):
+            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
+            pos = combine_dicts(position, center)
+            cmds.append(RigidbodiesDataset.add_transforms_object(self,
+                record, pos, rotation, o_id+i*self.interval, add_data, library))
+        return cmds
     
     def add_primitive(self,
                       record: ModelRecord,
@@ -506,14 +541,51 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
-            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
-        return RigidbodiesDataset.add_primitive(self,
-            record, position, rotation, scale, o_id, material, color, exclude_color, mass,
-            dynamic_friction, static_friction,
-            bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
-            default_physics_values, density)        
+        # if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+        #     position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        # return RigidbodiesDataset.add_primitive(self,
+        #     record, position, rotation, scale, o_id, material, color, exclude_color, mass,
+        #     dynamic_friction, static_friction,
+        #     bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
+        #     default_physics_values, density)    
 
+        cmds = []
+        for i, room in enumerate(self.scene_record.rooms):
+            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
+            pos = combine_dicts(position, center)
+            cmds.extend(RigidbodiesDataset.add_primitive(self,
+                record, pos, rotation, scale, o_id+i*self.interval, material, color, exclude_color, mass,
+                dynamic_friction, static_friction,
+                bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
+                default_physics_values, density)[0])
+        return cmds, None
+
+    def add_ramp(self,
+                 record: ModelRecord,
+                 position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                 o_id: Optional[int] = None,
+                 material: Optional[str] = None,
+                 color: Optional[list] = None,
+                 mass: Optional[float] = None,
+                 dynamic_friction: Optional[float] = None,
+                 static_friction: Optional[float] = None,
+                 bounciness: Optional[float] = None,
+                 add_data: Optional[bool] = True
+                 ) -> List[dict]:
+        cmds = []
+        for i, room in enumerate(self.scene_record.rooms):
+            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
+            pos = combine_dicts(position, center)
+            cmds.extend(RigidbodiesDataset.add_ramp(self,
+                record, pos, rotation, scale, o_id+i*self.interval, material, color, mass,
+                dynamic_friction, static_friction,
+                bounciness, add_data))
+        return cmds
+    
     def add_physics_object(self,
                            record: ModelRecord,
                            position: Dict[str, float],
@@ -532,13 +604,26 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
-        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
-            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
-        return RigidbodiesDataset.add_physics_object(self,
-            record, position, rotation, mass,
-            scale, dynamic_friction, static_friction,
-            bounciness, o_id, add_data,
-            default_physics_values, density)        
+        # if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+        #     position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        # return RigidbodiesDataset.add_physics_object(self,
+        #     record, position, rotation, mass,
+        #     scale, dynamic_friction, static_friction,
+        #     bounciness, o_id, add_data,
+        #     default_physics_values, density)    
+    
+        cmds = []
+        for i, room in enumerate(self.scene_record.rooms):
+            # this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
+            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
+            pos = combine_dicts(position, center)
+            cmds.extend(RigidbodiesDataset.add_physics_object(self,
+                record, pos, rotation, mass,
+                scale, dynamic_friction, static_friction,
+                bounciness, o_id+i*self.interval, add_data,
+                default_physics_values, density)[0])
+        return cmds, None
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int, sim_seed: int) -> List[dict]:
         """
@@ -549,7 +634,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._ongoing_collisions = []
         self._lasttime_collisions = []
         """
-        # print('frame: ', frame)
         cmds = []
         if self.collision_noise_generator is not None and frame >= self._noise_params.start_simulate:
             if frame == self._noise_params.start_simulate:

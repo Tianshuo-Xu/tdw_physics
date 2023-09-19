@@ -3,6 +3,7 @@ import numpy.matlib
 from typing import List, Tuple, Dict, Optional
 from scipy.linalg import null_space
 from scipy.stats import norm, uniform, beta
+import operator
 
 XYZ = ['x', 'y', 'z']
 
@@ -212,3 +213,8 @@ def rand_von_mises_fisher(seed, mu,kappa,N=1):
     samples = np.dot(R,samples.T).T
 
     return samples
+
+def combine_dicts(a, b, op=operator.add):
+    assert a.keys() == b.keys()
+    return dict([(k, op(a[k], b[k])) for k in a.keys()])
+   
