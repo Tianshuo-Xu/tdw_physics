@@ -172,10 +172,18 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         if self._noise_params == NO_NOISE:
             return RigidbodiesDataset._write_frame(self, frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
         else:
+            num_objects = len(Dataset.OBJECT_IDS)
             frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+            objs = frame.create_group("objects")
+            positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
             tr = self.get_tr(resp=resp)
-            sleeping = True
+            for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+                if o_id not in tr:
+                    continue
+                positions[i] = tr[o_id]["pos"]
+            objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
 
+            sleeping = True
             for r in resp[:-1]:
                 r_id = OutputData.get_data_type_id(r)
                 if r_id == "rigi":
@@ -184,7 +192,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                         # Check if any objects are sleeping that aren't in the abyss.
                         if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
                             sleeping = False
-            return frame, None, None, sleeping
+            return frame, objs, tr, sleeping
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
@@ -464,6 +472,27 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("----------------------------------------------------------------------------------------------------------------------------")
         self._registered_objects.append(o_id)
         return position, rotation, mass, dynamic_friction, static_friction, bounciness
+
+    def add_ramp(self,
+                record: ModelRecord,
+                position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                o_id: Optional[int] = None,
+                material: Optional[str] = None,
+                color: Optional[list] = None,
+                mass: Optional[float] = None,
+                dynamic_friction: Optional[float] = None,
+                static_friction: Optional[float] = None,
+                bounciness: Optional[float] = None,
+                add_data: Optional[bool] = True
+                 ) -> List[dict]:
+        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
+        return RigidbodiesDataset.add_ramp(self,
+                record, position, rotation, scale, o_id, material, color, mass,
+                dynamic_friction, static_friction,
+                bounciness, add_data)
 
     def add_transforms_object(self,
                               record: ModelRecord,
