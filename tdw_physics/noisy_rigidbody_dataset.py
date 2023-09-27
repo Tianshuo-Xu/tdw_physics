@@ -473,27 +473,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._registered_objects.append(o_id)
         return position, rotation, mass, dynamic_friction, static_friction, bounciness
 
-    def add_ramp(self,
-                record: ModelRecord,
-                position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
-                o_id: Optional[int] = None,
-                material: Optional[str] = None,
-                color: Optional[list] = None,
-                mass: Optional[float] = None,
-                dynamic_friction: Optional[float] = None,
-                static_friction: Optional[float] = None,
-                bounciness: Optional[float] = None,
-                add_data: Optional[bool] = True
-                 ) -> List[dict]:
-        if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
-            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(position, rotation, mass, dynamic_friction, static_friction, bounciness, o_id, sim_seed)
-        return RigidbodiesDataset.add_ramp(self,
-                record, position, rotation, scale, o_id, material, color, mass,
-                dynamic_friction, static_friction,
-                bounciness, add_data)
-
     def add_transforms_object(self,
                               record: ModelRecord,
                               position: Dict[str, float],
