@@ -5,16 +5,17 @@ import operator
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from abc import ABC
 import numpy as np
+import networkx as nx
 import copy
 from tdw.librarian import ModelRecord
 from .rigidbodies_dataset import RigidbodiesDataset
 from tdw_physics.controller import Controller
 from .dataset import Dataset, PASSES
-from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms, StaticRigidbodies
+from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentCollision, Transforms, StaticRigidbodies, Bounds
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from tdw.tdw_utils import TDWUtils
-from scipy.stats import vonmises, norm
+from scipy.stats import vonmises, norm, lognorm
 from .noisy_utils import *
 import json
 from pathlib import Path
@@ -151,10 +152,21 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self.set_collision_noise_generator(noise)
         # if self.collision_noise_generator is not None:
         #     print("example noise", self.collision_noise_generator())
-        self._registered_objects = []
+        # self._registered_objects = []
         self.interval = 100
 
-    def get_tr(self, resp: List[bytes]) -> dict:
+    def log_transform_info(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> Tuple[h5py.Group, h5py.Group, dict, bool]:
+        num_objects = len(Dataset.OBJECT_IDS)
+        frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
+        objs = frame.create_group("objects")
+        # Transforms data.
+        positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
+        forwards = np.empty(dtype=np.float32, shape=(num_objects, 3))
+        rotations = np.empty(dtype=np.float32, shape=(num_objects, 4))
+        # Bounds data.
+        bounds = dict()
+        for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
+            bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
 
@@ -167,16 +179,44 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     tr_dict.update({tr.get_id(i): {"pos": pos,
                                                    "for": tr.get_forward(i),
                                                    "rot": tr.get_rotation(i)}})
-        return tr_dict
+                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+                    if o_id not in tr_dict:
+                        continue
+                    positions[i] = tr_dict[o_id]["pos"]
+                    forwards[i] = tr_dict[o_id]["for"]
+                    rotations[i] = tr_dict[o_id]["rot"]
+            elif r_id == "boun":
+                bo = Bounds(r)
+                bo_dict = dict()
+                for i in range(bo.get_num()):
+                    bo_dict.update({bo.get_id(i): {"front": bo.get_front(i),
+                                                   "back": bo.get_back(i),
+                                                   "left": bo.get_left(i),
+                                                   "right": bo.get_right(i),
+                                                   "top": bo.get_top(i),
+                                                   "bottom": bo.get_bottom(i),
+                                                   "center": bo.get_center(i)}})
+                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+                    for bound_type in bounds.keys():
+                        try:
+                            bounds[bound_type][i] = bo_dict[o_id][bound_type]
+                        except KeyError:
+                            print("couldn't store bound data for object %d" % o_id)
+
+        objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
+        objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
+        objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+        for bound_type in bounds.keys():
+            objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+
+        return frame, objs, tr_dict
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int):
         if self._noise_params == NO_NOISE:
             return RigidbodiesDataset._write_frame(self, frames_grp=frames_grp, resp=resp, frame_num=frame_num, view_num=view_num)
         else:
-            frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
-            tr = self.get_tr(resp=resp)
+            frame, objs, tr = self.log_transform_info(frames_grp, resp, frame_num)
             sleeping = True
-
             for r in resp[:-1]:
                 r_id = OutputData.get_data_type_id(r)
                 if r_id == "rigi":
@@ -185,141 +225,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                         # Check if any objects are sleeping that aren't in the abyss.
                         if not ri.get_sleeping(i) and tr[ri.get_id(i)]["pos"][1] >= -1:
                             sleeping = False
-            return frame, None, None, sleeping
-        
-    # def combine_dicts(self, a, b, op=operator.add):
-    #     assert a.keys() == b.keys()
-    #     return dict([(k, op(a[k], b[k])) for k in a.keys()])
-    
-    # def get_scene_initialization_commands(self) -> List[dict]:
-    #     print("we are in bussiness!")
-    #     if self.room == 'mm_kitchen_1b_4x5':
-    #         add_scene = [self.get_add_scene(scene_name='mm_kitchen_1b_4x5')]
-    #         add_scene.extend([{"$type": "set_floorplan_roof",
-    #             "show": False}])
-    #         self.scene_record = Controller.SCENE_LIBRARIANS["scenes.json"].get_record(self.room)
-    #         base_scene_record = Controller.SCENE_LIBRARIANS["scenes.json"].get_record(self.room.split('_4x5')[0])
-    #         self.base_room_center =  base_scene_record.rooms[0].main_region.center
-
-    #     if self.hdri_skybox is not None:
-    #         add_scene.extend([{"$type": "add_hdri_skybox",
-    #                            "name": self.hdri_skybox,  # ninomaru_teien_4k
-    #                            "url": "file:///" + self.path_hdri + self.hdri_skybox,
-    #                            "exposure": 1,
-    #                            "initial_skybox_rotation": self.skybox_rotation,
-    #                            "sun_elevation": self.sun_elevation,
-    #                            "sun_initial_angle": self.sun_angle,
-    #                            "sun_intensity": self.sun_intensity,
-    #                            "location": 'interior'}])
-
-    #         add_scene.extend([{"$type": "set_contrast",
-    #              "contrast": 30},
-    #             # {"$type": "set_saturation",
-    #             #  "saturation": -5},
-    #             {"$type": "set_screen_space_reflections",
-    #              "enabled": True}])
-
-    #     # else:
-    #     add_scene += [{"$type": "set_aperture",
-    #      "aperture": 8.0},
-    #     {"$type": "set_post_process", "value": False},
-    #     # {"$type": "set_focus_distance",
-    #     #  "focus_distance": 2.25},
-    #     {"$type": "set_post_exposure",
-    #      "post_exposure": 0.4},
-    #     {"$type": "set_ambient_occlusion_intensity",
-    #      "intensity": 0.175},
-    #     {"$type": "set_ambient_occlusion_thickness_modifier",
-    #      "thickness": 3.5}]
-    #     return add_scene
-
-    # def get_trial_initialization_commands(self) -> List[dict]:
-    #     commands = []
-
-    #     # randomization across trials
-    #     if not(self.randomize):
-
-    #         self.trial_seed = (self.MAX_TRIALS * self.seed) + self._trial_num
-    #         random.seed(self.trial_seed)
-    #     else:
-    #         # breakpoint()
-    #         self.trial_seed = -1 # not used
-
-    #     for room in self.scene_record.rooms:
-    #         center = self.combine_dicts(room.main_region.center, self.base_room_center, operator.sub)
-    #         # Choose and place the target zone.
-    #         commands.extend(self._place_target_zone(center))
-    #         # Choose and place the target object.
-    #         commands.extend(self._place_target_object(center))
-    #         # Choose, place, and push a probe object.
-    #         commands.extend(self._place_and_push_probe_object(center))
-    #         # Build the intermediate structure that captures some aspect of "intuitive physics."
-    #         commands.extend(self._build_intermediate_structure(center))
-    #         # Place distractor objects in the background
-    #         commands.extend(self._place_background_distractors(center))
-    #         # Place occluder objects in the background
-    #         commands.extend(self._place_occluders(center))
-
-    #     # Set the probe color
-    #     if self.probe_color is None:
-    #         self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
-
-    #     # Teleport the avatar to a reasonable position based on the drop height.
-    #     a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
-    #                                             radius_max=self.camera_radius_range[1],
-    #                                             angle_min=self.camera_min_angle,
-    #                                             angle_max=self.camera_max_angle,
-    #                                             y_min=self.camera_min_height,
-    #                                             y_max=self.camera_max_height,
-    #                                             center=TDWUtils.VECTOR3_ZERO,
-    #                                             reflections=self.camera_left_right_reflections)
-
-    #     # Set the camera parameters
-    #     self._set_avatar_attributes(a_pos)
-
-    #     commands.extend([
-    #         {"$type": "teleport_avatar_to",
-    #          "position": {"x": 0, "y": 50, "z": 0}},
-    #         {"$type": "look_at_position",
-    #          "position": self.camera_aim},
-    #         {"$type": "set_focus_distance",
-    #          "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
-    #     ])
-
-    #     # make things stable
-    #     # commands.extend(self.settle())
-
-    #     # test mode colors
-    #     if self.use_test_mode_colors:
-    #         self._set_test_mode_colors(commands)
-
-    #     return commands
-
-    # def _write_frame_labels(self,
-    #                         frame_grp: h5py.Group,
-    #                         resp: List[bytes],
-    #                         frame_num: int,
-    #                         sleeping: bool) -> Tuple[h5py.Group, List[bytes], int, bool]:
-
-    #     labels, resp, frame_num, done = Dataset._write_frame_labels(self, frame_grp, resp, frame_num, sleeping)
-
-    #     # Whether this trial has a target or zone to track
-    #     has_target = (not self.remove_target) or self.replace_target
-    #     has_zone = not self.remove_zone
-
-    #     if not (has_target or has_zone):
-    #         return labels, resp, frame_num, done
-
-    #     # Whether target has hit the zone
-    #     if has_target and has_zone:
-    #         target_zone_contact = []
-    #         for i in range(len(self.scene_record.rooms)):
-    #             c_points, _ = self.get_object_target_collision(
-    #                 self.target_id+i*self.interval, self.zone_id+i*self.interval, resp)
-    #             target_zone_contact.append(bool(len(c_points)))
-    #         labels.create_dataset("target_contacting_zone", data=target_zone_contact)
-
-    #     return labels, resp, frame_num, done
+            return frame, objs, tr, sleeping
 
     def trial(self, filepath: Path, temp_path: Path, trial_num: int, unload_assets_every: int) -> None:
         # return Dataset.trial(self, filepath, temp_path, trial_num, unload_assets_every)
@@ -470,8 +376,9 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             # print("avg time to communicate", (time.time() - t)/num)
             pbar.close()
 
-    def _add_perturbation(self, resp, sim_seed):
+    def _add_perturbation(self, resp):
         ri_dict = dict()
+        coll_list = []
         r_ids = [OutputData.get_data_type_id(r) for r in resp[:-1]]
         for i, r_id in enumerate(r_ids):
             # print("i: ", i, r_id)
@@ -511,20 +418,93 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     position = dict([[k, position[idx]]
                                             for idx, k in enumerate(XYZ)])
                     rotation = tran.get_rotation(j)
-                    if object_id in ri_dict.keys():
-                        ri_dict[object_id].update({'position': position, 'rotation': QuaternionUtils.quaternion_to_euler_angles(rotation)})
-                    else:
-                        ri_dict[object_id] = {'position': position, 'rotation': QuaternionUtils.quaternion_to_euler_angles(rotation)}
-
-        cmds = []
-        for o_id, vals in ri_dict.items():
-            rotation = dict([[k, vals['rotation'][idx]]
+                    rotation = QuaternionUtils.quaternion_to_euler_angles(rotation)
+                    rotation = dict([[k, rotation[idx]]
                                             for idx, k in enumerate(XYZ)])
-            # print(o_id, vals['position'], rotation, vals['mass'])
-            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(vals['position'], rotation, vals['mass'], vals['dynamic_friction'], vals['static_friction'], vals['bounciness'], o_id, sim_seed)
+                    if object_id in ri_dict.keys():
+                        ri_dict[object_id].update({'position': position, 'rotation': rotation})
+                    else:
+                        ri_dict[object_id] = {'position': position, 'rotation': rotation}
+            if r_id == 'coll':
+                co = Collision(resp[i])
+                # state = co.get_state()
+                agent_id = co.get_collider_id()
+                patient_id = co.get_collidee_id()
+                if ([agent_id, patient_id] in coll_list) or ([patient_id, agent_id] in coll_list):
+                    pass
+                else:
+                    coll_list.append([agent_id, patient_id])
+        G = nx.Graph()
+        G.add_edges_from(coll_list)
+        cc = list(nx.connected_components(G))
+        # if coll_list:
+        #     with open('/home/haw027/code/private-physics-bench/stimuli/stimuli/generation/test_20rooms/log.txt', "a") as f: 
+        #         f.write(f"{self.stimulus_name, cc}\n") 
+                
+        cmds = []
+        for agent_patients in cc:
+            # print("agent_patients: ", agent_patients)
+            center_of_mass = np.average([list(ri_dict[o_id]['position'].values()) for o_id in agent_patients], axis=0, weights=[ri_dict[o_id]['mass'] for o_id in agent_patients])
+            # print("center_of_mass: ", center_of_mass)
+            # this position and rotation are shared by the collision connected components
+            delta_position, delta_rotation, _, _, _, _ = self._random_placement({'x':0,'y':0,'z':0}, {'x':0,'y':0,'z':0}, None, None, None, None)
+            # delta_position = {'x': 0.1, 'y':0, 'z':0.1}
+            # delta_rotation = {'x': 0, 'y': 90, 'z':0}
+            # print("delta position: ", delta_position)
+            rotate_angle = delta_rotation['y']
+            # print("rotate_angle: ", delta_rotation)
+            for o_id in agent_patients:
+                vals = ri_dict[o_id]
+                pos_after_rotate = TDWUtils.rotate_position_around(list(vals['position'].values()), rotate_angle, center_of_mass)
+                position_rot = dict([[k, np.float64(pos_after_rotate[i])] for i, k in enumerate(XYZ)])
+                # cmds.extend([{"$type": "teleport_object",
+                #                         "id": o_id,
+                #                         "position":position_rot}])
+                position = combine_dicts(delta_position, position_rot, operator.add)
+                # print(vals['position'], '\n', position_rot, '\n', position)
+                cmds.extend([{"$type": "teleport_object",
+                                        "id": o_id,
+                                        # "physics": True,
+                                        "position": dict([[k, np.float64(position[k])]
+                                                    for k in XYZ])}])
+                cmds.extend([{"$type": "rotate_object_by",
+                                    "id": o_id,
+                                    "angle": rotate_angle}])
+                _, _, mass, _, _, _ = self._random_placement(None, None, copy.deepcopy(vals['mass']), None, None, None)
+                cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
+                del ri_dict[o_id]
+
+            # # print(agent_patients)
+            # for index, o_id in enumerate(agent_patients):
+            #     vals = ri_dict[o_id]
+            #     position, _, mass, _, _, _ = self._random_placement(copy.deepcopy(vals['position']), copy.deepcopy(vals['rotation']), copy.deepcopy(vals['mass']), copy.deepcopy(vals['dynamic_friction']), copy.deepcopy(vals['static_friction']), copy.deepcopy(vals['bounciness']))
+            #     if index == 0:
+            #         position_diff = combine_dicts(position, vals['position'], operator.sub)
+            #         # rotation_diff = combine_dicts(rotation, vals['rotation'], operator.sub)
+            #     else:
+            #         # print("position_diff: ", position_diff)
+            #         # print("rotation_diff: ", rotation_diff)
+            #         position = combine_dicts(vals['position'], position_diff, operator.add)
+            #         # rotation = combine_dicts(vals['rotation'], rotation_diff, operator.add)
+            #     cmds.extend([{"$type": "teleport_object",
+            #                             "id": o_id,
+            #                             # "physics": True,
+            #                             "position": dict([[k, np.float64(position[k])]
+            #                                         for k in XYZ])}])
+            #     # cmds.extend([{"$type": "rotate_object_to_euler_angles",
+            #     #                     "id": o_id,
+            #     #                     "euler_angles": dict([[k, np.float64(rotation[k])]
+            #     #                                 for k in XYZ])}])
+            #     cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
+            #     del ri_dict[o_id]
+    
+        for o_id, vals in ri_dict.items():
+            # print(o_id, vals)
+            position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(copy.deepcopy(vals['position']), copy.deepcopy(vals['rotation']), copy.deepcopy(vals['mass']), copy.deepcopy(vals['dynamic_friction']), copy.deepcopy(vals['static_friction']), copy.deepcopy(vals['bounciness']))
             # print(o_id, position, rotation, mass)
             cmds.extend([{"$type": "teleport_object",
                                 "id": o_id,
+                                # "physics": True,
                                 "position": dict([[k, np.float64(position[k])]
                                             for k in XYZ])}])
             cmds.extend([{"$type": "rotate_object_to_euler_angles",
@@ -532,11 +512,11 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                 "euler_angles": dict([[k, np.float64(rotation[k])]
                                             for k in XYZ])}])
             cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
-            cmds.extend([{"$type": "set_physic_material",
-                                "dynamic_friction": np.float64(dynamic_friction), 
-                                "static_friction": np.float64(static_friction), 
-                                "bounciness": np.float64(bounciness), 
-                                "id": o_id}])
+            # cmds.extend([{"$type": "set_physic_material",
+            #                     "dynamic_friction": np.float64(dynamic_friction), 
+            #                     "static_friction": np.float64(static_friction), 
+            #                     "bounciness": np.float64(bounciness), 
+            #                     "id": o_id}])
         # print(cmds)
         return cmds
     
@@ -546,9 +526,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                           mass: float,
                           dynamic_friction: float,
                           static_friction: float,
-                          bounciness: float,
-                          o_id: int,
-                          sim_seed: int):
+                          bounciness: float):
         # print("----------------------------------------------------------------------------------------------------------------------------")
         # print("sim_seed: ", self.sim_seed)
         # print("original o_id: ", o_id)
@@ -560,35 +538,45 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("original static_frictions: ", static_friction)
         # print("original bouncinesses: ", bounciness)
         n = self._noise_params
-        rotrad = dict([[k, deg2rad(rotation[k])]
-                       for k in rotation.keys()])
+        if rotation is not None:
+            rotrad = dict([[k, deg2rad(rotation[k])]
+                        for k in rotation.keys()])
         for k in XYZ:
             if n.position is not None and k in n.position.keys()\
                     and n.position[k] is not None and position is not None:
+                # print("parameters: ", position[k], n.position[k])
                 position[k] = norm.rvs(position[k],
-                                       n.position[k], random_state=sim_seed)
+                                       n.position[k], random_state=self.sim_seed)
+                # print( "self.sim_seed: ", self.sim_seed, "position ", k, position[k])
                 self.sim_seed += 1
             # this is adding vonmises noise to the Euler angles
             if n.rotation is not None and k in n.rotation.keys()\
                     and n.rotation[k] is not None and rotation is not None:
-                rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], random_state=sim_seed)
+                rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], random_state=self.sim_seed)
+                # print( "self.sim_seed: ", self.sim_seed, "rotation ", k, rotrad[k])
                 self.sim_seed += 1
-        rotation = dict([[k, rad2deg(rotrad[k])]
-                         for k in rotrad.keys()])
+        if rotation is not None:
+            rotation = dict([[k, rad2deg(rotrad[k])]
+                            for k in rotrad.keys()])
         if (n.mass is not None) and (mass is not None):
-            mass = max(0, norm.rvs(loc=mass, scale=n.mass, random_state=sim_seed))
+            # mass = max(0, norm.rvs(loc=mass, scale=n.mass, random_state=self.sim_seed))
+            mass = mass*lognorm.rvs(s=n.mass, random_state=self.sim_seed)
+            # print( "self.sim_seed: ", self.sim_seed, "mass: ", mass)
             self.sim_seed += 1
         
         # Clamp frictions to be > 0
         if (n.dynamic_friction is not None) and (dynamic_friction is not None):
-            dynamic_friction = max(0, norm.rvs(loc=dynamic_friction, scale=n.dynamic_friction, random_state=sim_seed))
+            # dynamic_friction = max(0, norm.rvs(loc=dynamic_friction, scale=n.dynamic_friction, random_state=self.sim_seed))
+            dynamic_friction = dynamic_friction*lognorm.rvs(s=n.dynamic_friction, random_state=self.sim_seed)
             self.sim_seed += 1
         if (n.static_friction is not None) and (static_friction is not None):
-            static_friction = max(0, norm.rvs(loc=static_friction, scale=n.static_friction, random_state=sim_seed))
+            # static_friction = max(0, norm.rvs(loc=static_friction, scale=n.static_friction, random_state=self.sim_seed))
+            static_friction = static_friction*lognorm.rvs(s=n.static_friction, random_state=self.sim_seed)
             self.sim_seed += 1
         # Clamp bounciness between 0 and 1
         if (n.bounciness is not None) and (bounciness is not None):
-            bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=sim_seed))
+            # bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=self.sim_seed))
+            bounciness = bounciness*lognorm.rvs(s=n.bounciness, random_state=self.sim_seed)
             self.sim_seed += 1
         # print("perturbed positions: ", position)
         # print("perturbed rotations: ", rotation)
@@ -597,7 +585,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("perturbed static_frictions: ", static_friction)
         # print("perturbed bouncinesses: ", bounciness)
         # print("----------------------------------------------------------------------------------------------------------------------------")
-        self._registered_objects.append(o_id)
+        # self._registered_objects.append(o_id)
         return position, rotation, mass, dynamic_friction, static_friction, bounciness
 
     def add_transforms_object(self,
@@ -606,8 +594,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                               rotation: Dict[str, float],
                               o_id: Optional[int] = None,
                               add_data: Optional[bool] = True,
-                              library: str = "",
-                              sim_seed: int = None) -> dict:
+                              library: str = "") -> dict:
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
         """
@@ -615,14 +602,21 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     position, rotation, _, _, _, _ = self._random_placement(position, rotation, None, None, None, None, o_id, sim_seed)
         # return [RigidbodiesDataset.add_transforms_object(self,
         #     record, position, rotation, o_id, add_data, library)]
-
+        # print("o_id: ", o_id, "position: ", position, "rotation: ", rotation)
         cmds = []
-        for i, room in enumerate(self.scene_record.rooms):
-            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+        for i, room in enumerate(self.scene_record.rooms[:self.num_sim]):
+            this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
             center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
-            pos = combine_dicts(position, center)
-            cmds.append(RigidbodiesDataset.add_transforms_object(self,
-                record, pos, rotation, o_id+i*self.interval, add_data, library))
+            if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+                pos, rot, _, _, _, _ = self._random_placement(copy.deepcopy(position), copy.deepcopy(rotation), None, None, None, None)
+                # print("pos: ", pos, "rot: ", rot)
+                pos = combine_dicts(pos, center)
+                cmds.append(RigidbodiesDataset.add_transforms_object(self,
+                    record, pos, rot, o_id+i*self.interval, add_data, library))
+            else:
+                pos = combine_dicts(position, center)
+                cmds.append(RigidbodiesDataset.add_transforms_object(self,
+                    record, pos, rotation, o_id+i*self.interval, add_data, library))
         return cmds
     
     def add_primitive(self,
@@ -645,7 +639,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                       apply_texture: Optional[bool] = True,
                       default_physics_values: Optional[bool] = True,
                       density:  Optional[float] = 5,
-                      sim_seed: int = None
                       ) -> List[dict]:
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
@@ -657,43 +650,28 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     dynamic_friction, static_friction,
         #     bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
         #     default_physics_values, density)    
-
+        # print("o_id: ", o_id, "position: ", position, "rotation: ", rotation)
         cmds = []
-        for i, room in enumerate(self.scene_record.rooms):
-            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+        # print("o_id: ", o_id, "position: ", position, "rotation: ", rotation)
+        for i, room in enumerate(self.scene_record.rooms[:self.num_sim]):
+            this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
             center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
-            pos = combine_dicts(position, center)
-            cmds.extend(RigidbodiesDataset.add_primitive(self,
-                record, pos, rotation, scale, o_id+i*self.interval, material, color, exclude_color, mass,
-                dynamic_friction, static_friction,
-                bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
-                default_physics_values, density)[0])
+            if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+                pos, rot, m, df, sf, b = self._random_placement(copy.deepcopy(position), copy.deepcopy(rotation), copy.deepcopy(mass), copy.deepcopy(dynamic_friction), copy.deepcopy(static_friction), copy.deepcopy(bounciness))
+                # print("pos: ", pos, "rot: ", rot)
+                pos = combine_dicts(pos, center)
+                cmds.extend(RigidbodiesDataset.add_primitive(self,
+                    record, pos, rot, scale, o_id+i*self.interval, material, color, exclude_color, m,
+                    df, sf, b, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
+                    default_physics_values, density)[0])
+            else:
+                pos = combine_dicts(position, center)
+                cmds.extend(RigidbodiesDataset.add_primitive(self,
+                    record, pos, rotation, scale, o_id+i*self.interval, material, color, exclude_color, mass,
+                    dynamic_friction, static_friction,
+                    bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
+                    default_physics_values, density)[0])
         return cmds, None
-
-    def add_ramp(self,
-                 record: ModelRecord,
-                 position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                 rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
-                 scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
-                 o_id: Optional[int] = None,
-                 material: Optional[str] = None,
-                 color: Optional[list] = None,
-                 mass: Optional[float] = None,
-                 dynamic_friction: Optional[float] = None,
-                 static_friction: Optional[float] = None,
-                 bounciness: Optional[float] = None,
-                 add_data: Optional[bool] = True
-                 ) -> List[dict]:
-        cmds = []
-        for i, room in enumerate(self.scene_record.rooms):
-            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
-            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
-            pos = combine_dicts(position, center)
-            cmds.extend(RigidbodiesDataset.add_ramp(self,
-                record, pos, rotation, scale, o_id+i*self.interval, material, color, mass,
-                dynamic_friction, static_friction,
-                bounciness, add_data))
-        return cmds
     
     def add_physics_object(self,
                            record: ModelRecord,
@@ -708,7 +686,6 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                            add_data: Optional[bool] = True,
                            default_physics_values = True,
                            density = 5,
-                           sim_seed = None
                            ) -> List[dict]:
         """
         Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
@@ -720,21 +697,30 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     scale, dynamic_friction, static_friction,
         #     bounciness, o_id, add_data,
         #     default_physics_values, density)    
-    
+        # print("o_id: ", o_id, "position: ", position, "rotation: ", rotation)
         cmds = []
-        for i, room in enumerate(self.scene_record.rooms):
+        for i, room in enumerate(self.scene_record.rooms[:self.num_sim]):
             # this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
-            this_room_center = {'x':room.main_region.center[0], 'y':0, 'z':room.main_region.center[2]}
+            this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
             center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
-            pos = combine_dicts(position, center)
-            cmds.extend(RigidbodiesDataset.add_physics_object(self,
-                record, pos, rotation, mass,
-                scale, dynamic_friction, static_friction,
-                bounciness, o_id+i*self.interval, add_data,
-                default_physics_values, density)[0])
+            if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+                pos, rot, m, df, sf, b = self._random_placement(copy.deepcopy(position), copy.deepcopy(rotation), copy.deepcopy(mass), copy.deepcopy(dynamic_friction), copy.deepcopy(static_friction), copy.deepcopy(bounciness))
+                # print("pos: ", pos, "rot: ", rot)
+                pos = combine_dicts(pos, center)
+                cmds.extend(RigidbodiesDataset.add_physics_object(self,
+                    record, pos, rot, m,
+                    scale, df, sf, b, o_id+i*self.interval, add_data,
+                    default_physics_values, density)[0])
+            else:
+                pos = combine_dicts(position, center)
+                cmds.extend(RigidbodiesDataset.add_physics_object(self,
+                    record, pos, rotation, mass,
+                    scale, dynamic_friction, static_friction,
+                    bounciness, o_id+i*self.interval, add_data,
+                    default_physics_values, density)[0])
         return cmds, None
 
-    def get_per_frame_commands(self, resp: List[bytes], frame: int, sim_seed: int) -> List[dict]:
+    def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
         """
         Overwrites abstract method to add collision noise commands
 
@@ -744,17 +730,19 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         self._lasttime_collisions = []
         """
         cmds = []
-        if self.collision_noise_generator is not None and frame >= self._noise_params.start_simulate:
-            if frame == self._noise_params.start_simulate:
-                perturbation_cmds = self._add_perturbation(resp, sim_seed)
-                cmds.extend(perturbation_cmds)
+        if frame == self._noise_params.start_simulate:
+            perturbation_cmds = self._add_perturbation(resp)
+            cmds.extend(perturbation_cmds)
+        if self.collision_noise_generator is not None and frame > self._noise_params.start_simulate:
+            # print("frame: ", frame)
             coll_data = self._get_collision_data(resp)
+            # print('\n')
             if len(coll_data) > 0:
                 # """ some filtering and smoothing can be done below, e.g remove target zone collision
                 for cd in coll_data:
                     # if '1' not in nm_ap:
                     # print("----------------------------------------------------------------------------------------------------------------------------")
-                    coll_noise_cmds = self.apply_collision_noise(sim_seed, cd)
+                    coll_noise_cmds = self.apply_collision_noise(cd)
                     cmds.extend(coll_noise_cmds)
                     self.sim_seed += 1
 
@@ -800,10 +788,10 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 # """
                 # coll_noise_cmds = self.apply_collision_noise(coll_data)
                 # cmds.extend(coll_noise_cmds)
-
+        # print('\n')
         return cmds
 
-    def apply_collision_noise(self, sim_seed, data=None):
+    def apply_collision_noise(self, data=None):
         # nm_ap = str(data['agent_id']) + '_' + str(data['patient_id'])
         # print('collision objects: ', nm_ap)
         if data is None or np.linalg.norm(data['impulse']) < self._noise_params.coll_threshold:
@@ -813,19 +801,20 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("num_contacts: ", data['num_contacts'])
         p_id = data['patient_id']
         a_id = data['agent_id']
+        # print("patient and agent id: ", p_id, a_id)
         # print('contact points: ', data['contact_points'])
         contact_points = [dict([[k, pt[idx]] for idx, k in enumerate(XYZ)]) for pt in data['contact_points']]
         # print('contact points formatted: ', contact_points)
         impulse = dict([[k, data['impulse'][idx]] for idx, k in enumerate(XYZ)])
         # print("original impulse: ", impulse)
         # print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
-        force = self.collision_noise_generator(sim_seed, data['impulse'])
-        delta_force = self._calculate_collision_differential(impulse, force)
+        force = self.collision_noise_generator(self.sim_seed, data['impulse'])
+        delta_force = combine_dicts(force, impulse, operator.sub)
         # print("perturbed impulse: ", force)
-        # print("norm perturbed impulse: ", np.linalg.norm(list(force.values())))
-        # print("perturbed impulse delta: ", delta_force)
+                # print("perturbed impulse delta: ", delta_force)
         force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
         force_avg_a = dict([[k, -delta_force[k]/data['num_contacts']] for k in XYZ])
+        # print("norm original impulse: ", np.linalg.norm(list(impulse.values())), ", norm perturbed impulse: ", np.linalg.norm(list(force.values())), ", patient and agent id: ", p_id, a_id, ", perturbed force_avg_p: ", force_avg_p)
         # if data['num_contacts'] != 0:
         #     force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
         #     force_avg_a = dict([[k, -delta_force[k]/data['num_contacts']] for k in XYZ])
@@ -834,7 +823,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     force_avg_p = delta_force
         #     force_avg_a = dict([[k, -delta_force[k]] for k in XYZ])
         # print("perturbed force_avg_p: ", force_avg_p)
-        # print("perturbed force_avg_a: ", force_avg_a)        
+        # print("perturbed force_avg_a: ", force_avg_a)   
+        # print("sim seed: ", self.sim_seed)     
         # see here: https://github.com/threedworld-mit/tdw/blob/ce177b9754e4fa7bc7094c59937bb12c01f978aa/Documentation/api/command_api.md#apply_force_at_position
         # why there are multiple contact normals: https://gamedev.stackexchange.com/questions/40048/why-doesnt-unitys-oncollisionenter-give-me-surface-normals-and-whats-the-mos
         cmds_p = [
@@ -854,7 +844,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             } for contact_point in contact_points
         ]
         cmds = cmds_p+cmds_a
-        # print('cmd: ', cmds)
+        # q('cmd: ', cmds)
         # print("----------------------------------------------------------------------------------------------------------------------------")
         return cmds
 
@@ -864,8 +854,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     Helper function that takes in a collision momentum transfer vector, then calculates the momentum to apply
     in the next timestep to actualize the collision noise
     """
-    def _calculate_collision_differential(self, original_momentum: Dict[str, float], perturbed_momentum: Dict[str, float]) -> Dict[str, float]:
-        return dict([[k, perturbed_momentum[k]-original_momentum[k]] for k in XYZ])
+    # def _calculate_collision_differential(self, original_momentum: Dict[str, float], perturbed_momentum: Dict[str, float]) -> Dict[str, float]:
+    #     return dict([[k, perturbed_momentum[k]-original_momentum[k]] for k in XYZ])
 
     def set_collision_noise_generator(self,
                                       noise_obj: RigidNoiseParams):
@@ -890,14 +880,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    # impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
                                       impulse_mag)
             else:
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    # impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
                     impulse_rand_dir = rand_von_mises_fisher(sim_seed, impulse_dir, kappa=ncd)[0]
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]), impulse_mag)

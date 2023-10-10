@@ -80,6 +80,7 @@ class Dataset(Controller, ABC):
                  randomize: int=0,
                  seed: int=0,
                  sim_seed: int=0,
+                 num_sim: int=1,
                  save_args=True,
                  return_early=False,
                  custom_build=None,
@@ -144,7 +145,7 @@ class Dataset(Controller, ABC):
         if not bool(self.randomize):
             random.seed(self.seed)
             # print("SET RANDOM SEED: %d" % self.seed)
-
+        self.num_sim = num_sim
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
         self.num_views = kwargs.get('num_views', 1)
@@ -641,7 +642,7 @@ class Dataset(Controller, ABC):
                    output_dir: str,
                    temp_path: str,
                    save_frame: int = None,
-                   unload_assets_every: int = 10,
+                   unload_assets_every: int = 1000000,
                    update_kwargs: List[dict] = {},
                    do_log: bool = False) -> None:
 

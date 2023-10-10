@@ -478,7 +478,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         cmds.extend(cds)
 
         if o_id is None:
-            o_id = cmds[-1]["id"]
+            o_id = cmds[-self.num_sim]["id"]
 
         # # scale the ramp
         # cmds.append(
@@ -486,25 +486,41 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         #      "scale_factor": scale,
         #      "id": o_id})
 
-        # texture and color it
-        cmds.extend(
-            self.get_object_material_commands(
-                record, o_id, self.get_material_name(material)))
+        for i in range(self.num_sim):
+            cmds.extend(
+                self.get_object_material_commands(
+                    record, o_id+i*self.interval, self.get_material_name(material)))
+            cmds.extend([
+                {"$type": "set_color",
+                "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+                "id": o_id+i*self.interval},
+                {"$type": "set_object_collision_detection_mode",
+                "mode": "continuous_speculative",
+                "id": o_id+i*self.interval},
+                {"$type": "set_kinematic_state",
+                "id": o_id+i*self.interval,
+                "is_kinematic": True,
+                "use_gravity": True}])
+            
+        # # texture and color it
+        # cmds.extend(
+        #     self.get_object_material_commands(
+        #         record, o_id, self.get_material_name(material)))
 
-        cmds.append(
-            {"$type": "set_color",
-             "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
-             "id": o_id})
+        # cmds.append(
+        #     {"$type": "set_color",
+        #      "color": {"r": color[0], "g": color[1], "b": color[2], "a": 1.},
+        #      "id": o_id})
 
-        # need to make ramp a kinetimatic object
-        cmds.extend([
-            {"$type": "set_object_collision_detection_mode",
-             "mode": "continuous_speculative",
-             "id": o_id},
-            {"$type": "set_kinematic_state",
-             "id": o_id,
-             "is_kinematic": True,
-             "use_gravity": True}])
+        # # need to make ramp a kinetimatic object
+        # cmds.extend([
+        #     {"$type": "set_object_collision_detection_mode",
+        #      "mode": "continuous_speculative",
+        #      "id": o_id},
+        #     {"$type": "set_kinematic_state",
+        #      "id": o_id,
+        #      "is_kinematic": True,
+            #  "use_gravity": True}])
 
         if add_data:
             self._add_name_scale_color(record, {'color': color, 'scale': scale})
