@@ -86,6 +86,7 @@ class Dataset(Controller, ABC):
                  custom_build=None,
                  ffmpeg_executable='ffmpeg',
                  path_obj='/mnt/fs3/rmvenkat/data/all_flex_meshes',
+                 path_scene='/ccn2/u/haw027/data/tdw_scenes/scenes',
                  view_id_number=0,
                  max_frames=250,
                  check_interpenet=True,
@@ -123,7 +124,8 @@ class Dataset(Controller, ABC):
                         check_version=check_version,
                          launch_build=launch_build,
                          custom_build=custom_build,
-                         mesh_folder=path_obj)
+                         mesh_folder=path_obj,
+                         scene_folder=path_scene)
 
         # hdri_skybox = "table_mountain_1_4k"
         # interior_scene_lighting = InteriorSceneLighting(hdri_skybox=hdri_skybox, aperture=8, focus_distance=2.5, ambient_occlusion_intensity=0.125, ambient_occlusion_thickness_modifier=3.5, shadow_strength=0.1)

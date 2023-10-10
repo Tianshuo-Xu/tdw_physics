@@ -57,7 +57,7 @@ class Controller:
     for key in FLEX_MASSES.keys():
         TRIMESH_MESHES[key] = None
 
-    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True, custom_build=None, mesh_folder:str ='/mnt/fs3/rmvenkat/data/all_flex_meshes'):
+    def __init__(self, port: int = 1071, check_version: bool = True, launch_build: bool = True, custom_build=None, mesh_folder:str ='/mnt/fs3/rmvenkat/data/all_flex_meshes', scene_folder:str ='/ccn2/u/haw027/data/tdw_scenes/scenes'):
         """
         Create the network socket and bind the socket to the port.
 
@@ -69,6 +69,7 @@ class Controller:
         # A list of modules that will add commands on `communicate()`.
 
         self.mesh_folder = mesh_folder
+        self.scene_folder = scene_folder
 
         for key in Controller.FLEX_MASSES.keys():
             Controller.TRIMESH_MESHES[key] = trimesh.load(os.path.join(mesh_folder, key + '.obj'))
