@@ -389,7 +389,11 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     object_id = rigi.get_id(j)
                     # print("j: ", j, 'object_id: ', object_id)
                     velocity = rigi.get_velocity(j)
+                    velocity = dict([[k, velocity[idx]]
+                                            for idx, k in enumerate(XYZ)])
                     angular_velocity = rigi.get_angular_velocity(j)
+                    angular_velocity = dict([[k, angular_velocity[idx]]
+                                            for idx, k in enumerate(XYZ)])
                     if object_id in ri_dict.keys():
                         ri_dict[object_id].update({'velocity': velocity, 'angular_velocity': angular_velocity})
                     else:
@@ -461,6 +465,8 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 #                         "id": o_id,
                 #                         "position":position_rot}])
                 position = combine_dicts(delta_position, position_rot, operator.add)
+                vel_after_rotate = TDWUtils.rotate_position_around(list(vals['velocity'].values()), rotate_angle)
+                angular_vel_after_rotate = TDWUtils.rotate_position_around(list(vals['angular_velocity'].values()), rotate_angle)
                 # print(vals['position'], '\n', position_rot, '\n', position)
                 cmds.extend([{"$type": "teleport_object",
                                         "id": o_id,
@@ -470,6 +476,14 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 cmds.extend([{"$type": "rotate_object_by",
                                     "id": o_id,
                                     "angle": rotate_angle}])
+                cmds.extend([{"$type": "set_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(vel_after_rotate[i])]
+                                                    for i, k in enumerate(XYZ)])}])
+                cmds.extend([{"$type": "set_angular_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(angular_vel_after_rotate[i])]
+                                                    for i, k in enumerate(XYZ)])}])
                 _, _, mass, _, _, _ = self._random_placement(None, None, copy.deepcopy(vals['mass']), None, None, None)
                 cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
                 del ri_dict[o_id]
@@ -501,6 +515,9 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         for o_id, vals in ri_dict.items():
             # print(o_id, vals)
             position, rotation, mass, dynamic_friction, static_friction, bounciness = self._random_placement(copy.deepcopy(vals['position']), copy.deepcopy(vals['rotation']), copy.deepcopy(vals['mass']), copy.deepcopy(vals['dynamic_friction']), copy.deepcopy(vals['static_friction']), copy.deepcopy(vals['bounciness']))
+            delta_rotation = combine_dicts(rotation, vals['rotation'], operator.sub)
+            vel_after_rotate = TDWUtils.rotate_position_around(list(vals['velocity'].values()), delta_rotation['y'])
+            angular_vel_after_rotate = TDWUtils.rotate_position_around(list(vals['angular_velocity'].values()), delta_rotation['y'])
             # print(o_id, position, rotation, mass)
             cmds.extend([{"$type": "teleport_object",
                                 "id": o_id,
@@ -511,6 +528,14 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                                 "id": o_id,
                                 "euler_angles": dict([[k, np.float64(rotation[k])]
                                             for k in XYZ])}])
+            cmds.extend([{"$type": "set_velocity",
+                                    "id": o_id,
+                                    "velocity": dict([[k, np.float64(vel_after_rotate[i])]
+                                            for i, k in enumerate(XYZ)])}])
+            cmds.extend([{"$type": "set_angular_velocity",
+                                    "id": o_id,
+                                    "velocity": dict([[k, np.float64(angular_vel_after_rotate[i])]
+                                            for i, k in enumerate(XYZ)])}])
             cmds.extend([{"$type": "set_mass", "mass": np.float64(mass), "id": o_id}])
             # cmds.extend([{"$type": "set_physic_material",
             #                     "dynamic_friction": np.float64(dynamic_friction), 
