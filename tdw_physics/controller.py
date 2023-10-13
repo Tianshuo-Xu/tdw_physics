@@ -5,9 +5,9 @@ from subprocess import Popen
 from typing import List, Union, Tuple, Dict
 from tdw.librarian import ModelLibrarian, SceneLibrarian, MaterialLibrarian, HDRISkyboxLibrarian, \
     HumanoidAnimationLibrarian, HumanoidLibrarian, HumanoidAnimationRecord, RobotLibrarian
-from tdw.backend.paths import EDITOR_LOG_PATH, PLAYER_LOG_PATH
+from tdw.backend.paths import EDITOR_LOG_PATH, PLAYER_LOG_PATH, BUILD_PATH
 from tdw.output_data import Version, QuitSignal
-# from tdw.release.build import Build
+from argparse import ArgumentParser
 from tdw.backend.update import Update
 # from tdw.release.pypi import PyPi
 from tdw.version import __version__
@@ -75,9 +75,6 @@ class Controller:
         for key in Controller.FLEX_MASSES.keys():
             Controller.TRIMESH_MESHES[key] = trimesh.load(os.path.join(mesh_folder, key + '.obj'))
 
-        # breakpoint()
-
-
         self.add_ons: List[AddOn] = list()
 
         # Compare the installed version of the tdw Python module to the latest on PyPi.
@@ -100,12 +97,12 @@ class Controller:
         self.socket = context.socket(zmq.REP)
         # sock.bind(('', 0))
 
-        # self.socket.bind('tcp://*:' + str(port))
-        self.socket.bind('tcp://*:' + str(0))
+        self.socket.bind('tcp://*:' + str(port))
+        # self.socket.bind('tcp://*:' + str(0))
 
-        port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
+        # port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
 
-        port = int(str(port).split(':')[-1][:-1])
+        # port = int(str(port).split(':')[-1][:-1])
 
 
         # print("port changed:", port)
@@ -616,21 +613,21 @@ class Controller:
         return int.from_bytes(frame, byteorder='big')
 
     @staticmethod
-    def launch_build(port: int = 1071, custom_build=None) -> None:
+    def launch_build(port: int = 1071) -> None:
         """
         Launch the build. If a build doesn't exist at the expected location, download one to that location.
 
         :param port: The socket port.
         """
-        parser = ArgumentParser()
-        parser.add_argument("--flip_images", action="store_true")
-        parser.add_argument("--force_glcore42", action="store_true")
-        args = parser.parse_args()
+        # parser = ArgumentParser()
+        # parser.add_argument("--flip_images", action="store_true")
+        # parser.add_argument("--force_glcore42", action="store_true")
+        # args = parser.parse_args()
         build_call = [str(BUILD_PATH.resolve()), "-port " + str(port)]
-        if args.flip_images:
-            build_call.append("-flip_images")
-        if args.force_glcore42:
-            build_call.append("-force-glcore42")
+        # if args.flip_images:
+        #     build_call.append("-flip_images")
+        # if args.force_glcore42:
+        #     build_call.append("-force-glcore42")
         Popen(build_call)
 
         # # Download the build.
