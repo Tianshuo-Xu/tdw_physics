@@ -154,6 +154,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         #     print("example noise", self.collision_noise_generator())
         # self._registered_objects = []
         self.interval = 100
+        self.coll_clip = 0.01
 
     def log_transform_info(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(Dataset.OBJECT_IDS)
@@ -458,6 +459,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             rotate_angle = delta_rotation['y']
             # print("rotate_angle: ", delta_rotation)
             for o_id in agent_patients:
+                # print(o_id)
                 vals = ri_dict[o_id]
                 pos_after_rotate = TDWUtils.rotate_position_around(list(vals['position'].values()), rotate_angle, center_of_mass)
                 position_rot = dict([[k, np.float64(pos_after_rotate[i])] for i, k in enumerate(XYZ)])
@@ -467,6 +469,10 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 position = combine_dicts(delta_position, position_rot, operator.add)
                 vel_after_rotate = TDWUtils.rotate_position_around(list(vals['velocity'].values()), rotate_angle)
                 angular_vel_after_rotate = TDWUtils.rotate_position_around(list(vals['angular_velocity'].values()), rotate_angle)
+                # assert position['y'] == vals['position']['y']
+                # assert vel_after_rotate[1] == vals['velocity']['y']
+                # assert angular_vel_after_rotate[1] == vals['angular_velocity']['y']
+                # print("position: ", position['y'])
                 # print(vals['position'], '\n', position_rot, '\n', position)
                 cmds.extend([{"$type": "teleport_object",
                                         "id": o_id,
@@ -835,6 +841,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
         force = self.collision_noise_generator(self.sim_seed, data['impulse'])
         delta_force = combine_dicts(force, impulse, operator.sub)
+        delta_force = dict([[k, np.clip(delta_force[k], -self.coll_clip, self.coll_clip)] for k in XYZ])
         # print("perturbed impulse: ", force)
                 # print("perturbed impulse delta: ", delta_force)
         force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
