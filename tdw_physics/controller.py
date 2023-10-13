@@ -82,7 +82,7 @@ class Controller:
         if check_version:
             can_launch_build = Update.check_for_update(download_build=launch_build)
         else:
-            can_launch_build = False
+            can_launch_build = True
 
         if not can_launch_build:
             print("You need to launch your own build.")

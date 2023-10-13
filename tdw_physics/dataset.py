@@ -75,7 +75,7 @@ class Dataset(Controller, ABC):
     # IDs of the objects in the current trial.
     OBJECT_IDS: np.array = np.empty(dtype=int, shape=0)
 
-    def __init__(self, port: int = 1071, check_version: bool=True,
+    def __init__(self, port: int = 1071, check_version: bool=False,
                  launch_build: bool=True,
                  randomize: int=0,
                  seed: int=0,
