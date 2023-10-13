@@ -461,12 +461,12 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             for o_id in agent_patients:
                 # print(o_id)
                 vals = ri_dict[o_id]
-                pos_after_rotate = TDWUtils.rotate_position_around(list(vals['position'].values()), rotate_angle, center_of_mass)
-                position_rot = dict([[k, np.float64(pos_after_rotate[i])] for i, k in enumerate(XYZ)])
-                # cmds.extend([{"$type": "teleport_object",
-                #                         "id": o_id,
-                #                         "position":position_rot}])
-                position = combine_dicts(delta_position, position_rot, operator.add)
+                # pos_after_rotate = TDWUtils.rotate_position_around(list(vals['position'].values()), rotate_angle, center_of_mass)
+                # position_rot = dict([[k, np.float64(pos_after_rotate[i])] for i, k in enumerate(XYZ)])
+                # # cmds.extend([{"$type": "teleport_object",
+                # #                         "id": o_id,
+                # #                         "position":position_rot}])
+                # position = combine_dicts(delta_position, position_rot, operator.add)
                 vel_after_rotate = TDWUtils.rotate_position_around(list(vals['velocity'].values()), rotate_angle)
                 angular_vel_after_rotate = TDWUtils.rotate_position_around(list(vals['angular_velocity'].values()), rotate_angle)
                 # assert position['y'] == vals['position']['y']
@@ -474,14 +474,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 # assert angular_vel_after_rotate[1] == vals['angular_velocity']['y']
                 # print("position: ", position['y'])
                 # print(vals['position'], '\n', position_rot, '\n', position)
+                position = combine_dicts(delta_position, vals['position'], operator.add)
+                cmds.extend([{"$type": "rotate_object_around",
+                                    "id": o_id,
+                                    "position":dict([[k, center_of_mass[i]] for i, k in enumerate(XYZ)]),
+                                    "angle": rotate_angle}])
                 cmds.extend([{"$type": "teleport_object",
                                         "id": o_id,
                                         # "physics": True,
                                         "position": dict([[k, np.float64(position[k])]
                                                     for k in XYZ])}])
-                cmds.extend([{"$type": "rotate_object_by",
-                                    "id": o_id,
-                                    "angle": rotate_angle}])
                 cmds.extend([{"$type": "set_velocity",
                                         "id": o_id,
                                         "velocity": dict([[k, np.float64(vel_after_rotate[i])]
@@ -841,7 +843,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # print("norm original impulse: ", np.linalg.norm(list(impulse.values())))
         force = self.collision_noise_generator(self.sim_seed, data['impulse'])
         delta_force = combine_dicts(force, impulse, operator.sub)
-        delta_force = dict([[k, np.clip(delta_force[k], -self.coll_clip, self.coll_clip)] for k in XYZ])
+        # delta_force = dict([[k, np.clip(delta_force[k], -self.coll_clip, self.coll_clip)] for k in XYZ])
         # print("perturbed impulse: ", force)
                 # print("perturbed impulse delta: ", delta_force)
         force_avg_p = dict([[k, delta_force[k]/data['num_contacts']] for k in XYZ])
