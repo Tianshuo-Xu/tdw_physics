@@ -623,6 +623,8 @@ class RigidbodiesDataset(TransformsDataset, ABC):
         collision_ids = np.empty(dtype=np.int32, shape=(0, 2))
         collision_relative_velocities = np.empty(dtype=np.float32, shape=(0, 3))
         collision_contacts = np.empty(dtype=np.float32, shape=(0, 2, 3))
+        collision_contacts_ot = np.empty(dtype=np.float32, shape=(0, 3))
+        collision_contacts_normals_ot = np.empty(dtype=np.float32, shape=(0, 3))
         collision_states = np.empty(dtype=str, shape=(0, 1))
         # Environment Collision data.
         env_collision_ids = np.empty(dtype=np.int32, shape=(0, 1))
@@ -680,6 +682,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                 for i in range(co.get_num_contacts()):
                     collision_contacts = np.append(collision_contacts, (co.get_contact_normal(i),
                                                                         co.get_contact_point(i)))
+
+                collision_contacts_ot, collision_contacts_normals_ot = self.get_object_target_collision(self.zone_id, self.target_id, resp)
+
+
             elif r_id == "enco":
                 en = EnvironmentCollision(r)
                 env_collision_ids = np.append(env_collision_ids, en.get_object_id())
@@ -701,6 +707,10 @@ class RigidbodiesDataset(TransformsDataset, ABC):
             collisions.create_dataset("relative_velocities", data=collision_relative_velocities.reshape((-1, 3)),
                                       compression="gzip")
             collisions.create_dataset("contacts", data=collision_contacts.reshape((-1, 2, 3)), compression="gzip")
+            # breakpoint()
+            collisions.create_dataset("contacts_ot", data=collision_contacts_ot, compression="gzip")
+            collisions.create_dataset("contacts_normals_ot", data=collision_contacts_normals_ot, compression="gzip")
+
             collisions.create_dataset("states", data=collision_states.astype('S'), compression="gzip")
             env_collisions = frame.create_group("env_collisions")
             env_collisions.create_dataset("object_ids", data=env_collision_ids, compression="gzip")
@@ -722,7 +732,7 @@ class RigidbodiesDataset(TransformsDataset, ABC):
                     contact_points = [co.get_contact_point(i) for i in range(co.get_num_contacts())]
                     contact_normals = [co.get_contact_normal(i) for i in range(co.get_num_contacts())]
 
-        return (contact_points, contact_normals)
+        return np.array(contact_points), np.array(contact_normals)
 
     def get_object_environment_collision(self, obj_id: int, resp: List[bytes]):
 

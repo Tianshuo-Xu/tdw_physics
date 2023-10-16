@@ -271,6 +271,8 @@ def get_penetration(file_path):
 # pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1
 def accept_stimuli(filepath, check_interp=True, check_area=True):
     # breakpoint()
+    if (not check_interp) and (not check_area):
+        return True
 
     # breakpoint()
     area = get_target_area(filepath)[1]
