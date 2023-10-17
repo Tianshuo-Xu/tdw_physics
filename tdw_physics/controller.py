@@ -87,17 +87,23 @@ class Controller:
         if not can_launch_build:
             print("You need to launch your own build.")
 
-        # Launch the build.
-        if launch_build and can_launch_build:
-            Controller.launch_build(port=port)
-
         context = zmq.Context()
 
         # noinspection PyUnresolvedReferences
         self.socket = context.socket(zmq.REP)
         # sock.bind(('', 0))
 
-        self.socket.bind('tcp://*:' + str(port))
+        while True:
+            try:
+                self.socket.bind('tcp://*:' + str(port))
+                break
+            except:
+                port += 1
+                continue
+        # Launch the build.
+        if launch_build and can_launch_build:
+            Controller.launch_build(port=port)
+        
         # self.socket.bind('tcp://*:' + str(0))
 
         # port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
