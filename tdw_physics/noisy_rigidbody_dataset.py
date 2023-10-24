@@ -581,13 +581,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 position[k] = norm.rvs(position[k],
                                        n.position[k], random_state=self.sim_seed)
                 # print( "self.sim_seed: ", self.sim_seed, "position ", k, position[k])
-                # self.sim_seed += 1
+                self.sim_seed += 1
             # this is adding vonmises noise to the Euler angles
             if n.rotation is not None and k in n.rotation.keys()\
                     and n.rotation[k] is not None and rotation is not None:
                 rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], random_state=self.sim_seed)
                 # print( "self.sim_seed: ", self.sim_seed, "rotation ", k, rotrad[k])
-                # self.sim_seed += 1
+                self.sim_seed += 1
         if rotation is not None:
             rotation = dict([[k, rad2deg(rotrad[k])]
                             for k in rotrad.keys()])
