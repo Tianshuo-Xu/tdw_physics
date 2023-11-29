@@ -581,35 +581,35 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 position[k] = norm.rvs(position[k],
                                        n.position[k], random_state=self.sim_seed)
                 # print( "self.sim_seed: ", self.sim_seed, "position ", k, position[k])
-                self.sim_seed += 1
+                # self.sim_seed += 1
             # this is adding vonmises noise to the Euler angles
             if n.rotation is not None and k in n.rotation.keys()\
                     and n.rotation[k] is not None and rotation is not None:
                 rotrad[k] = vonmises.rvs(n.rotation[k], rotrad[k], random_state=self.sim_seed)
                 # print( "self.sim_seed: ", self.sim_seed, "rotation ", k, rotrad[k])
-                self.sim_seed += 1
+                # self.sim_seed += 1
         if rotation is not None:
             rotation = dict([[k, rad2deg(rotrad[k])]
                             for k in rotrad.keys()])
         if (n.mass is not None) and (mass is not None):
-            # mass = max(0, norm.rvs(loc=mass, scale=n.mass, random_state=self.sim_seed))
-            mass = mass*lognorm.rvs(s=n.mass, random_state=self.sim_seed)
+            mass = max(0, norm.rvs(loc=mass, scale=n.mass, random_state=self.sim_seed))
+            # mass = mass*lognorm.rvs(s=n.mass, random_state=self.sim_seed)
             # print( "self.sim_seed: ", self.sim_seed, "mass: ", mass)
             self.sim_seed += 1
         
         # Clamp frictions to be > 0
         if (n.dynamic_friction is not None) and (dynamic_friction is not None):
-            # dynamic_friction = max(0, norm.rvs(loc=dynamic_friction, scale=n.dynamic_friction, random_state=self.sim_seed))
-            dynamic_friction = dynamic_friction*lognorm.rvs(s=n.dynamic_friction, random_state=self.sim_seed)
+            dynamic_friction = max(0, norm.rvs(loc=dynamic_friction, scale=n.dynamic_friction, random_state=self.sim_seed))
+            # dynamic_friction = dynamic_friction*lognorm.rvs(s=n.dynamic_friction, random_state=self.sim_seed)
             self.sim_seed += 1
         if (n.static_friction is not None) and (static_friction is not None):
-            # static_friction = max(0, norm.rvs(loc=static_friction, scale=n.static_friction, random_state=self.sim_seed))
-            static_friction = static_friction*lognorm.rvs(s=n.static_friction, random_state=self.sim_seed)
+            static_friction = max(0, norm.rvs(loc=static_friction, scale=n.static_friction, random_state=self.sim_seed))
+            # static_friction = static_friction*lognorm.rvs(s=n.static_friction, random_state=self.sim_seed)
             self.sim_seed += 1
         # Clamp bounciness between 0 and 1
         if (n.bounciness is not None) and (bounciness is not None):
-            # bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=self.sim_seed))
-            bounciness = bounciness*lognorm.rvs(s=n.bounciness, random_state=self.sim_seed)
+            bounciness = max(0, norm.rvs(loc=bounciness, scale=n.bounciness, random_state=self.sim_seed))
+            # bounciness = bounciness*lognorm.rvs(s=n.bounciness, random_state=self.sim_seed)
             self.sim_seed += 1
         # print("perturbed positions: ", position)
         # print("perturbed rotations: ", rotation)
@@ -914,16 +914,16 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    # impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
-                    impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    # impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
                     return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
                                       impulse_mag)
             else:
                 def cng(sim_seed, impulse):
                     impulse_mag = np.linalg.norm(impulse)
                     impulse_dir = impulse/impulse_mag
-                    # impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
-                    impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=ncm, random_state=sim_seed))
+                    # impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
                     impulse_rand_dir = rand_von_mises_fisher(sim_seed, impulse_dir, kappa=ncd)[0]
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]), impulse_mag)
