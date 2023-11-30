@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DATAROOT=${1:-'tdw_room_allobj'}
-ROOM=${2:-'tdw_room'} # [tdw_room, box, mm_craftroom_1b]
+ROOM=${2:-'floorplan_1a'} # [tdw_room, box, mm_craftroom_1b]
 PORT=${3:-'1071'}
 GPU=${4:-'0'}
 

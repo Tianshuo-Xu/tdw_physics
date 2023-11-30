@@ -478,6 +478,7 @@ class Playroom(Collision):
                 self.room_center = get_random_xyz_transform(generator)
             else:
                 self.room_center = get_random_xyz_transform(self.room_center_range)
+                print('ROOM CENTER: ', self.room_center)
         else:
             self._set_room_center()
 

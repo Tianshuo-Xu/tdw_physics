@@ -9,11 +9,12 @@ from collections import OrderedDict
 import copy
 import json
 from tqdm import tqdm
-from tdw_physics.util import MODEL_LIBRARIES, none_or_str, none_or_int
+from tdw_physics.util import MODEL_LIBRARIES, ROOMS, none_or_str, none_or_int
 from tdw_physics.target_controllers.playroom import Playroom, get_playroom_args
 from tdw_physics.dataset_generation.scripts.playroom_selection import (
     EXCLUDE_MODEL, EXCLUDE_CATEGORY, CATEGORY_SCALE_FACTOR, MODEL_SCALE_FACTOR)
 import h5py
+
 
 RECORDS = []
 for lib in {k:MODEL_LIBRARIES[k] for k in ["models_full.json", "models_special.json"]}.values():
@@ -123,6 +124,10 @@ def get_args(dataset_dir: str):
                         type=int,
                         default=10,
                         help="Number of trials to create per moving model")
+    parser.add_argument("--num_trials_per_scene",
+                        type=int,
+                        default=10,
+                        help="Number of trials to create per scene")
     parser.add_argument("--split",
                         type=int,
                         default=0,
@@ -218,9 +223,9 @@ def split_models(category_splits, num_models_per_split=[1000,1000], seed=0):
     return model_splits
 
 def build_simple_scenario(models, num_trials, seed, num_distractors, room, permute=True, load_cfg=None):
-
-    room_seed = {None: 0, 'box': 0, 'archviz_house': 1, 'tdw_room': 2, 'mm_craftroom_1b': 3}
-    rng = np.random.RandomState(seed=(seed + room_seed[room]))
+    room_seed = ROOMS.index(room)
+    print('ROOM SEED', room_seed, seed)
+    rng = np.random.RandomState(seed=(seed + room_seed))
 
 
     scenarios = []
@@ -524,11 +529,7 @@ def main(args):
         models_simple = TRAIN_VAL_MODELS_NAMES
         print('Generate train with %d models' % len(models_simple))
 
-    scenarios = build_simple_scenario(models_simple, num_trials=10000, seed=args.category_seed, num_distractors=args.num_distractors, room=args.room, permute=True, load_cfg=args.load_cfg_path)
 
-    print('Number of models: ', len(models_simple))
-
-    start, end = args.start, (args.end or len(scenarios))
 
 
     # for i,sc in enumerate(scenarios[start:end]):
@@ -563,6 +564,19 @@ def main(args):
     if (args.seed == -1) or (args.seed is None):
         args.seed = int(args.split) + num_moving_splits * args.group_order[0]
 
+    exclude_list = ['archviz_house', 'box_room_4x5', 'tdw_room_4x5', 'suburb_scene_2018', 'savanna_flat_6km', 'mm_kitchen_4a', 'mm_kitchen_1b_4x5']
+
+
+    rooms_list = []
+    for i in ROOMS:
+        if i not in exclude_list:
+            rooms_list.append(i)
+
+    if args.room == 'random':
+        num_rooms = len(rooms_list)
+    else:
+        num_rooms = 1
+
     Play = build_controller(args, scale_dict)
     Play._height, Play._width, Play._framerate = (args.height, args.width, args.framerate)
     Play.command_log = output_dir.joinpath('tdw_commands.json')
@@ -571,20 +585,62 @@ def main(args):
     Play.save_movies = args.save_movies
     Play.save_meshes = args.save_meshes
     Play.save_labels = False
+    count = 0
+    for i in range(num_rooms):
+        args.room = Play.room = rooms_list[i]
 
-    log_cmds = [{"$type": "set_network_logging", "value": True}]
-    init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
-    Play.communicate(log_cmds + init_cmds)
-    logging.info("Initialized Controller with random seed %d" % args.seed)
+        output_dir = Path(os.path.join(args.dir, args.room))  # .joinpath('model_split_' + suffix)
+        if not output_dir.exists():
+            output_dir.mkdir(parents=True)
 
-    ## run the trial loop
-    Play.trial_loop(num=(end - start),
-                    output_dir=str(output_dir),
-                    temp_path=str(temp_path),
-                    save_frame=SAVE_FRAME,
-                    update_kwargs=scenarios[start:end],
-                    unload_assets_every=args.unload_assets_every,
-                    do_log=True)
+        if 'floorplan_2' in args.room:
+            Play.room_center_range = {'x':(7.2, 7.2), 'y': (0,0), 'z': (-2.5,-2.5)}
+        elif 'floorplan_1' in args.room:
+            Play.room_center_range = {'x': (0, 0), 'y': (0, 0), 'z': (2.5, 2.5)}
+        elif 'floorplan_4' in args.room:
+            Play.room_center_range = {'x': (-6.2, -6.2), 'y': (0, 0), 'z': (-3, -3)}
+        elif 'floorplan_5' in args.room:
+            Play.room_center_range = {'x': (-2.5, -2.5), 'y': (0, 0), 'z': (-2.5, -2.5)}
+        elif 'house' in args.room:
+            # [-12.8730,1.85,-5.75]
+            Play.room_center_range = {'x': (12.8, 12.8), 'y': (1.85, 1.85), 'z': (-5.75, -5.75)}
+        elif 'downtown' in args.room:
+            Play.room_center_range = {'x': (4,-4), 'y': (-3., -3.), 'z': (-5, -5)}
+        elif 'ruin' in args.room:
+            Play.room_center_range = {'x': (0,0), 'y': (0,0), 'z': (-2.5, -2.5)}
+        elif 'building_site' in args.room:
+            Play.room_center_range = {'x': (0, 0), 'y': (0, 0), 'z': (2.5, 2.5)}
+        elif 'craftroom_4' in args.room or 'kitchen_4' in args.room:
+            Play.room_center_range = {'x': (0, 0), 'y': (0, 0), 'z': (0.5, 0.5)}
+        elif 'craftroom_3' in args.room or 'kitchen_3' in args.room:
+            Play.room_center_range = {'x': (0.25, 0.25), 'y': (0, 0), 'z': (0, 0)}
+        else:
+            Play.room_center_range = {'x': (0, 0), 'y': (0, 0), 'z': (0, 0)}
+        start, end = args.start, (args.end or args.num_trials_per_scene)
+        # Play.start = start
+        # Play.end = end
+        Play.communicate(Play.get_scene_initialization_commands())
+        scenarios = build_simple_scenario(copy.deepcopy(models_simple), num_trials=args.num_trials_per_scene, seed=args.category_seed,
+                                          num_distractors=args.num_distractors, room=args.room, permute=True,
+                                          load_cfg=args.load_cfg_path)
+
+        print('Number of models: ', len(models_simple))
+        print('ROOM: ', args.room)
+
+        log_cmds = [{"$type": "set_network_logging", "value": True}]
+        init_cmds = Play.get_initialization_commands(width=args.width, height=args.height)
+        Play.communicate(log_cmds + init_cmds)
+        logging.info("Initialized Controller with random seed %d" % args.seed)
+
+        ## run the trial loop
+        Play.trial_loop(num=(end - start),
+                        output_dir=str(output_dir),
+                        temp_path=str(temp_path),
+                        save_frame=SAVE_FRAME,
+                        update_kwargs=scenarios[start:end],
+                        unload_assets_every=args.unload_assets_every,
+                        do_log=True)
+        count += 1
 
 
     ## terminate build
@@ -602,6 +658,7 @@ if __name__ == '__main__':
             os.environ["DISPLAY"] = ":0"
 
     print('USE GPU: ', args.gpu)
+
     main(args)
 
     # for nm in MODEL_NAMES:

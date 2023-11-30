@@ -22,7 +22,9 @@ for i in range(start_idx, end_idx):
     for j, ds in enumerate(datasets):
         file_list = glob.glob(os.path.join(ds, 'sc{:04d}*'.format(i)))
 
-        assert len(file_list) == 29, (ds, i)
+
+
+        assert len(file_list) == 29, breakpoint()
         new_id = i * len(datasets) + j
         assert new_id == count
         count += 1

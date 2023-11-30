@@ -312,7 +312,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in (['box', 'tdw', 'house', 'random_kitchen'] + ROOMS), (args.room, ROOMS)
+        #assert args.room in (['box', 'tdw', 'house', 'random_kitchen'] + ROOMS), (args.room, ROOMS)
         args.room_center = handle_random_transform_args(args.room_center)
 
         # parse the model libraries
@@ -849,6 +849,8 @@ class Dominoes(RigidbodiesDataset):
             print('Add scene: ', add_scene)
         else:
             add_scene = self.get_add_scene(scene_name=self.room)
+            print('Add scene: ', self.room)
+
         return [add_scene,
                 {"$type": "set_aperture",
                  "aperture": 8.0},

@@ -26,6 +26,11 @@ import math
 
 import signal
 
+from tdw.add_ons.interior_scene_lighting import InteriorSceneLighting
+
+
+# interior_scene_lighting = InteriorSceneLighting()
+
 class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
@@ -365,6 +370,7 @@ class Dataset(Controller, ABC):
             num = self.start + num
 
         for i in range(exists_up_to, num):
+
             trial_num = i
             filepath = output_dir.joinpath('sc'+TDWUtils.zero_padding(trial_num, 4) + ".hdf5")
             self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
