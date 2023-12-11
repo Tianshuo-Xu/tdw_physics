@@ -2,7 +2,8 @@ import os
 import shutil
 import glob
 
-root_dir = ['tdw_room_more_bg', 'tdw_room_more_bg+1', 'tdw_room_more_bg_2', 'tdw_room_more_bg_3', 'tdw_room_more_bg_4']
+# root_dir = ['tdw_room_more_bg', 'tdw_room_more_bg+1', 'tdw_room_more_bg_2', 'tdw_room_more_bg_3', 'tdw_room_more_bg_4']
+root_dir = ['tdw_playroom_4obj']
 
 datasets = []
 for dir in root_dir:
@@ -12,7 +13,7 @@ for dir in root_dir:
             datasets.append(d)
 
 
-save_dir = '/ccn2/u/honglinc/datasets/tdw_playroom_v3_more_bg'
+save_dir = '/ccn2/u/honglinc/datasets/tdw_playroom_v3_4obj'
 start_idx = 0
 end_idx = 100
 

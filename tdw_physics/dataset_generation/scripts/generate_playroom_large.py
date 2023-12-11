@@ -240,7 +240,7 @@ def build_simple_scenario(models, num_trials, seed, num_distractors, room, permu
         scene = {
             'probe': permute_models[0],
             'target': permute_models[1],
-            'occluder': permute_models[2]
+            'occluder': permute_models[2],
         }
 
         if num_distractors > 0:
@@ -575,6 +575,7 @@ def main(args):
     if args.room == 'random':
         num_rooms = len(rooms_list)
     else:
+        rooms_list = [args.room]
         num_rooms = 1
 
     Play = build_controller(args, scale_dict)

@@ -21,6 +21,12 @@ from tdw_physics.util import MODEL_LIBRARIES, get_parser, xyz_to_arr, arr_to_xyz
 from tdw_physics.target_controllers.dominoes import Dominoes, MultiDominoes, get_args, none_or_str, none_or_int
 from tdw_physics.target_controllers.collision import Collision
 from tdw_physics.postprocessing.labels import is_trial_valid
+from tdw.proc_gen.arrangements.plate import Plate
+from tdw.proc_gen.arrangements.cup_and_coaster import CupAndCoaster
+from tdw.proc_gen.arrangements.microwave import Microwave
+from tdw.cardinal_direction import CardinalDirection
+from random import randrange
+
 
 MODEL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
@@ -360,7 +366,8 @@ class Playroom(Collision):
         return Dominoes._place_and_push_probe_object(self, size_range=self.probe_scale_range)
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
-        Dominoes._write_static_data(self, static_group)
+        pass
+        # Dominoes._write_static_data(self, static_group)
 
     def get_trial_initialization_commands(self) -> List[dict]:
 
@@ -485,29 +492,110 @@ class Playroom(Collision):
         # # Choose and place the target zone.
         self.zone_id = None
         # commands.extend(self._place_target_zone())
+        # Choose and place the probe object.
 
-        radius = 1.1
-        min_distance = 1.1
-        point_generator = Points(n=3, r=radius, mindist=min_distance)
-        positions = point_generator.points
+        stacking = False
 
-        self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
-        # Choose and place a target object.
-        commands.extend(self._place_target_object())
+        if stacking:
+            radius = 0.5
+            min_distance = 0.5
+            point_generator = Points(n=3, r=radius, mindist=min_distance)
+            positions = point_generator.points
 
-        self.target_position = {'x': float(positions[1][0]), 'y': 0., 'z': float(positions[1][1])}
-        self.target_rotation = self.get_rotation(self.target_rotation_range)
-        self._target_types = self.occluder_types
-        # Choose and place a 2nd target object.
-        commands.extend(self._place_target_object())
+            target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
 
-        # Set the probe color
-        if self.probe_color is None:
-            self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
+            choice = randrange(3)
+            if choice == 0:
+                plate = Plate(position=target_position, rng=None)
+                scale_factor = 8
+                plate_commands = plate.get_commands()
 
-        self.probe_initial_position = {'x': float(positions[2][0]), 'y': 0., 'z': float(positions[2][1])}
-        # Choose, place, and push a probe object.
-        commands.extend(self._place_and_push_probe_object())
+                for cmd in plate_commands:
+                    if 'scale_factor' in cmd:
+                        print('Before', cmd['name'], cmd['scale_factor'])
+                        if not 'plate' in cmd['name']:
+                            cmd['scale_factor'] *= (scale_factor * 0.5)
+                        elif 'chocolate' in cmd['name']:
+                            cmd['scale_factor'] *= (scale_factor * 2.0)
+                        else:
+                            cmd['scale_factor'] *= scale_factor
+                        print('After', cmd['name'], cmd['scale_factor'])
+                        self.object_ids = np.append(self.object_ids, cmd['id'])
+                        self.object_scale_factors = np.append(self.object_scale_factors, cmd['scale_factor'])
+
+                commands.extend(plate_commands)
+
+            elif choice == 1:
+                microwave = Microwave(position=target_position,rng=None,
+                                      wall=CardinalDirection.west)
+
+                microwave_commands = microwave.get_commands()
+                scale_factor = 2.0
+                count = 0
+                for cmd in microwave_commands:
+                    if 'scale_factor' in cmd:
+
+                        print('Before', cmd['name'], cmd['scale_factor'])
+                        if count == 0:
+                            cmd['scale_factor'] *= scale_factor
+                        else:
+                            cmd['scale_factor'] *= (scale_factor * 1.2)
+                        count += 1
+                        print('After', cmd['name'], cmd['scale_factor'])
+                        self.object_ids = np.append(self.object_ids, cmd['id'])
+                        self.object_scale_factors = np.append(self.object_scale_factors, cmd['scale_factor'])
+
+                commands.extend(microwave_commands)
+            else:
+                cup_and_coaster = CupAndCoaster(position=target_position, rng=None)
+                cup_and_coaster_commands = cup_and_coaster.get_commands()
+
+                scale_factor = 5.
+
+                count = 0
+                for cmd in cup_and_coaster_commands:
+                    if 'scale_factor' in cmd:
+
+                        print('Before', cmd['name'], cmd['scale_factor'])
+                        cmd['scale_factor'] *= scale_factor
+                        count += 1
+                        print('After', cmd['name'], cmd['scale_factor'])
+                        self.object_ids = np.append(self.object_ids, cmd['id'])
+                        self.object_scale_factors = np.append(self.object_scale_factors, cmd['scale_factor'])
+                commands.extend(cup_and_coaster_commands)
+
+        else:
+            radius = 1.1
+            min_distance = 0.8 if len(self.distractor_types) == 1 else 1.1
+            num_objects = 4 if len(self.distractor_types) == 1 else 3
+            point_generator = Points(n=num_objects, r=radius, mindist=min_distance)
+            positions = point_generator.points
+
+            self.target_position = {'x': float(positions[0][0]), 'y': 0., 'z': float(positions[0][1])}
+            # Choose and place a target object.
+            commands.extend(self._place_target_object())
+
+            self.target_position = {'x': float(positions[1][0]), 'y': 0., 'z': float(positions[1][1])}
+            self.target_rotation = self.get_rotation(self.target_rotation_range)
+            self._target_types = self.occluder_types
+            # Choose and place a 2nd target object.
+            commands.extend(self._place_target_object())
+
+            if len(self.distractor_types) == 1:
+                self.target_position = {'x': float(positions[3][0]), 'y': 0., 'z': float(positions[3][1])}
+                self._target_types = self.distractor_types
+                # Choose and place a 2nd target object.
+                commands.extend(self._place_target_object())
+
+
+
+            # Set the probe color
+            if self.probe_color is None:
+                self.probe_color = self.target_color if (self.monochrome and self.match_probe_and_target_color) else None
+
+            self.probe_initial_position = {'x': float(positions[2][0]), 'y': 0., 'z': float(positions[2][1])}
+            # Choose, place, and push a probe object.
+            commands.extend(self._place_and_push_probe_object())
 
         # Build the intermediate structure that captures some aspect of "intuitive physics."
         commands.extend(self._build_intermediate_structure())

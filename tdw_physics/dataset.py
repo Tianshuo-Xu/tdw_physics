@@ -479,13 +479,13 @@ class Dataset(Controller, ABC):
         frame = 0
         # Write static data to disk.
         static_group = f.create_group("static")
-        self._write_static_data(static_group)
+        #self._write_static_data(static_group)
 
         # Add the first frame.
         done = False
         frames_grp = f.create_group("frames")
         _, _, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame)
-        self._write_frame_labels(frames_grp, resp, -1, False)
+        #self._write_frame_labels(frames_grp, resp, -1, False)
 
         print('\tObject ids before looping: ', self.object_ids)
 
