@@ -159,15 +159,15 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     def log_transform_info(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int) -> Tuple[h5py.Group, h5py.Group, dict, bool]:
         num_objects = len(Dataset.OBJECT_IDS)
         frame = frames_grp.create_group(TDWUtils.zero_padding(frame_num, 4))
-        objs = frame.create_group("objects")
+        # objs = frame.create_group("objects")
         # Transforms data.
-        positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
-        forwards = np.empty(dtype=np.float32, shape=(num_objects, 3))
-        rotations = np.empty(dtype=np.float32, shape=(num_objects, 4))
+        # positions = np.empty(dtype=np.float32, shape=(num_objects, 3))
+        # forwards = np.empty(dtype=np.float32, shape=(num_objects, 3))
+        # rotations = np.empty(dtype=np.float32, shape=(num_objects, 4))
         # Bounds data.
-        bounds = dict()
-        for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
-            bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
+        # bounds = dict()
+        # for bound_type in ['front', 'back', 'left', 'right', 'top', 'bottom', 'center']:
+        #     bounds[bound_type] = np.empty(dtype=np.float32, shape=(num_objects, 3))
         # Parse the data in an ordered manner so that it can be mapped back to the object IDs.
         tr_dict = dict()
 
@@ -180,37 +180,37 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     tr_dict.update({tr.get_id(i): {"pos": pos,
                                                    "for": tr.get_forward(i),
                                                    "rot": tr.get_rotation(i)}})
-                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
-                    if o_id not in tr_dict:
-                        continue
-                    positions[i] = tr_dict[o_id]["pos"]
-                    forwards[i] = tr_dict[o_id]["for"]
-                    rotations[i] = tr_dict[o_id]["rot"]
-            elif r_id == "boun":
-                bo = Bounds(r)
-                bo_dict = dict()
-                for i in range(bo.get_num()):
-                    bo_dict.update({bo.get_id(i): {"front": bo.get_front(i),
-                                                   "back": bo.get_back(i),
-                                                   "left": bo.get_left(i),
-                                                   "right": bo.get_right(i),
-                                                   "top": bo.get_top(i),
-                                                   "bottom": bo.get_bottom(i),
-                                                   "center": bo.get_center(i)}})
-                for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
-                    for bound_type in bounds.keys():
-                        try:
-                            bounds[bound_type][i] = bo_dict[o_id][bound_type]
-                        except KeyError:
-                            print("couldn't store bound data for object %d" % o_id)
+                # for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+                #     if o_id not in tr_dict:
+                #         continue
+                #     positions[i] = tr_dict[o_id]["pos"]
+                #     forwards[i] = tr_dict[o_id]["for"]
+                #     rotations[i] = tr_dict[o_id]["rot"]
+            # elif r_id == "boun":
+            #     bo = Bounds(r)
+            #     bo_dict = dict()
+            #     for i in range(bo.get_num()):
+            #         bo_dict.update({bo.get_id(i): {"front": bo.get_front(i),
+            #                                        "back": bo.get_back(i),
+            #                                        "left": bo.get_left(i),
+            #                                        "right": bo.get_right(i),
+            #                                        "top": bo.get_top(i),
+            #                                        "bottom": bo.get_bottom(i),
+            #                                        "center": bo.get_center(i)}})
+            #     for o_id, i in zip(Dataset.OBJECT_IDS, range(num_objects)):
+            #         for bound_type in bounds.keys():
+            #             try:
+            #                 bounds[bound_type][i] = bo_dict[o_id][bound_type]
+            #             except KeyError:
+            #                 print("couldn't store bound data for object %d" % o_id)
 
-        objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
-        objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
-        for bound_type in bounds.keys():
-            objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
+        # objs.create_dataset("positions", data=positions.reshape(num_objects, 3), compression="gzip")
+        # objs.create_dataset("forwards", data=forwards.reshape(num_objects, 3), compression="gzip")
+        # objs.create_dataset("rotations", data=rotations.reshape(num_objects, 4), compression="gzip")
+        # for bound_type in bounds.keys():
+        #     objs.create_dataset(bound_type, data=bounds[bound_type], compression="gzip")
 
-        return frame, objs, tr_dict
+        return frame, None, tr_dict
 
     def _write_frame(self, frames_grp: h5py.Group, resp: List[bytes], frame_num: int, view_num: int):
         if self._noise_params == NO_NOISE:
@@ -265,6 +265,10 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             random.uniform(6, 7.5)
 
             frame = 0
+            # Write static data to disk.
+            static_group = f.create_group("static")
+            self._write_static_data(static_group)
+            
             # Add the first frame.
             done = False
             frames_grp = f.create_group("frames")
