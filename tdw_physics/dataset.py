@@ -443,8 +443,8 @@ class Dataset(Controller, ABC):
 
 
         # print("Hello***")
-        frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=self.view_id_number)
-        self._write_frame_labels(frame_grp, resp, -1, False)
+        # frame_grp, _, _, _ = self._write_frame(frames_grp=frames_grp, resp=resp, frame_num=frame, view_num=self.view_id_number)
+        # self._write_frame_labels(frame_grp, resp, -1, False)
 
         # TODO: write the pngs here for img, id, depth, etc.
 
@@ -515,7 +515,7 @@ class Dataset(Controller, ABC):
             # breakpoint()
 
             # Write whether this frame completed the trial and any other trial-level data
-            labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
+            # labels_grp, _, _, _ = self._write_frame_labels(frame_grp, resp, frame, done)
             #
             # if frame > 5:
             #     break
@@ -523,7 +523,7 @@ class Dataset(Controller, ABC):
 
         #save_imgs for viz
         if self.save_movies:
-            for fr in range(0, frame+1):
+            for fr in range(1, frame+1):
                 imgs = []
                 for pass_mask in self.save_passes:
 
@@ -544,12 +544,12 @@ class Dataset(Controller, ABC):
 
                 # breakpoint()
 
-                filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
+                # filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
 
                 im_arr = Image.fromarray(imgs)
                 shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
                 im_arr = im_arr.resize(shp)
-                im_arr.save(filename)
+                # im_arr.save(filename)
 
 
 
@@ -596,32 +596,32 @@ class Dataset(Controller, ABC):
 
         # # Save out the target/zone segmentation mask
         # if (self.zone_id in Dataset.OBJECT_IDS) and (self.target_id in Dataset.OBJECT_IDS):
-        try:
-            _id = f['frames']['0000']['images']['_id']
-        except:
-            # print("inside cam0")
-            _id = f['frames']['0000']['images']['_id_cam0']
-        # get PIL image
-        _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
-        # get colors
-        zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
-        zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
-        target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
-        target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
-        # get individual maps
-        zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
-        target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
-        # colorize
-        zone_map = zone_map * ZONE_COLOR
-        target_map = target_map * TARGET_COLOR
-        joint_map = zone_map + target_map
-        # add alpha
-        alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
-        joint_map = np.dstack((joint_map, alpha))
-        # as image
-        map_img = Image.fromarray(np.uint8(joint_map))
-        # save image
-        map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
+        # try:
+        #     _id = f['frames']['0000']['images']['_id']
+        # except:
+        #     # print("inside cam0")
+        #     _id = f['frames']['0000']['images']['_id_cam0']
+        # # get PIL image
+        # _id_map = np.array(Image.open(io.BytesIO(np.array(_id))))
+        # # get colors
+        # zone_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.zone_id]
+        # zone_color = self.object_segmentation_colors[zone_idx[0] if len(zone_idx) else 0]
+        # target_idx = [i for i, o_id in enumerate(Dataset.OBJECT_IDS) if o_id == self.target_id]
+        # target_color = self.object_segmentation_colors[target_idx[0] if len(target_idx) else 1]
+        # # get individual maps
+        # zone_map = (_id_map == zone_color).min(axis=-1, keepdims=True)
+        # target_map = (_id_map == target_color).min(axis=-1, keepdims=True)
+        # # colorize
+        # zone_map = zone_map * ZONE_COLOR
+        # target_map = target_map * TARGET_COLOR
+        # joint_map = zone_map + target_map
+        # # add alpha
+        # alpha = ((target_map.sum(axis=2) | zone_map.sum(axis=2)) != 0) * 255
+        # joint_map = np.dstack((joint_map, alpha))
+        # # as image
+        # map_img = Image.fromarray(np.uint8(joint_map))
+        # # save image
+        # map_img.save(filepath.parent.joinpath(filepath.stem + "_map.png"))
 
         # Close the file.
         f.close()
@@ -649,6 +649,10 @@ class Dataset(Controller, ABC):
             update_kwargs = [update_kwargs] * num
 
         pbar = tqdm(total=num)
+        # if not isinstance(update_kwargs, list):
+        #     update_kwargs = [update_kwargs] * len(self.indexes)
+
+        # pbar = tqdm(total=len(self.indexes))
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = -1
         for f in output_dir.glob("*.hdf5"):
@@ -664,6 +668,8 @@ class Dataset(Controller, ABC):
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
+            # if i not in self.indexes:
+            #     continue
 
             # if i==0:
             #     continue
@@ -700,7 +706,7 @@ class Dataset(Controller, ABC):
                 if self.save_movies:
 
                     for pass_mask in ['_img']:
-                        pass_mask = pass_mask #+ cam_suffix
+                        pass_mask = pass_mask + cam_suffix
                         mp4_filename = str(filepath).split('.hdf5')[0].split('/')
                         name = mp4_filename[-1]
                         mp4_filename = '/'.join(mp4_filename[:-1]) + '_' + name + pass_mask
@@ -725,7 +731,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:
