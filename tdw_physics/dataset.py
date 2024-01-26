@@ -645,14 +645,14 @@ class Dataset(Controller, ABC):
                    update_kwargs: List[dict] = {},
                    do_log: bool = False) -> None:
 
-        if not isinstance(update_kwargs, list):
-            update_kwargs = [update_kwargs] * num
-
-        pbar = tqdm(total=num)
         # if not isinstance(update_kwargs, list):
-        #     update_kwargs = [update_kwargs] * len(self.indexes)
+        #     update_kwargs = [update_kwargs] * num
 
-        # pbar = tqdm(total=len(self.indexes))
+        # pbar = tqdm(total=num)
+        if not isinstance(update_kwargs, list):
+            update_kwargs = [update_kwargs] * len(self.indexes)
+
+        pbar = tqdm(total=len(self.indexes))
         # Skip trials that aren't on the disk, and presumably have been uploaded; jump to the highest number.
         exists_up_to = -1
         for f in output_dir.glob("*.hdf5"):
@@ -668,8 +668,8 @@ class Dataset(Controller, ABC):
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
-            # if i not in self.indexes:
-            #     continue
+            if i not in self.indexes:
+                continue
 
             # if i==0:
             #     continue
