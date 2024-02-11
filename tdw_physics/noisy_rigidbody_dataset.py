@@ -15,6 +15,7 @@ from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentColli
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from tdw.tdw_utils import TDWUtils
+from tdw_physics.util import arr_to_xyz
 from scipy.stats import vonmises, norm, lognorm
 from .noisy_utils import *
 import json
@@ -70,6 +71,8 @@ class RigidNoiseParams:
     bounciness: float = None
     collision_dir: float = None
     collision_mag: float = None
+    push_dir: float = None
+    push_mag: float = None
     coll_threshold: float = None
     start_simulate: int = None
 
@@ -85,6 +88,8 @@ class RigidNoiseParams:
             'bounciness': self.bounciness,
             'collision_dir': self.collision_dir,
             'collision_mag': self.collision_mag,
+            'push_dir': self.push_dir,
+            'push_mag': self.push_mag,
             'coll_threshold': self.coll_threshold,
             'start_simulate': self.start_simulate
         }
@@ -150,6 +155,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
         # self._ongoing_collisions = []
         # self._lasttime_collisions = []
         self.set_collision_noise_generator(noise)
+        self.set_push_noise_generator(noise)
         # if self.collision_noise_generator is not None:
         #     print("example noise", self.collision_noise_generator())
         # self._registered_objects = []
@@ -932,6 +938,45 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
                                             for idx, k in enumerate(XYZ)]), impulse_mag)
             self.collision_noise_generator = cng
+        
+    def set_push_noise_generator(self,
+                                 noise_obj: RigidNoiseParams):
+        # Only make noise if there is noise to be added
+        # if noise_obj.collision_dir is not None:
+        #     ncd = copy.copy(noise_obj.collision_dir)
+        # else:
+        #     ncd = None
+        npd = noise_obj.push_dir
+        npm = noise_obj.push_mag
+        if npd is None and npm is None:
+            def push_ng(sim_seed, impulse):
+                return arr_to_xyz(impulse)
+        else:
+            """ NOTE MAKE THIS ALL RELATIVE | ADD INPUT """
+            if npm is None:
+                def push_ng(sim_seed, impulse):
+                    impulse_rand_dir = rand_von_mises_fisher(sim_seed, impulse/np.linalg.norm(impulse),kappa=npd)[0]
+                    return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
+                                            for idx, k in enumerate(XYZ)]),
+                                      np.linalg.norm(impulse))
+            elif npd is None:
+                def push_ng(sim_seed, impulse):
+                    impulse_mag = np.linalg.norm(impulse)
+                    impulse_dir = impulse/impulse_mag
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=npm, random_state=sim_seed))
+                    # impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
+                    return rotmag2vec(dict([[k, impulse_dir[idx]] for idx, k in enumerate(XYZ)]),
+                                      impulse_mag)
+            else:
+                def push_ng(sim_seed, impulse):
+                    impulse_mag = np.linalg.norm(impulse)
+                    impulse_dir = impulse/impulse_mag
+                    impulse_mag = max(0, norm.rvs(loc=impulse_mag, scale=npm, random_state=sim_seed))
+                    # impulse_mag = impulse_mag*lognorm.rvs(s=ncm, random_state=sim_seed)
+                    impulse_rand_dir = rand_von_mises_fisher(sim_seed, impulse_dir, kappa=npd)[0]
+                    return rotmag2vec(dict([[k, impulse_rand_dir[idx]]
+                                            for idx, k in enumerate(XYZ)]), impulse_mag)
+        self.push_noise_generator = push_ng
 
     # def settle(self):
     #     """
