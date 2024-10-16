@@ -15,7 +15,7 @@ from tdw.output_data import OutputData, Rigidbodies, Collision, EnvironmentColli
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from tdw.tdw_utils import TDWUtils
-from tdw_physics.util import arr_to_xyz
+from tdw_physics.util import arr_to_xyz, xyz_to_arr
 from scipy.stats import vonmises, norm, lognorm
 from .noisy_utils import *
 import json
@@ -132,7 +132,26 @@ class RigidNoiseParams:
 
 NO_NOISE = RigidNoiseParams()
 
+@dataclass
+class VisualInputs:
+    model: Dict[str, str] = None
+    position: Dict[str, list] = None
+    rotation: Dict[str, list] = None
+    scale:  Dict[str, list] = None
+    velocity: Dict[str, list] = None
+    angular_velocity: Dict[str, list] = None
+    mass: Dict[str, list] = None
+    static_friction: Dict[str, list] = None
+    dynamic_friction: Dict[str, list] = None
+    bounciness: Dict[str, list] = None
 
+    @staticmethod
+    def load(flpth):
+        with open(flpth, 'r') as ifl:
+            obj = json.load(ifl)
+        return VisualInputs(**obj)
+
+NO_INPUTS = VisualInputs()
 
 class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     """
@@ -140,11 +159,13 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
     """
 
     def __init__(self,
+                 visual: VisualInputs = NO_INPUTS,
                  noise: RigidNoiseParams = NO_NOISE,
                  indexes: List[str] = [],
                  **kwargs):
         RigidbodiesDataset.__init__(self, **kwargs)
         self._noise_params = noise
+        self._tracking_results = visual
         # self.indexes = [int(index) for index in indexes]
         try:
             self.indexes = [int(index) for index in indexes]
@@ -657,9 +678,63 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                 cmds.append(RigidbodiesDataset.add_transforms_object(self,
                     record, pos, rot, o_id+i*self.interval, add_data, library))
             else:
+                position = self._tracking_results.position[o_id][i]
+                rotation = self._tracking_results.rotation[o_id][i]
+                # scale = self._tracking_results.scale[o_id][i]
                 pos = combine_dicts(position, center)
                 cmds.append(RigidbodiesDataset.add_transforms_object(self,
                     record, pos, rotation, o_id+i*self.interval, add_data, library))
+        return cmds
+    
+    def add_ramp(self,
+                 record: ModelRecord,
+                 position: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 rotation: Dict[str, float] = TDWUtils.VECTOR3_ZERO,
+                 scale: Dict[str, float] = {"x": 1., "y": 1., "z": 1},
+                 o_id: Optional[int] = None,
+                 material: Optional[str] = None,
+                 color: Optional[list] = None,
+                 mass: Optional[float] = None,
+                 dynamic_friction: Optional[float] = None,
+                 static_friction: Optional[float] = None,
+                 bounciness: Optional[float] = None,
+                 add_data: Optional[bool] = True
+                 ) -> List[dict]:
+        """
+        Overwrites method from rigidbodies_dataset to add noise to objects when added to the scene
+        """
+        cmds = []
+        for i, room in enumerate(self.scene_record.rooms[:self.num_sim]):
+            this_room_center = {'x':room.main_region.center[0], 'y':room.main_region.center[1], 'z':room.main_region.center[2]}
+            center = combine_dicts(this_room_center, self.base_room_center, operator.sub)
+            if self._noise_params != NO_NOISE and self._noise_params.start_simulate == 0:
+                pos, rot, m, df, sf, b = self._random_placement(copy.deepcopy(position), copy.deepcopy(rotation), copy.deepcopy(mass), copy.deepcopy(dynamic_friction), copy.deepcopy(static_friction), copy.deepcopy(bounciness))
+                # print("pos: ", pos, "rot: ", rot)
+                pos = combine_dicts(pos, center)
+                cmds.extend(RigidbodiesDataset.add_ramp(self,
+                    record, pos, rot, scale, o_id+i*self.interval, material, color, m,
+                    df, sf, b, add_data))
+            else:
+                position = self._tracking_results.position[o_id][i]
+                rotation = self._tracking_results.rotation[o_id][i]
+                scale = self._tracking_results.scale[o_id][i]
+                vel = self._tracking_results.velocity[o_id][i]
+                ang_vel = self._tracking_results.angular_velocity[o_id][i]
+                mass = mass * np.prod(xyz_to_arr(scale))
+
+                pos = combine_dicts(position, center)
+                cmds.extend(RigidbodiesDataset.add_ramp(self,
+                    record, pos, rotation, scale, o_id+i*self.interval, material, color, mass,
+                    dynamic_friction, static_friction,
+                    bounciness, add_data))
+                cmds.extend([{"$type": "set_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
+                cmds.extend([{"$type": "set_angular_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(ang_vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
         return cmds
     
     def add_primitive(self,
@@ -708,12 +783,27 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     df, sf, b, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
                     default_physics_values, density)[0])
             else:
+                position = self._tracking_results.position[o_id][i]
+                rotation = self._tracking_results.rotation[o_id][i]
+                scale = self._tracking_results.scale[o_id][i]
+                vel = self._tracking_results.velocity[o_id][i]
+                ang_vel = self._tracking_results.angular_velocity[o_id][i]
+                mass = mass * np.prod(xyz_to_arr(scale))
+
                 pos = combine_dicts(position, center)
                 cmds.extend(RigidbodiesDataset.add_primitive(self,
                     record, pos, rotation, scale, o_id+i*self.interval, material, color, exclude_color, mass,
                     dynamic_friction, static_friction,
                     bounciness, add_data, scale_mass, make_kinematic, obj_list, apply_texture,
                     default_physics_values, density)[0])
+                cmds.extend([{"$type": "set_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
+                cmds.extend([{"$type": "set_angular_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(ang_vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
         return cmds, None
     
     def add_physics_object(self,
@@ -755,12 +845,27 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                     scale, df, sf, b, o_id+i*self.interval, add_data,
                     default_physics_values, density)[0])
             else:
+                position = self._tracking_results.position[o_id][i]
+                rotation = self._tracking_results.rotation[o_id][i]
+                scale = self._tracking_results.scale[o_id][i]
+                vel = self._tracking_results.velocity[o_id][i]
+                ang_vel = self._tracking_results.angular_velocity[o_id][i]
+                mass = mass * np.prod(xyz_to_arr(scale))
+
                 pos = combine_dicts(position, center)
                 cmds.extend(RigidbodiesDataset.add_physics_object(self,
                     record, pos, rotation, mass,
                     scale, dynamic_friction, static_friction,
                     bounciness, o_id+i*self.interval, add_data,
                     default_physics_values, density)[0])
+                cmds.extend([{"$type": "set_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
+                cmds.extend([{"$type": "set_angular_velocity",
+                                        "id": o_id,
+                                        "velocity": dict([[k, np.float64(ang_vel[i])]
+                                                    for i, k in enumerate(XYZ)])}])
         return cmds, None
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
