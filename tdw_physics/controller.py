@@ -5,10 +5,11 @@ from subprocess import Popen
 from typing import List, Union, Tuple, Dict
 from tdw.librarian import ModelLibrarian, SceneLibrarian, MaterialLibrarian, HDRISkyboxLibrarian, \
     HumanoidAnimationLibrarian, HumanoidLibrarian, HumanoidAnimationRecord, RobotLibrarian
-from tdw.backend.paths import EDITOR_LOG_PATH, PLAYER_LOG_PATH
+from tdw.backend.paths import EDITOR_LOG_PATH, PLAYER_LOG_PATH, BUILD_PATH
 from tdw.output_data import Version, QuitSignal
-from tdw.release.build import Build
-from tdw.release.pypi import PyPi
+from argparse import ArgumentParser
+from tdw.backend.update import Update
+# from tdw.release.pypi import PyPi
 from tdw.version import __version__
 from tdw.add_ons.add_on import AddOn
 import trimesh
@@ -73,15 +74,17 @@ class Controller:
         for key in Controller.FLEX_MASSES.keys():
             Controller.TRIMESH_MESHES[key] = trimesh.load(os.path.join(mesh_folder, key + '.obj'))
 
-        # breakpoint()
-
-
         self.add_ons: List[AddOn] = list()
 
         # Compare the installed version of the tdw Python module to the latest on PyPi.
         # If there is a difference, recommend an upgrade.
         if check_version:
-            self._check_pypi_version()
+            can_launch_build = Update.check_for_update(download_build=launch_build)
+        else:
+            can_launch_build = True
+
+        if not can_launch_build:
+            print("You need to launch your own build.")
 
         context = zmq.Context()
 
@@ -89,12 +92,22 @@ class Controller:
         self.socket = context.socket(zmq.REP)
         # sock.bind(('', 0))
 
-        # self.socket.bind('tcp://*:' + str(port))
-        self.socket.bind('tcp://*:' + str(0))
+        while True:
+            try:
+                self.socket.bind('tcp://*:' + str(port))
+                break
+            except:
+                port += 1
+                continue
+        # Launch the build.
+        if launch_build and can_launch_build:
+            Controller.launch_build(port=port)
+        
+        # self.socket.bind('tcp://*:' + str(0))
 
-        port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
+        # port = self.socket.getsockopt(zmq.LAST_ENDPOINT)
 
-        port = int(str(port).split(':')[-1][:-1])
+        # port = int(str(port).split(':')[-1][:-1])
 
 
         # print("port changed:", port)
@@ -102,9 +115,9 @@ class Controller:
         # breakpoint()
         # port = self.socket.getsockname()[1]
 
-        # Launch the build.
-        if launch_build:
-            Controller.launch_build(port=port, custom_build=custom_build)
+        # # Launch the build.
+        # if launch_build:
+        #     Controller.launch_build(port=port, custom_build=custom_build)
 
         self.socket.recv()
 
@@ -264,8 +277,6 @@ class Controller:
         # bounciness = 0.24
 
         bounciness = 0.4
-
-        # breakpoint()
 
         if library == "":
             library = "models_core.json"
@@ -607,47 +618,57 @@ class Controller:
         return int.from_bytes(frame, byteorder='big')
 
     @staticmethod
-    def launch_build(port: int = 1071, custom_build=None) -> None:
+    def launch_build(port: int = 1071) -> None:
         """
         Launch the build. If a build doesn't exist at the expected location, download one to that location.
 
         :param port: The socket port.
         """
+        # parser = ArgumentParser()
+        # parser.add_argument("--flip_images", action="store_true")
+        # parser.add_argument("--force_glcore42", action="store_true")
+        # args = parser.parse_args()
+        build_call = [str(BUILD_PATH.resolve()), "-port " + str(port)]
+        # if args.flip_images:
+        #     build_call.append("-flip_images")
+        # if args.force_glcore42:
+        #     build_call.append("-force-glcore42")
+        Popen(build_call)
 
-        # Download the build.
-        need_to_download = False
-        if not Build.BUILD_PATH.exists():
-            print(f"Couldn't find build at {Build.BUILD_PATH}\nDownloading now...")
-            need_to_download = True
-        else:
-            # Check versions.
-            build_version_path = Build.BUILD_ROOT_DIR.joinpath("TDW/version.txt")
-            if build_version_path.exists():
-                build_version = build_version_path.read_text().strip()
-            else:
-                build_version = "(unknown!)"
-            if build_version != __version__:
-                print(f"Python version is {__version__} but the build version is {build_version}.\n"
-                      f"Downloading version {__version__} of the build now...")
-                need_to_download = True
+        # # Download the build.
+        # need_to_download = False
+        # if not Build.BUILD_PATH.exists():
+        #     print(f"Couldn't find build at {Build.BUILD_PATH}\nDownloading now...")
+        #     need_to_download = True
+        # else:
+        #     # Check versions.
+        #     build_version_path = Build.BUILD_ROOT_DIR.joinpath("TDW/version.txt")
+        #     if build_version_path.exists():
+        #         build_version = build_version_path.read_text().strip()
+        #     else:
+        #         build_version = "(unknown!)"
+        #     if build_version != __version__:
+        #         print(f"Python version is {__version__} but the build version is {build_version}.\n"
+        #               f"Downloading version {__version__} of the build now...")
+        #         need_to_download = True
 
-        # breakpoint()
+        # # breakpoint()
 
-        # Download a new version of the build.
-        if need_to_download:
-            success = Build.download()
-            if not success:
-                print("You need to launch your own build.")
-        else:
-            success = True
-        # Launch the build.
-        if success:
-            # print("launching build")
-            # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
-            if custom_build is not None:
-                Popen([custom_build, "-port " + str(port)])
-            else:
-                Popen([str(Build.BUILD_PATH.resolve()), "-port "+str(port)])
+        # # Download a new version of the build.
+        # if need_to_download:
+        #     success = Build.download()
+        #     if not success:
+        #         print("You need to launch your own build.")
+        # else:
+        #     success = True
+        # # Launch the build.
+        # if success:
+        #     # print("launching build")
+        #     # Popen(['/ccn2/u/rmvenkat/data/TDW/TDW.x86_64', "-port " + str(port)])
+        #     if custom_build is not None:
+        #         Popen([custom_build, "-port " + str(port)])
+        #     else:
+        #         Popen([str(Build.BUILD_PATH.resolve()), "-port "+str(port)])
 
     def _check_build_version(self, version: str = __version__, build_version: str = None) -> None:
         """
