@@ -136,6 +136,7 @@ def get_parser(dataset_dir: str, get_help: bool=False):
     parser.add_argument("--sim_id", type=int, default=0, help="The index of the simulation.")
     parser.add_argument("--num_sim", type=int, default=1, help="Number of participants to simulate.")
     parser.add_argument("--noise", type=str, default="null", help="Path to the noise parameters file.")
+    parser.add_argument("--visual", type=str, default="null", help="Path to the tracking results file.")
     parser.add_argument("--indexes", type=str, default='', help="Comma-separated list of Which trials to run")
     parser.add_argument("--num_multiplier", type=float, default=1.0, help="Multiply the number of trials by this factor")
     parser.add_argument("--temp", type=str, default="NONE", help="Temp path for incomplete files. 'NONE' to place the temp file in the output folder.")
