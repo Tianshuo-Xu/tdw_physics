@@ -525,34 +525,34 @@ class Dataset(Controller, ABC):
         # print("avg time to communicate", time.time() - t)
 
         #save_imgs for viz
-        if self.save_movies:
-            for fr in range(0, frame+1):
-                imgs = []
-                for pass_mask in self.save_passes:
+        # if self.save_movies:
+        #     for fr in range(0, frame+1):
+        #         imgs = []
+        #         for pass_mask in self.save_passes:
 
-                    all_imgs = []
-                    # for cam_no in range(self.num_views):
-                    cam_no = self.view_id_number
-                    filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
-                    img = plt.imread(filename)
-                    all_imgs.append(img)
-                    all_imgs = np.stack(all_imgs)
-                    all_imgs = concat_img_horz(all_imgs)
-                    # all_imgs = pad_below(all_imgs)
-                    imgs.append(all_imgs[:, :, :3])
+        #             all_imgs = []
+        #             # for cam_no in range(self.num_views):
+        #             cam_no = self.view_id_number
+        #             filename = os.path.join(self.png_dir, pass_mask[1:] + '_' + 'cam' + str(cam_no) + '_' + str(fr).zfill(4) + '.png')
+        #             img = plt.imread(filename)
+        #             all_imgs.append(img)
+        #             all_imgs = np.stack(all_imgs)
+        #             all_imgs = concat_img_horz(all_imgs)
+        #             # all_imgs = pad_below(all_imgs)
+        #             imgs.append(all_imgs[:, :, :3])
 
-                # breakpoint()
+        #         # breakpoint()
 
-                imgs = (np.concatenate(imgs, 0)*255).astype('uint8')
+        #         imgs = (np.concatenate(imgs, 0)*255).astype('uint8')
 
-                # breakpoint()
+        #         # breakpoint()
 
-                filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
+        #         filename = os.path.join(self.png_dir, 'img_' + str(fr).zfill(4) + '.png')
 
-                im_arr = Image.fromarray(imgs)
-                shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
-                im_arr = im_arr.resize(shp)
-                im_arr.save(filename)
+        #         im_arr = Image.fromarray(imgs)
+        #         shp = (im_arr.size[0] - im_arr.size[0]%2, im_arr.size[1] - im_arr.size[1]%2)
+        #         im_arr = im_arr.resize(shp)
+        #         im_arr.save(filename)
 
 
 
@@ -635,7 +635,7 @@ class Dataset(Controller, ABC):
         shutil.move(temp_path, filepath)
 
         if self.save_movies:
-            return im_arr.size
+            return [self._height, self._width]
         else:
             return [2, 2]
 
@@ -667,7 +667,9 @@ class Dataset(Controller, ABC):
 
         pbar.update(exists_up_to)
         for i in range(exists_up_to, num):
-
+            if i not in self.indexes:
+                continue
+            self._tracking_results = self.visual[str(i)]
             # if i==0:
             #     continue
 
@@ -728,7 +730,7 @@ class Dataset(Controller, ABC):
                         png = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".png")
                         _ = subprocess.run('mv ' + str(self.png_dir) + '/' + sv + ' ' + str(png), shell=True)
 
-                    rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
+                    # rm = subprocess.run('rm -rf ' + str(self.png_dir), shell=True)
 
                 # if self.save_meshes:
                 #     for o_id in Dataset.OBJECT_IDS:

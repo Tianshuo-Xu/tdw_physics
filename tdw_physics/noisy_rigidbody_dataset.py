@@ -145,7 +145,7 @@ class VisualInputs:
     def load(flpth):
         with open(flpth, 'r') as ifl:
             obj = json.load(ifl)
-        return VisualInputs(**obj)
+        return dict([(key, VisualInputs(**val)) for key, val in obj.items()])
 
 NO_INPUTS = VisualInputs()
 
@@ -161,7 +161,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
                  **kwargs):
         RigidbodiesDataset.__init__(self, **kwargs)
         self._noise_params = noise
-        self._tracking_results = visual
+        self.visual = visual
         # self.indexes = [int(index) for index in indexes]
         try:
             self.indexes = [int(index) for index in indexes]
@@ -376,6 +376,7 @@ class NoisyRigidbodiesDataset(RigidbodiesDataset, ABC):
             for i in range(exists_up_to, num):
                 if i not in self.indexes:
                     continue
+                self._tracking_results = self.visual[str(i)]
                 filepath = output_dir.joinpath(TDWUtils.zero_padding(i, 4) + ".hdf5")
                 self.stimulus_name = '_'.join([filepath.parent.name, str(Path(filepath.name).with_suffix(''))])
                 # if True: #not filepath.exists():
