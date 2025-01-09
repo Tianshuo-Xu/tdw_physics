@@ -93,7 +93,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="comma separated list of initial middle object rotation values")
     parser.add_argument("--prot",
                         type=str,
-                        default="[0,0]",
+                        default="[-40,40]",
                         help="comma separated list of initial probe rotation values")
     parser.add_argument("--phorizontal",
                         type=int_or_bool,
@@ -121,7 +121,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="scale of probe objects")
     parser.add_argument("--fscale",
                         type=str,
-                        default="2.0",
+                        default="[1.0,4.0]",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -137,7 +137,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="jitter around object centroid to apply force")
     parser.add_argument("--fwait",
                         type=none_or_str,
-                        default="[0,10]",
+                        default="0",
                         help="How many frames to wait before applying the force")
     parser.add_argument("--tcolor",
                         type=none_or_str,
@@ -177,7 +177,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Don't actually put the target object in the scene.")
     parser.add_argument("--remove_zone",
                         type=int_or_bool,
-                        default=0,
+                        default=1,
                         help="Don't actually put the target zone in the scene.")
     parser.add_argument("--camera_distance",
                         type=none_or_str,
@@ -521,7 +521,7 @@ class Dominoes(RigidbodiesDataset):
     MAX_TRIALS = 1000
     DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
-    PRINT = False
+    PRINT = True
 
     def __init__(self,
                  port: int = None,
@@ -2047,6 +2047,47 @@ class MultiDominoes(Dominoes):
                 {"$type": "scale_object",
                  "scale_factor": scale,
                  "id": o_id}])
+            
+            # Set its collision mode
+            commands.extend([
+                {"$type": "set_object_drag",
+                "id": o_id,
+                "drag": 0, "angular_drag": 0}])
+
+
+            # Apply a force to the probe object
+            rot = self.get_y_rotation(self.probe_rotation_range)
+            self.push_force = self.get_push_force(
+                scale_range=self.probe_mass * np.array(self.force_scale_range),
+                angle_range=self.force_angle_range)
+            self.push_force = self.rotate_vector_parallel_to_floor(
+                self.push_force, -rot['y'], degrees=True)
+
+            self.push_position = pos
+
+            if self.PRINT:
+                print("PROBE MASS", self.probe_mass)
+                print("PUSH FORCE", self.push_force)
+            if self.use_ramp:
+                self.push_cmd = self._get_push_cmd(o_id, None)
+            else:
+                self.push_position = {
+                    k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                        self.probe_scale, rot['y'])[k]
+                    for k,v in self.push_position.items()}
+                self.push_position = {
+                    k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                    for k,v in self.push_position.items()}
+
+                self.push_cmd = self._get_push_cmd(o_id, self.push_position)
+
+            # decide when to apply the force
+            self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+            if self.PRINT:
+                print("force wait", self.force_wait)
+
+            if self.force_wait == 0:
+                commands.append(self.push_cmd)
 
         return commands
 

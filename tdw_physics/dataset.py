@@ -418,7 +418,7 @@ class Dataset(Controller, ABC):
         r_types = ['']
         count = 0
         # breakpoint()
-        print(commands)
+        # print(commands)
         resp = self.communicate(commands)  # stun
 
         self._set_segmentation_colors(resp)
