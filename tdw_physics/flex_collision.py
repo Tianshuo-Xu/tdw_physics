@@ -4,7 +4,7 @@ from tdw.output_data import OutputData, FlexParticles, EnvironmentCollision, Col
 
 class FlexCollisions(Controller):
     def run(self):
-        self.start()
+        # self.start()
         object_id = self.get_unique_id()
         resp = self.communicate([TDWUtils.create_empty_room(12, 12),
                                  {"$type": "create_flex_container",
@@ -76,7 +76,8 @@ class FlexCollisions(Controller):
                                   "stay": True,
                                   "exit": True,
                                   "collision_types": ["obj", "env"]}])
-        for i in range(100):
+        
+        for i in range(1):
             for j in range(len(resp) - 1):
                 r_id = OutputData.get_data_type_id(resp[j])
                 if r_id == "flex":
@@ -94,6 +95,6 @@ class FlexCollisions(Controller):
 
 
 if __name__ == "__main__":
-    C = FlexCollisions(launch_build=False)
+    C = FlexCollisions(launch_build=True, check_version=True)
     C.run()
     end = C.communicate({"$type": "terminate"})

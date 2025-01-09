@@ -46,7 +46,7 @@ class Dataset(Controller, ABC):
     """
     def __init__(self,
                  port: int = 1071,
-                 check_version: bool=False,
+                 check_version: bool=True,
                  launch_build: bool=True,
                  randomize: int=0,
                  seed: int=0,
@@ -57,7 +57,7 @@ class Dataset(Controller, ABC):
         self.save_args = save_args
         self._trial_num = None
         self.command_log = None
-
+        print(launch_build, check_version)
         super().__init__(port=port,
                          check_version=check_version,
                          launch_build=launch_build)
@@ -72,14 +72,14 @@ class Dataset(Controller, ABC):
         # fluid actors need to be handled separately
         self.fluid_object_ids = []
         
-    def communicate(self, commands) -> list:
-        '''
-        Save a log of the commands so that they can be rerun
-        '''
-        if self.command_log is not None:
-            with open(str(self.command_log), "at") as f:
-                f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
-        return super().communicate(commands)
+    # def communicate(self, commands) -> list:
+    #     '''
+    #     Save a log of the commands so that they can be rerun
+    #     '''
+    #     if self.command_log is not None:
+    #         with open(str(self.command_log), "at") as f:
+    #             f.write(json.dumps(commands) + (" trial %s" % self._trial_num) + "\n")
+    #     return super().communicate(commands)
 
     def clear_static_data(self) -> None:
         self.object_ids = np.empty(dtype=int, shape=0)
@@ -350,7 +350,6 @@ class Dataset(Controller, ABC):
                            temp_path=temp_path,
                            trial_num=i,
                            unload_assets_every=unload_assets_every)
-
                 # Save an MP4 of the stimulus
                 if self.save_movies:
                     for pass_mask in self.save_passes:
@@ -418,7 +417,9 @@ class Dataset(Controller, ABC):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
-        resp = self.communicate(commands)
+        # breakpoint()
+        print(commands)
+        resp = self.communicate(commands)  # stun
 
         self._set_segmentation_colors(resp)
 

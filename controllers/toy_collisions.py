@@ -17,11 +17,12 @@ class ToysDataset(RigidbodiesDataset):
     """
 
     def __init__(self, port: int = 1071):
-        lib = ModelLibrarian(str(Path("toys.json").resolve()))
+        # lib = ModelLibrarian(str(Path("toys.json").resolve()))
+        lib = ModelLibrarian("/Users/tianshuo/tdw_physics/controllers/toys.json")
         self.records = lib.records
         self._target_id: int = 0
 
-        super().__init__(port=port)
+        super().__init__(port=port, launch_build=True)
 
     def get_field_of_view(self) -> float:
         return 55
@@ -41,6 +42,7 @@ class ToysDataset(RigidbodiesDataset):
 
     def get_trial_initialization_commands(self) -> List[dict]:
         num_objects = random.choice([2, 3])
+        print(num_objects)
         # Positions where objects will be placed (used to prevent interpenetration).
         object_positions: List[ObjectPosition] = []
 
@@ -52,6 +54,7 @@ class ToysDataset(RigidbodiesDataset):
 
         # Add 2-3 objects.
         for i in range(num_objects):
+            breakpoint()
             o_id = Controller.get_unique_id()
             record = self.records[i]
 
@@ -150,5 +153,6 @@ class ToysDataset(RigidbodiesDataset):
 
 if __name__ == "__main__":
     args = get_args("toy_collisions")
+    print(args)
     td = ToysDataset()
     td.run(num=args.num, output_dir=args.dir, temp_path=args.temp, width=args.width, height=args.height)
