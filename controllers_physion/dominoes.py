@@ -12,13 +12,13 @@ from collections import OrderedDict
 from weighted_collection import WeightedCollection
 from tdw.tdw_utils import TDWUtils
 from tdw.librarian import ModelRecord, MaterialLibrarian
-from tdw.output_data import OutputData, Transforms, Images, CameraMatrices, Collision, EnvironmentCollision
+from tdw.output_data import OutputData, Transforms, Images, CameraMatrices
 from tdw_physics.rigidbodies_dataset import (RigidbodiesDataset,
                                              get_random_xyz_transform,
                                              get_range,
                                              handle_random_transform_args)
 from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
-                              MATERIAL_TYPES, MATERIAL_NAMES, ROOMS,
+                              MATERIAL_TYPES, MATERIAL_NAMES,
                               get_parser,
                               xyz_to_arr, arr_to_xyz, str_to_xyz,
                               none_or_str, none_or_int, int_or_bool)
@@ -35,10 +35,6 @@ def get_args(dataset_dir: str, parse=True):
     common = get_parser(dataset_dir, get_help=False)
     parser = ArgumentParser(parents=[common], add_help=parse, fromfile_prefix_chars='@')
 
-    parser.add_argument("--room_center",
-                        type=none_or_str,
-                        default=None,
-                        help="Ranges for the center of the room")
     parser.add_argument("--num_middle_objects",
                         type=int,
                         default=3,
@@ -129,7 +125,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
-                        default="[0,0]",
+                        default="[-10,10]",
                         help="range of angles in xz plane to apply push force")
     parser.add_argument("--foffset",
                         type=str,
@@ -141,23 +137,23 @@ def get_args(dataset_dir: str, parse=True):
                         help="jitter around object centroid to apply force")
     parser.add_argument("--fwait",
                         type=none_or_str,
-                        default="[0,0]",
+                        default="[0,10]",
                         help="How many frames to wait before applying the force")
     parser.add_argument("--tcolor",
                         type=none_or_str,
-                        default="1.0,0.0,0.0",
+                        default=None,
                         help="comma-separated R,G,B values for the target object color. None to random.")
     parser.add_argument("--zcolor",
                         type=none_or_str,
-                        default="1.0,1.0,0.0",
+                        default=None,
                         help="comma-separated R,G,B values for the target zone color. None is random")
     parser.add_argument("--rcolor",
                         type=none_or_str,
-                        default="0.75,0.75,1.0",
+                        default=None,
                         help="comma-separated R,G,B values for the target zone color. None is random")
     parser.add_argument("--pcolor",
                         type=none_or_str,
-                        default="0.0,1.0,1.0",
+                        default=None,
                         help="comma-separated R,G,B values for the probe object color. None is random.")
     parser.add_argument("--mcolor",
                         type=none_or_str,
@@ -195,10 +191,6 @@ def get_args(dataset_dir: str, parse=True):
                         type=float,
                         default=2.0,
                         help="max height of camera")
-    parser.add_argument("--camera_aim_height",
-                        type=float,
-                        default=0.5,
-                        help="Height to aim camera at (offset to room center)")
     parser.add_argument("--camera_min_angle",
                         type=float,
                         default=45,
@@ -212,7 +204,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="Whether camera angle range includes reflections along the collision axis")
     parser.add_argument("--material_types",
                         type=none_or_str,
-                        default="Wood,Metal,Plastic",
+                        default="Wood",
                         help="Which class of materials to sample material names from")
     parser.add_argument("--tmaterial",
                         type=none_or_str,
@@ -303,12 +295,6 @@ def get_args(dataset_dir: str, parse=True):
                         action="store_true",
                         help="Probe and target will have the same color.")
 
-    ## collision noise
-    parser.add_argument("--collision_noise_range",
-                        type=str,
-                        default=None,
-                        help="xyz range for collision noise generator")
-
     def postprocess(args):
 
         # testing set data drew from a different set of models; needs to be preserved
@@ -320,8 +306,7 @@ def get_args(dataset_dir: str, parse=True):
             FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records]
 
         # choose a valid room
-        assert args.room in (['box', 'tdw', 'house'] + ROOMS), (args.room, ROOMS)
-        args.room_center = handle_random_transform_args(args.room_center)
+        assert args.room in ['box', 'tdw', 'house'], args.room
 
         # parse the model libraries
         if args.model_libraries is not None:
@@ -359,10 +344,6 @@ def get_args(dataset_dir: str, parse=True):
         args.frot = handle_random_transform_args(args.frot)
         args.foffset = handle_random_transform_args(args.foffset)
         args.fwait = handle_random_transform_args(args.fwait)
-
-        ## collision noise
-        args.collision_noise_range = handle_random_transform_args(
-            args.collision_noise_range)
 
         args.horizontal = bool(args.horizontal)
 
@@ -442,7 +423,7 @@ def get_args(dataset_dir: str, parse=True):
             args.distractor = PRIMITIVE_NAMES
         else:
             d_names = args.distractor.split(',')
-            args.distractor = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in d_names))]
+            args.distractor = [r for r in FULL_NAMES if any((nm in r for nm in d_names))]
 
         if args.occluder is None or args.occluder == 'full':
             args.occluder = FULL_NAMES
@@ -452,7 +433,7 @@ def get_args(dataset_dir: str, parse=True):
             args.occluder = PRIMITIVE_NAMES
         else:
             o_names = args.occluder.split(',')
-            args.occluder = [r for r in FULL_NAMES+PRIMITIVE_NAMES if any((nm in r for nm in o_names))]
+            args.occluder = [r for r in FULL_NAMES if any((nm in r for nm in o_names))]
 
         # produce training data
         if args.training_data_mode:
@@ -472,7 +453,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            # args.write_passes = "_img,_id"
+            args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -498,7 +479,7 @@ def get_args(dataset_dir: str, parse=True):
             args.only_use_flex_objects = args.no_moving_distractors = True
 
             # only save out the RGB images and the segmentation masks
-            # args.write_passes = "_img,_id"
+            args.write_passes = "_img,_id"
             args.save_passes = ""
             args.save_movies = False
             args.save_meshes = True
@@ -540,12 +521,11 @@ class Dominoes(RigidbodiesDataset):
     MAX_TRIALS = 1000
     DEFAULT_RAMPS = [r for r in MODEL_LIBRARIES['models_full.json'].records if 'ramp_with_platform_30' in r.name]
     CUBE = [r for r in MODEL_LIBRARIES['models_flex.json'].records if 'cube' in r.name][0]
-    PRINT = True
+    PRINT = False
 
     def __init__(self,
                  port: int = None,
                  room='box',
-                 room_center_range=None,
                  target_zone=['cube'],
                  zone_color=[1.0,1.0,0.0], #yellow is the default color for target zones
                  zone_location=None,
@@ -575,7 +555,6 @@ class Dominoes(RigidbodiesDataset):
                  camera_left_right_reflections=False,
                  camera_min_height=1./3,
                  camera_max_height=2./3,
-                 camera_aim_height=0.5,
                  material_types=MATERIAL_TYPES,
                  target_material=None,
                  probe_material=None,
@@ -602,10 +581,6 @@ class Dominoes(RigidbodiesDataset):
                  match_probe_and_target_color=False,
                  probe_horizontal=False,
                  use_test_mode_colors=False,
-                 probe_initial_height=0.0,
-                 randomize_object_size=False,
-                 send_full_collision_data=False,
-                 collision_noise_range=None,
                  **kwargs):
 
         ## get random port unless one is specified
@@ -614,14 +589,10 @@ class Dominoes(RigidbodiesDataset):
             print("random port",port,"chosen. If communication with tdw build fails, set port to 1071 or update your tdw installation.")
 
         ## initializes static data and RNG
-        super().__init__(port=port,
-                         send_full_collision_data=send_full_collision_data,
-                         collision_noise_range=collision_noise_range,
-                         **kwargs)
+        super().__init__(port=port, **kwargs)
 
         ## which room to use
         self.room = room
-        self.room_center_range = room_center_range
 
         ## which model libraries can be sampled from
         self.model_libraries = model_libraries
@@ -677,7 +648,6 @@ class Dominoes(RigidbodiesDataset):
         self.target_material = target_material
         self.target_motion_thresh = target_motion_thresh
 
-        self.probe_initial_height = probe_initial_height
         self.probe_color = probe_color
         self.probe_scale_range = probe_scale_range
         self.probe_rotation_range = probe_rotation_range
@@ -703,9 +673,7 @@ class Dominoes(RigidbodiesDataset):
         self.camera_left_right_reflections = camera_left_right_reflections
         self.camera_min_height = camera_min_height
         self.camera_max_height = camera_max_height
-        self.camera_aim = {"x": 0.,
-                           "y": camera_aim_height,
-                           "z": 0.} # fixed aim
+        self.camera_aim = {"x": 0., "y": 0.5, "z": 0.} # fixed aim
 
         ## distractors and occluders
         self.num_distractors = num_distractors
@@ -730,14 +698,10 @@ class Dominoes(RigidbodiesDataset):
             aspect_ratio_min=self.occluder_aspect_ratio[0],
             aspect_ratio_max=self.occluder_aspect_ratio[1],
         )
-        self.distractor_material = self.occluder_material = self.target_material
 
         ## target can move
         self._fixed_target = False
         self.use_test_mode_colors = use_test_mode_colors
-        self.randomize_object_size = randomize_object_size
-
-        self.apply_force_to = 'probe'
 
     def get_types(self,
                   objlist,
@@ -755,7 +719,6 @@ class Dominoes(RigidbodiesDataset):
         for lib in libraries:
             recs.extend(MODEL_LIBRARIES[lib].records)
         tlist = [r for r in recs if r.name in objlist]
-
         if categories is not None:
             if not isinstance(categories, list):
                 categories = categories.split(',')
@@ -862,8 +825,6 @@ class Dominoes(RigidbodiesDataset):
             add_scene = self.get_add_scene(scene_name="tdw_room")
         elif self.room == 'house':
             add_scene = self.get_add_scene(scene_name='archviz_house')
-        else:
-            add_scene = self.get_add_scene(scene_name=self.room)
         return [add_scene,
                 {"$type": "set_aperture",
                  "aperture": 8.0},
@@ -874,9 +835,6 @@ class Dominoes(RigidbodiesDataset):
                 {"$type": "set_ambient_occlusion_thickness_modifier",
                  "thickness": 3.5}]
 
-    def _set_room_center(self) -> None:
-        self.room_center = TDWUtils.VECTOR3_ZERO
-
     def get_trial_initialization_commands(self) -> List[dict]:
         commands = []
 
@@ -886,12 +844,6 @@ class Dominoes(RigidbodiesDataset):
             random.seed(self.trial_seed)
         else:
             self.trial_seed = -1 # not used
-
-        ## choose the room center
-        if self.room_center_range is not None:
-            self.room_center = get_random_xyz_transform(self.room_center_range)
-        else:
-            self._set_room_center()
 
         # Choose and place the target zone.
         commands.extend(self._place_target_zone())
@@ -910,14 +862,13 @@ class Dominoes(RigidbodiesDataset):
         commands.extend(self._build_intermediate_structure())
 
         # Teleport the avatar to a reasonable position based on the drop height.
-
         a_pos = self.get_random_avatar_position(radius_min=self.camera_radius_range[0],
                                                 radius_max=self.camera_radius_range[1],
                                                 angle_min=self.camera_min_angle,
                                                 angle_max=self.camera_max_angle,
                                                 y_min=self.camera_min_height,
                                                 y_max=self.camera_max_height,
-                                                center=self.room_center,
+                                                center=TDWUtils.VECTOR3_ZERO,
                                                 reflections=self.camera_left_right_reflections)
 
         # Set the camera parameters
@@ -925,11 +876,11 @@ class Dominoes(RigidbodiesDataset):
 
         commands.extend([
             {"$type": "teleport_avatar_to",
-             "position": a_pos},
+             "position": self.camera_position},
             {"$type": "look_at_position",
              "position": self.camera_aim},
             {"$type": "set_focus_distance",
-             "focus_distance": TDWUtils.get_distance(self.camera_position, self.camera_aim)}
+             "focus_distance": TDWUtils.get_distance(a_pos, self.camera_aim)}
         ])
 
 
@@ -946,24 +897,14 @@ class Dominoes(RigidbodiesDataset):
         return commands
 
     def get_per_frame_commands(self, resp: List[bytes], frame: int) -> List[dict]:
-        
+
         if (self.force_wait != 0) and frame == self.force_wait:
             if self.PRINT:
                 print("applied %s at time step %d" % (self.push_cmd, frame))
-            cmds = [self.push_cmd]
+            return [self.push_cmd]
         else:
-            if self.PRINT:
-                print(frame)
-            cmds = []
-
-        ## apply collision noise
-        if self.collision_noise_generator is not None:
-            coll_data = self._get_collision_data(resp)
-            if coll_data is not None:
-                coll_noise_cmds = self.apply_collision_noise(resp, coll_data)
-                cmds.extend(coll_noise_cmds)
-
-        return cmds
+            print(frame)
+            return []
 
     def _write_static_data(self, static_group: h5py.Group) -> None:
         super()._write_static_data(static_group)
@@ -1050,24 +991,6 @@ class Dominoes(RigidbodiesDataset):
         except (AttributeError,TypeError):
             pass
 
-        ## which object was pushed
-        try:
-            static_group.create_dataset("apply_force_to", data=self.apply_force_to.encode('utf8'))
-        except (AttributeError,TypeError):
-            pass
-
-        try:
-            static_group.create_dataset("moving_name", data=self.moving_name.encode('utf8'))
-        except (AttributeError,TypeError):
-            pass
-
-        try:
-            static_group.create_dataset("moving_id", data=int(self.moving_id))
-        except (AttributeError,TypeError):
-            pass
-
-
-
     def _write_frame(self,
                      frames_grp: h5py.Group,
                      resp: List[bytes],
@@ -1083,6 +1006,7 @@ class Dominoes(RigidbodiesDataset):
         if frame_num <= 0:
             self.target_delta_position = xyz_to_arr(TDWUtils.VECTOR3_ZERO)
         elif 'tran' in [OutputData.get_data_type_id(r) for r in resp[:-1]]:
+            # breakpoint()
             # target_position_new = self.get_object_position(self.target_id, resp) or self.target_position
             pos = self.get_object_position(self.target_id, resp)
             if pos is not None:
@@ -1164,11 +1088,11 @@ class Dominoes(RigidbodiesDataset):
                     "y": random.uniform(*get_range(rot_range)),
                     "z": 0.}
 
-    def get_push_force(self, scale_range, angle_range, yforce = [0,0], angle_offset=0):
+    def get_push_force(self, scale_range, angle_range, yforce = [0,0]):
         #sample y force component
         yforce = random.uniform(*yforce)
         # rotate a unit vector initially pointing in positive-x direction
-        theta = np.radians(random.uniform(*get_range(angle_range)) + angle_offset)
+        theta = np.radians(random.uniform(*get_range(angle_range)))
         push = np.array([np.cos(theta), yforce, np.sin(theta)])
 
         # scale it
@@ -1222,11 +1146,10 @@ class Dominoes(RigidbodiesDataset):
 
         # place it just beyond the target object with an effectively immovable mass and high friction
         commands = []
-
         commands.extend(
             self.add_primitive(
                 record=record,
-                position=self.add_room_center((self.zone_location or self._get_zone_location(scale))),
+                position=(self.zone_location or self._get_zone_location(scale)),
                 rotation=TDWUtils.VECTOR3_ZERO,
                 scale=scale,
                 material=self.zone_material,
@@ -1256,16 +1179,8 @@ class Dominoes(RigidbodiesDataset):
         dims = Dominoes.get_record_dimensions(record)
         dmin, dmax = [min(dims), max(dims)]
 
+
         scale = 1.0
-
-        if hasattr(size_range, 'keys'):
-            assert set(size_range.keys()) == {'x','y','z'}, size_range
-            scale = {}
-            scale['x'] = Dominoes.rescale_record_to_size(record, size_range['x'], randomize)['x']
-            scale['y'] = Dominoes.rescale_record_to_size(record, size_range['y'], randomize)['y']
-            scale['z'] = Dominoes.rescale_record_to_size(record, size_range['z'], randomize)['z']
-            return scale
-
         if randomize:
             smin = random.uniform(*get_range(size_range))
             smax = random.uniform(smin, get_range(size_range)[1])
@@ -1277,9 +1192,9 @@ class Dominoes(RigidbodiesDataset):
         elif dmax > smax:
             scale = smax / dmax
 
-        # print("%s rescaled by %.2f" % (record.name, scale))
-        # print("dims", dims, "dminmax", dmin, dmax)
-        # print("bounds now", [d * scale for d in dims])
+        print("%s rescaled by %.2f" % (record.name, scale))
+        print("dims", dims, "dminmax", dmin, dmax)
+        print("bounds now", [d * scale for d in dims])
 
         return arr_to_xyz(np.array([scale] * 3))
 
@@ -1297,7 +1212,8 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled target", scale)
 
         self.target = record
         self.target_type = data["name"]
@@ -1336,7 +1252,7 @@ class Dominoes(RigidbodiesDataset):
                 bounciness=0.0,
                 o_id=o_id,
                 add_data=(not self.remove_target),
-                make_kinematic=True if (self._fixed_target and (self.apply_force_to != 'target')) else False,
+                make_kinematic=True if self._fixed_target else False,
                 apply_texture=True if self.target.name in PRIMITIVE_NAMES else False
             ))
 
@@ -1363,8 +1279,8 @@ class Dominoes(RigidbodiesDataset):
         o_id, scale, rgb = [data[k] for k in ["id", "scale", "color"]]
 
         if size_range is not None:
-            scale = self.rescale_record_to_size(record, size_range, randomize=self.randomize_object_size)
-            # print("rescaled probe", scale)
+            scale = self.rescale_record_to_size(record, size_range)
+            print("rescaled probe", scale)
 
         self.probe = record
         self.probe_type = data["name"]
@@ -1376,9 +1292,7 @@ class Dominoes(RigidbodiesDataset):
 
         ### better sampling of random physics values
         self.probe_mass = random.uniform(self.probe_mass_range[0], self.probe_mass_range[1])
-        self.probe_initial_position = {"x": -0.5*self.collision_axis_length,
-                                       "y": self.probe_initial_height,
-                                       "z": 0.}
+        self.probe_initial_position = {"x": -0.5*self.collision_axis_length, "y": 0., "z": 0.}
         rot = self.get_y_rotation(self.probe_rotation_range)
         if self.probe_horizontal:
             rot["z"] = 90
@@ -1405,7 +1319,7 @@ class Dominoes(RigidbodiesDataset):
                 scale_mass=False,
                 o_id=o_id,
                 add_data=True,
-                make_kinematic=(False if self.apply_force_to == 'probe' else True),
+                make_kinematic=False,
                 apply_texture=True if self.probe.name in PRIMITIVE_NAMES else False,
                 **probe_physics_info
             ))
@@ -1639,13 +1553,12 @@ class Dominoes(RigidbodiesDataset):
     def _set_avatar_attributes(self, avatar_position) -> None:
 
         a_pos = avatar_position
-        self.absolute_camera_position = a_pos
 
         ## camera position and ray
-        self.camera_position = {k: a_pos[k] - self.room_center[k] for k in a_pos.keys()}
-        self.camera_rotation = np.degrees(np.arctan2(self.camera_position['z'], self.camera_position['x']))
-        dist = TDWUtils.get_distance(self.camera_position, self.camera_aim)
-        self.camera_altitude = np.degrees(np.arcsin((self.camera_position['y'] - self.camera_aim['y'])/dist))
+        self.camera_position = a_pos
+        self.camera_rotation = np.degrees(np.arctan2(a_pos['z'], a_pos['x']))
+        dist = TDWUtils.get_distance(a_pos, self.camera_aim)
+        self.camera_altitude = np.degrees(np.arcsin((a_pos['y'] - self.camera_aim['y'])/dist))
         camera_ray = np.array([self.camera_position['x'], 0., self.camera_position['z']])
         self.camera_radius = np.linalg.norm(camera_ray)
         camera_ray /= np.linalg.norm(camera_ray)
@@ -1864,7 +1777,7 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.distractor_material)))
+                        record, o_id, self.get_material_name(self.target_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
@@ -1877,7 +1790,7 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
-            if self.no_moving_distractors or (self.apply_force_to != 'distractor'):
+            if self.no_moving_distractors:
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "discrete",
@@ -1891,10 +1804,9 @@ class Dominoes(RigidbodiesDataset):
             self.colors = np.concatenate([self.colors, np.array(rgb).reshape((1,3))], axis=0)
             self.scales.append(scale)
 
-
+            print("distractor record", record.name)
+            print("distractor category", record.wcategory)
             if self.PRINT:
-                print("distractor record", record.name)
-                print("distractor category", record.wcategory)
                 print("distractor position", pos)
                 print("distractor scale", scale)
 
@@ -1941,11 +1853,12 @@ class Dominoes(RigidbodiesDataset):
             if record.name in PRIMITIVE_NAMES:
                 commands.extend(
                     self.get_object_material_commands(
-                        record, o_id, self.get_material_name(self.occluder_material)))
+                        record, o_id, self.get_material_name(self.target_material)))
                 commands.append(
                     {"$type": "set_color",
                      "color": {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": 1.},
                      "id": o_id})
+
 
             commands.extend([
                 {"$type": "scale_object",
@@ -1953,7 +1866,7 @@ class Dominoes(RigidbodiesDataset):
                  "id": o_id}
             ])
 
-            if self.no_moving_distractors or (self.apply_force_to != 'occluder'):
+            if self.no_moving_distractors:
                 commands.extend([
                     {"$type": "set_object_collision_detection_mode",
                      "mode": "discrete",
@@ -1963,9 +1876,10 @@ class Dominoes(RigidbodiesDataset):
                      "is_kinematic": True,
                      "use_gravity": True}])
 
+
+            print("occluder name", record.name)
+            print("occluder category", record.wcategory)
             if self.PRINT:
-                print("occluder name", record.name)
-                print("occluder category", record.wcategory)
                 print("occluder position", pos)
                 print("occluder pose", rot)
                 print("occluder scale", scale)
@@ -2215,8 +2129,7 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors,
-        collision_noise_range=args.collision_noise_range
+        use_test_mode_colors=args.use_test_mode_colors
     )
 
     if bool(args.run):

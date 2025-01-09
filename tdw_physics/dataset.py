@@ -716,8 +716,9 @@ class Dataset(Controller, ABC):
     def _get_next_object_id(self) -> int:
         self._increment_object_id()
         return int(self._object_id_counter)
-
+    
     def add_room_center(self, vector):
+        # breakpoint()
         return {k: vector[k] + self.room_center[k] for k in vector.keys()}
 
     def get_material_name(self, material):
