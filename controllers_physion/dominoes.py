@@ -25,6 +25,7 @@ from tdw_physics.util import (MODEL_LIBRARIES, FLEX_MODELS, MODEL_CATEGORIES,
 
 from tdw_physics.postprocessing.labels import get_all_label_funcs
 
+
 PRIMITIVE_NAMES = [r.name for r in MODEL_LIBRARIES['models_flex.json'].records if not r.do_not_use]
 FULL_NAMES = [r.name for r in MODEL_LIBRARIES['models_full.json'].records if not r.do_not_use]
 
@@ -121,7 +122,7 @@ def get_args(dataset_dir: str, parse=True):
                         help="scale of probe objects")
     parser.add_argument("--fscale",
                         type=str,
-                        default="[1.0,4.0]",
+                        default="[0.5,3.0]",
                         help="range of scales to apply to push force")
     parser.add_argument("--frot",
                         type=str,
@@ -193,11 +194,11 @@ def get_args(dataset_dir: str, parse=True):
                         help="max height of camera")
     parser.add_argument("--camera_min_angle",
                         type=float,
-                        default=45,
+                        default=110,
                         help="minimum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_max_angle",
                         type=float,
-                        default=225,
+                        default=210,
                         help="maximum angle of camera rotation around centerpoint")
     parser.add_argument("--camera_left_right_reflections",
                         action="store_true",
@@ -1325,44 +1326,50 @@ class Dominoes(RigidbodiesDataset):
             ))
 
         # Set its collision mode
-        commands.extend([
-            {"$type": "set_object_drag",
-             "id": o_id,
-             "drag": 0, "angular_drag": 0}])
+        if random.random() < 0.6:  
+            commands.extend([
+                {"$type": "set_object_drag",
+                "id": o_id,
+                "drag": 0, "angular_drag": 0}])
 
 
-        # Apply a force to the probe object
-        self.push_force = self.get_push_force(
-            scale_range=self.probe_mass * np.array(self.force_scale_range),
-            angle_range=self.force_angle_range)
-        self.push_force = self.rotate_vector_parallel_to_floor(
-            self.push_force, -rot['y'], degrees=True)
+            # Apply a force to the probe object
+            self.push_force = self.get_push_force(
+                scale_range=self.probe_mass * np.array(self.force_scale_range),
+                angle_range=self.force_angle_range)
+            self.push_force = self.rotate_vector_parallel_to_floor(
+                self.push_force, -rot['y'], degrees=True)
 
-        self.push_position = self.probe_initial_position
+            if random.random() < 0.3:
+                self.push_force['x'] = - self.push_force['x']
+                self.push_force['y'] = - self.push_force['y']
+                self.push_force['z'] = - self.push_force['z']
 
-        if self.PRINT:
-            print("PROBE MASS", self.probe_mass)
-            print("PUSH FORCE", self.push_force)
-        if self.use_ramp:
-            self.push_cmd = self._get_push_cmd(o_id, None)
-        else:
-            self.push_position = {
-                k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                    self.probe_scale, rot['y'])[k]
-                for k,v in self.push_position.items()}
-            self.push_position = {
-                k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
-                for k,v in self.push_position.items()}
+            self.push_position = self.probe_initial_position
 
-            self.push_cmd = self._get_push_cmd(o_id, self.push_position)
+            if self.PRINT:
+                print("PROBE MASS", self.probe_mass)
+                print("PUSH FORCE", self.push_force)
+            if self.use_ramp:
+                self.push_cmd = self._get_push_cmd(o_id, None)
+            else:
+                self.push_position = {
+                    k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                        self.probe_scale, rot['y'])[k]
+                    for k,v in self.push_position.items()}
+                self.push_position = {
+                    k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                    for k,v in self.push_position.items()}
 
-        # decide when to apply the force
-        self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
-        if self.PRINT:
-            print("force wait", self.force_wait)
+                self.push_cmd = self._get_push_cmd(o_id, self.push_position)
 
-        if self.force_wait == 0:
-            commands.append(self.push_cmd)
+            # decide when to apply the force
+            self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+            if self.PRINT:
+                print("force wait", self.force_wait)
+
+            if self.force_wait == 0:
+                commands.append(self.push_cmd)
 
         return commands
 
@@ -1996,6 +2003,12 @@ class MultiDominoes(Dominoes):
         else:
             rm_idx = -1
 
+        # force the middle blocks or not
+        if random.random() < 0.7:
+            forced_block = random.choice(range(self.num_middle_objects))
+        else:
+            forced_block = None
+
         for m in range(self.num_middle_objects):
             offset += self.spacing * random.uniform(1.-self.spacing_jitter, 1.+self.spacing_jitter)
             offset = np.minimum(np.maximum(offset, min_offset), max_offset)
@@ -2048,46 +2061,52 @@ class MultiDominoes(Dominoes):
                  "scale_factor": scale,
                  "id": o_id}])
             
-            # Set its collision mode
-            commands.extend([
-                {"$type": "set_object_drag",
-                "id": o_id,
-                "drag": 0, "angular_drag": 0}])
+            if forced_block == m:
+                # Set its collision mode
+                commands.extend([
+                    {"$type": "set_object_drag",
+                    "id": o_id,
+                    "drag": 0, "angular_drag": 0}])
 
 
-            # Apply a force to the probe object
-            rot = self.get_y_rotation(self.probe_rotation_range)
-            self.push_force = self.get_push_force(
-                scale_range=self.probe_mass * np.array(self.force_scale_range),
-                angle_range=self.force_angle_range)
-            self.push_force = self.rotate_vector_parallel_to_floor(
-                self.push_force, -rot['y'], degrees=True)
+                # Apply a force to the probe object
+                rot = self.get_y_rotation(self.probe_rotation_range)
+                self.push_force = self.get_push_force(
+                    scale_range=self.probe_mass * np.array(self.force_scale_range),
+                    angle_range=self.force_angle_range)
+                self.push_force = self.rotate_vector_parallel_to_floor(
+                    self.push_force, -rot['y'], degrees=True)
 
-            self.push_position = pos
+                if random.random() < 0.5:
+                    self.push_force['x'] = - self.push_force['x']
+                    self.push_force['y'] = - self.push_force['y']
+                    self.push_force['z'] = - self.push_force['z']
 
-            if self.PRINT:
-                print("PROBE MASS", self.probe_mass)
-                print("PUSH FORCE", self.push_force)
-            if self.use_ramp:
-                self.push_cmd = self._get_push_cmd(o_id, None)
-            else:
-                self.push_position = {
-                    k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
-                        self.probe_scale, rot['y'])[k]
-                    for k,v in self.push_position.items()}
-                self.push_position = {
-                    k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
-                    for k,v in self.push_position.items()}
+                self.push_position = pos
 
-                self.push_cmd = self._get_push_cmd(o_id, self.push_position)
+                if self.PRINT:
+                    print("PROBE MASS MIDDLE", self.probe_mass)
+                    print("PUSH FORCE MIDDLE", self.push_force)
+                if self.use_ramp:
+                    self.push_cmd = self._get_push_cmd(o_id, None)
+                else:
+                    self.push_position = {
+                        k:v+self.force_offset[k]*self.rotate_vector_parallel_to_floor(
+                            self.probe_scale, rot['y'])[k]
+                        for k,v in self.push_position.items()}
+                    self.push_position = {
+                        k:v+random.uniform(-self.force_offset_jitter, self.force_offset_jitter)
+                        for k,v in self.push_position.items()}
 
-            # decide when to apply the force
-            self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
-            if self.PRINT:
-                print("force wait", self.force_wait)
+                    self.push_cmd = self._get_push_cmd(o_id, self.push_position)
 
-            if self.force_wait == 0:
-                commands.append(self.push_cmd)
+                # decide when to apply the force
+                self.force_wait = int(random.uniform(*get_range(self.force_wait_range)))
+                if self.PRINT:
+                    print("force wait", self.force_wait)
+
+                if self.force_wait == 0:
+                    commands.append(self.push_cmd)
 
         return commands
 
@@ -2170,7 +2189,7 @@ if __name__ == "__main__":
         flex_only=args.only_use_flex_objects,
         no_moving_distractors=args.no_moving_distractors,
         match_probe_and_target_color=args.match_probe_and_target_color,
-        use_test_mode_colors=args.use_test_mode_colors
+        use_test_mode_colors=args.use_test_mode_colors,
     )
 
     if bool(args.run):

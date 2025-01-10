@@ -23,7 +23,8 @@ from tdw_physics.postprocessing.labels import (get_labels_from,
 from tdw_physics.util_geom import save_obj
 import shutil
 
-PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
+# PASSES = ["_img", "_depth", "_normals", "_flow", "_id", "_category", "_albedo"]
+PASSES = ["_img", "_depth", "_id"]
 M = MaterialLibrarian()
 MATERIAL_TYPES = M.get_material_types()
 MATERIAL_NAMES = {mtype: [m.name for m in M.get_all_materials_of_type(mtype)] \
@@ -417,8 +418,6 @@ class Dataset(Controller, ABC):
         # Send the commands and start the trial.
         r_types = ['']
         count = 0
-        # breakpoint()
-        # print(commands)
         resp = self.communicate(commands)  # stun
 
         self._set_segmentation_colors(resp)
